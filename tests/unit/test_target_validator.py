@@ -136,3 +136,37 @@ def test_accepts_ssh_repo() -> None:
 def test_accepts_image() -> None:
     out = validate_target_value("nginx:1.27-alpine", asset_type="image")
     assert out == "nginx:1.27-alpine"
+
+
+# ------------------ SEC-04: SSRF por hostname (resolve DNS) ------------------
+_RESOLVE = "orchestrator.domain.target_validator._resolve_host_ips"
+
+
+def test_rejects_hostname_resolving_to_private(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "LAB_ONLY", True)
+    monkeypatch.setattr(settings, "TARGET_ALLOWLIST", "")
+    monkeypatch.setattr(_RESOLVE, lambda h: ["10.0.0.5"])
+    with pytest.raises(TargetValidationError, match="rede privada"):
+        validate_target_value("http://postgres:5432", asset_type="url")
+
+
+def test_rejects_hostname_resolving_to_imds(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "LAB_ONLY", True)
+    monkeypatch.setattr(settings, "TARGET_ALLOWLIST", "")
+    monkeypatch.setattr(_RESOLVE, lambda h: ["169.254.169.254"])
+    with pytest.raises(TargetValidationError):
+        validate_target_value("http://metadata.attacker.example/meta", asset_type="url")
+
+
+def test_allows_hostname_resolving_to_public(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "LAB_ONLY", True)
+    monkeypatch.setattr(settings, "TARGET_ALLOWLIST", "")
+    monkeypatch.setattr(_RESOLVE, lambda h: ["93.184.216.34"])
+    assert validate_target_value("http://example.com", asset_type="url") == "http://example.com"
+
+
+def test_rejects_image_registry_imds_literal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "LAB_ONLY", True)
+    monkeypatch.setattr(settings, "TARGET_ALLOWLIST", "")
+    with pytest.raises(TargetValidationError, match="registry"):
+        validate_target_value("169.254.169.254/evil:latest", asset_type="image")

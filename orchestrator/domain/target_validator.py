@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import socket
 from urllib.parse import urlparse
 
 from orchestrator.config import settings
@@ -38,12 +39,10 @@ _HOSTNAME_RE = re.compile(
 )
 
 
-def _is_blocked_network(host: str) -> bool:
-    """True se o host é IP em range privado/reservado, ou hostname sentinela."""
-    if host.lower() in _FORBIDDEN_HOSTNAMES:
-        return True
+def _ip_is_blocked(ip_str: str) -> bool:
+    """True se o IP cai em range privado/loopback/link-local/reservado."""
     try:
-        ip = ipaddress.ip_address(host)
+        ip = ipaddress.ip_address(ip_str)
     except ValueError:
         return False
     return (
@@ -54,6 +53,37 @@ def _is_blocked_network(host: str) -> bool:
         or ip.is_multicast
         or ip.is_unspecified
     )
+
+
+def _resolve_host_ips(host: str) -> list[str]:
+    """Resolve um hostname para a lista de IPs (v4+v6). Vazio se não resolver.
+
+    Isolado numa função própria de propósito, para o teste fazer monkeypatch sem
+    depender de DNS real.
+    """
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (OSError, UnicodeError):
+        return []
+    return [str(info[4][0]) for info in infos]
+
+
+def _is_blocked_network(host: str) -> bool:
+    """True se o host é sentinela, IP-literal bloqueado, OU resolve para um IP bloqueado.
+
+    SEC-04: a versão anterior só checava IP-literal — então um hostname como
+    `postgres`, `redis` ou `metadata.attacker.com` passava direto (o `ip_address`
+    levantava ValueError e a função retornava False), abrindo SSRF por nome contra
+    os serviços da `cai-net` e o IMDS. Agora hostnames são resolvidos e bloqueados
+    se QUALQUER IP resolvido cair em rede interna. Nota: isto fecha o SSRF por nome;
+    a defesa completa contra DNS rebinding exige re-resolver no momento do scan
+    (camada futura no executor, ver goal3).
+    """
+    if host.lower() in _FORBIDDEN_HOSTNAMES:
+        return True
+    if _is_ip_literal(host):
+        return _ip_is_blocked(host)
+    return any(_ip_is_blocked(ip) for ip in _resolve_host_ips(host))
 
 
 def _host_in_allowlist(host: str, allowlist: list[str]) -> bool:
@@ -122,7 +152,21 @@ def validate_target_value(value: str, *, asset_type: str | None = None) -> str:
             return v
         raise TargetValidationError("repo deve usar http(s):// ou git@host:owner/repo (ssh)")
     elif asset_type == "image":
-        # Image: registry/name:tag — só rejeita prefixo "-" (já feito acima)
+        # Image: registry/name:tag. SEC-04: se o primeiro componente for um host de
+        # registry (tem "." ou ":") e apontar para rede interna/IMDS, bloquear —
+        # senão `169.254.169.254/evil:latest` alcança o metadata pelo scanner.
+        first = v.split("/", 1)[0]
+        if "." in first or ":" in first or first == "localhost":
+            registry_host = first.split(":", 1)[0]
+            if (
+                settings.LAB_ONLY
+                and not _host_in_allowlist(registry_host, settings.target_allowlist)
+                and _is_blocked_network(registry_host)
+            ):
+                raise TargetValidationError(
+                    f"registry {registry_host!r} em rede privada/loopback/IMDS "
+                    "e nao esta em TARGET_ALLOWLIST"
+                )
         return v
     elif asset_type == "url" or "://" in v:
         try:
