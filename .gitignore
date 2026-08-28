@@ -14,7 +14,8 @@ env/
 
 # uv
 .uv/
-uv.lock
+# uv.lock É versionado de propósito (SEC-08): build reprodutível e o
+# gate `uv lock --check` do CI depende dele estar no repo.
 
 # Test / coverage
 .pytest_cache/

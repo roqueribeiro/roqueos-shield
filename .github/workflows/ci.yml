@@ -32,6 +32,19 @@ jobs:
       - name: ruff format --check
         run: ruff format --check orchestrator tests
 
+  lockfile:
+    name: Lockfile em dia (uv)
+    runs-on: ubuntu-latest
+    # SEC-08: o repo não tinha lock e zero pins `==`, e o Dockerfile instalava uma
+    # lista manual divergente do pyproject. Um lock que ninguém verifica é
+    # decoração: este gate reprova se o pyproject mudar sem o uv.lock ser
+    # regenerado (mutação confirmada: rc 1 ao adicionar dep sem relockar).
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: uv lock --check
+        run: uv lock --check
+
   typecheck:
     name: Typecheck (mypy)
     runs-on: ubuntu-latest
