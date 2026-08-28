@@ -55,7 +55,9 @@ class AuthContext(BaseModel):
 
 class ScanIn(BaseModel):
     target_id: UUID
-    profile: str = "web"  # web | network | exposure | cloud | full
+    # web (passivo, default) | network | exposure | cloud | full/active (liga o
+    # active scan do ZAP: payloads reais de injection, mais lento e mais intrusivo).
+    profile: str = "web"
     scanners: list[str] | None = Field(
         default=None,
         description=(
@@ -111,6 +113,24 @@ def split_scan_auth(
     return persisted, headers, openapi
 
 
+# Profiles que ligam o ZAP active scan (payloads reais de injection). O `profile`
+# era metadado morto: gravava na linha do scan e não chegava a lugar nenhum, então o
+# scan web da API era SEMPRE passivo (só header/cookie/info disclosure) e nunca
+# testava injection — só a CLI (--active-zap) conseguia. Ligar é escolha explícita
+# do operador, e continua sob LAB_ONLY + allowlist + authorization_ref.
+_ACTIVE_PROFILES: frozenset[str] = frozenset({"full", "active"})
+
+
+def apply_profile(options: dict, profile: str) -> dict:
+    """Traduz o `profile` do scan em opções concretas de adapter."""
+    out = dict(options or {})
+    if (profile or "").strip().lower() in _ACTIVE_PROFILES:
+        zap = dict(out.get("zap") or {})
+        zap.setdefault("active", True)
+        out["zap"] = zap
+    return out
+
+
 def redact_audit_auth(audit_body: dict) -> dict:
     """Redige os VALORES dos auth headers no request_body do audit, mantendo os
     NOMES (a auditoria precisa saber QUAIS headers, não o segredo)."""
@@ -150,6 +170,7 @@ async def create_scan(
     # `scans`. Helpers PUROS (testáveis) separam o que persiste do segredo
     # efêmero e redigem o audit.
     persisted_options, auth_headers, openapi_url = split_scan_auth(body.options, body.auth)
+    persisted_options = apply_profile(persisted_options, body.profile)
     audit_body = redact_audit_auth(body.model_dump(mode="json"))
 
     scan = ScanRow(

@@ -77,3 +77,23 @@ def test_port_target_supported_by_nmap() -> None:
     # _DEFAULT_SCANNERS[PORT] == ["nmap"], mas o nmap rejeitava PORT (bug irmão).
     assert _supported_for(["nmap"], AssetType.PORT) == ["nmap"]
     assert _DEFAULT_SCANNERS[AssetType.PORT] == ["nmap"]
+
+
+# --- profile deixou de ser metadado morto ---
+def test_profile_full_enables_zap_active_scan() -> None:
+    from orchestrator.api.routers.scans import apply_profile
+
+    assert apply_profile({}, "full")["zap"]["active"] is True
+    assert apply_profile({}, "active")["zap"]["active"] is True
+
+
+def test_profile_web_stays_passive() -> None:
+    from orchestrator.api.routers.scans import apply_profile
+
+    assert "zap" not in apply_profile({}, "web")
+
+
+def test_profile_does_not_override_explicit_option() -> None:
+    from orchestrator.api.routers.scans import apply_profile
+
+    assert apply_profile({"zap": {"active": False}}, "full")["zap"]["active"] is False
