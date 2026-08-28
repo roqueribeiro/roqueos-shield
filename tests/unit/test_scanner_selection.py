@@ -40,3 +40,14 @@ def test_image_default_resolves_to_trivy() -> None:
     adapters = _build_adapters(_DEFAULT_SCANNERS[AssetType.IMAGE])
     assert len(adapters) == 1
     assert adapters[0].name == "trivy"
+
+
+# --- Onda 1: motores antes órfãos agora construíveis + semgrep no default ---
+def test_semgrep_in_repo_default() -> None:
+    assert "semgrep" in _DEFAULT_SCANNERS[AssetType.REPO]
+
+
+def test_nuclei_and_greenbone_now_buildable() -> None:
+    # antes caíam em scanner.unknown e sumiam do scan; agora instanciáveis se pedidos.
+    adapters = _build_adapters(["nuclei", "greenbone"])
+    assert {a.name for a in adapters} == {"nuclei", "greenbone"}

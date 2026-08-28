@@ -50,6 +50,8 @@ def _build_adapters(names: list[str]) -> list[ScannerAdapter]:
     """Instancia adapters a partir dos nomes pedidos; desconhecidos → warning."""
     from orchestrator.adapters.checkov_adapter import CheckovAdapter
     from orchestrator.adapters.gitleaks_adapter import GitleaksAdapter
+    from orchestrator.adapters.greenbone_adapter import GreenboneAdapter
+    from orchestrator.adapters.nuclei_adapter import NucleiAdapter
     from orchestrator.adapters.semgrep_adapter import SemgrepAdapter
     from orchestrator.adapters.trivy_adapter import TrivyAdapter
     from orchestrator.adapters.trufflehog_adapter import TrufflehogAdapter
@@ -62,6 +64,16 @@ def _build_adapters(names: list[str]) -> list[ScannerAdapter]:
         "trufflehog": lambda: TrufflehogAdapter(),
         "checkov": lambda: CheckovAdapter(),
         "semgrep": lambda: SemgrepAdapter(),
+        # nuclei e greenbone eram órfãos (não construíveis) — pedir por eles caía em
+        # scanner.unknown. Agora instanciáveis quando pedidos; o default por asset
+        # não muda (compatibilidade com o front, que hoje não os envia).
+        "nuclei": lambda: NucleiAdapter(),
+        "greenbone": lambda: GreenboneAdapter(
+            username=settings.GREENBONE_USERNAME,
+            password=settings.GREENBONE_PASSWORD,
+            host=settings.GREENBONE_HOST or None,
+            port=settings.GREENBONE_PORT,
+        ),
     }
     out: list[ScannerAdapter] = []
     for n in names:
