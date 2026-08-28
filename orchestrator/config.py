@@ -65,6 +65,11 @@ class Settings(BaseSettings):
 
     # API auth (token simples; pentester comercial num engagement)
     APP_TOKEN: str = "dev-changeme"  # token simples API; trocar em prod
+    # SEC-01: o APP_TOKEN mapeia para um principal de serviço ADMIN e é a chave de
+    # sessão no fallback. Subir com o token de exemplo entrega admin a quem lê o
+    # repo. O boot recusa isso (ver `insecure_boot_errors`); em dev local, para usar
+    # o token de exemplo de propósito, setar ALLOW_INSECURE_APP_TOKEN=true.
+    ALLOW_INSECURE_APP_TOKEN: bool = False
 
     # Compliance gates — defaults seguros (lab-only).
     # Em prod regulado: LAB_ONLY=true + TARGET_ALLOWLIST=[escopo escrito do engagement]
@@ -111,6 +116,31 @@ class Settings(BaseSettings):
                 raise ValueError("TARGET_ALLOWLIST JSON deve ser array")
             return [str(x) for x in parsed]
         return [x.strip() for x in raw.split(",") if x.strip()]
+
+
+# Tokens de exemplo que NÃO podem valer num deploy real (SEC-01).
+_INSECURE_APP_TOKENS: frozenset[str] = frozenset(
+    {"", "dev-changeme", "dev-changeme-with-strong-random", "changeme", "change-me"}
+)
+
+
+def insecure_boot_errors(s: Settings) -> list[str]:
+    """Retorna a lista de problemas de segurança que impedem um boot seguro.
+
+    Hoje cobre o APP_TOKEN de exemplo (SEC-01). Vazio no fim para um boot seguro.
+    O guard é aplicado no lifespan (`orchestrator.main`); `ALLOW_INSECURE_APP_TOKEN`
+    é o escape explícito para dev local.
+    """
+    errors: list[str] = []
+    if s.ALLOW_INSECURE_APP_TOKEN:
+        return errors
+    if s.APP_TOKEN.strip().lower() in _INSECURE_APP_TOKENS:
+        errors.append(
+            "APP_TOKEN está com um valor de exemplo/vazio — ele concede ADMIN de serviço. "
+            "Defina um APP_TOKEN forte (ex.: `openssl rand -hex 32`) ou, só em dev local, "
+            "ALLOW_INSECURE_APP_TOKEN=true."
+        )
+    return errors
 
 
 settings = Settings()

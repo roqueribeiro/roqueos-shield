@@ -75,6 +75,20 @@ async def lifespan(app: FastAPI):
     _setup_logging()
     log = structlog.get_logger(__name__)
 
+    # SEC-01: fail-closed no boot se houver config insegura (ex.: APP_TOKEN de
+    # exemplo, que concede ADMIN de serviço). Recusa subir em vez de servir aberto.
+    from orchestrator.config import insecure_boot_errors
+
+    boot_errors = insecure_boot_errors(settings)
+    if boot_errors:
+        for err in boot_errors:
+            log.error("boot.insecure_config", problem=err)
+        raise RuntimeError(
+            "Boot recusado por config insegura: "
+            + "; ".join(boot_errors)
+            + " (defina ALLOW_INSECURE_APP_TOKEN=true só em dev local)."
+        )
+
     # cria tabelas (dev SQLite). Em prod usar `alembic upgrade head` antes.
     if settings.DATABASE_URL.startswith("sqlite"):
         from orchestrator.persistence.db import init_db
