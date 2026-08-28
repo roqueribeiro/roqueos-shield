@@ -151,3 +151,29 @@ def test_triage_compact_preserves_target_value() -> None:
 def test_no_match_returns_unchanged() -> None:
     text = "ipsum dolor sit amet sem dado sensivel"
     assert scrub(text) == text
+
+
+# --- SEC-02: telefone BR não pode devorar número não-telefônico (regressão) ---
+def test_phone_br_does_not_eat_plain_8_digits() -> None:
+    # IDs, valores e timestamps de 8 dígitos NÃO são telefone e não podem ser redigidos.
+    assert scrub("order id 12345678 shipped") == "order id 12345678 shipped"
+    assert scrub("valor R$ 12345678 pago") == "valor R$ 12345678 pago"
+    assert "PHONE" not in scrub("timestamp 20250815 evento")
+    assert "PHONE" not in scrub("valor 1234-5678 no log")
+
+
+def test_phone_br_does_not_split_long_grouped_numbers() -> None:
+    # 16 dígitos em grupos de 4 (ex.: ID de transação) não viram dois telefones.
+    assert "PHONE" not in scrub("Tx ID: 1234 5678 9012 3456")
+
+
+def test_phone_br_does_not_corrupt_iban() -> None:
+    # IBAN não pode ser recortado deixando dígitos expostos.
+    assert "PHONE" not in scrub("IBAN BR97 0001 0000 0000 0123 4567 890")
+
+
+def test_phone_br_still_redacts_real_phones() -> None:
+    assert "<PHONE_BR>" in scrub("ligar (11) 91234-5678")
+    assert "<PHONE_BR>" in scrub("cel +55 11 91234-5678")
+    assert "<PHONE_BR>" in scrub("contato 11 98765-4321")
+    assert "<PHONE_BR>" in scrub("fixo (21) 3234-5678")

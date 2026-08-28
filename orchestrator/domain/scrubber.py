@@ -38,11 +38,17 @@ _JWT: Final[Pattern[str]] = re.compile(r"\beyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.
 # AWS access key
 _AWS_KEY: Final[Pattern[str]] = re.compile(r"\b(AKIA|ASIA)[A-Z0-9]{16}\b")
 
-# Telefone BR: (11) 91234-5678 ou variações.
-# Bordas (?<!\d)/(?!\d) impedem que a regex devore digitos de tokens maiores
-# (ex: IDs de transacao de 14-16 digitos sendo recortados como telefone).
+# Telefone BR: exige sinal real de telefone. SEC-02: a versão anterior tornava o
+# DDD e o +55 opcionais, então o núcleo obrigatório eram só 8 dígitos — e a regex
+# devorava ID de pedido, valor e timestamp, e partia IBAN/PAN em pedaços. Aqui um
+# número só é telefone quando traz o DDD (entre parênteses, precedido de +55, ou
+# nu seguido do 9 de celular). 8 dígitos soltos não são mais redigidos.
 _PHONE_BR: Final[Pattern[str]] = re.compile(
-    r"(?<!\d)\(?(?:\+?55\s?)?(?:\(?[1-9][1-9]\)?\s?)?9?\d{4}[\-\s]?\d{4}(?!\d)"
+    r"(?<!\d)(?:"
+    r"\(\d{2}\)\s?9?\d{4}[\s.\-]?\d{4}"  # (11) 91234-5678 / (21) 3234-5678
+    r"|\+?55[\s.\-]?\(?\d{2}\)?[\s.\-]?9?\d{4}[\s.\-]?\d{4}"  # +55 11 91234-5678
+    r"|\d{2}[\s.\-]9\d{4}[\s.\-]?\d{4}"  # 11 98765-4321 (DDD nu + celular)
+    r")(?!\d)"
 )
 
 # Bearer/Authorization tokens
