@@ -52,9 +52,9 @@ jobs:
   test:
     name: Tests (pytest)
     runs-on: ubuntu-latest
-    # v0.1 baseline: 1 teste do scrubber falhando (regex BR phone greedy).
-    # Issue rastreando o fix; nao bloquear PRs externos enquanto isso.
-    continue-on-error: true
+    # Gate bloqueante: a suíte reprova o merge (o teste do scrubber que "falhava"
+    # era o SEC-02, agora consertado). O piso de cobertura é catraca que só sobe —
+    # hoje ~35%, dominado por módulos puros; o e2e de HTTP dos controles é backlog.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -66,7 +66,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
       - name: pytest
-        run: pytest --cov=orchestrator --cov-report=term-missing
+        run: pytest --cov=orchestrator --cov-report=term-missing --cov-fail-under=34
 
   build-image:
     name: Build orchestrator image
