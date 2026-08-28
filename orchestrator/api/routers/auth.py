@@ -71,7 +71,11 @@ async def callback(request: Request, session: SessionDep) -> JSONResponse:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "ID token sem 'sub'")
 
     user = await find_or_provision(
-        session, sub=sub, email=userinfo.get("email"), name=userinfo.get("name")
+        session,
+        sub=sub,
+        email=userinfo.get("email"),
+        name=userinfo.get("name"),
+        email_verified=bool(userinfo.get("email_verified")),
     )
     if not user.active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "usuário desativado")

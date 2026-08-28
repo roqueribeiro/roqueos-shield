@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlmodel import select
 
-from orchestrator.api.deps import Principal, RequireScansRead, SessionDep
+from orchestrator.api.deps import Principal, RequireScansRead, RequireScansRun, SessionDep
 from orchestrator.persistence.models import FindingRow, ScanRow, TargetRow
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -136,7 +136,7 @@ async def compliance_report(
 
 @router.post("/{scan_id}/export/defectdojo", status_code=202)
 async def export_defectdojo(
-    scan_id: UUID, session: SessionDep, _principal: Principal = RequireScansRead
+    scan_id: UUID, session: SessionDep, _principal: Principal = RequireScansRun
 ) -> JSONResponse:
     """Exporta findings desse scan pro DefectDojo via API."""
     from orchestrator.reporting.exporters.defectdojo import export_scan

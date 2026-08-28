@@ -48,9 +48,14 @@ services:
       dockerfile: docker/images/kali-toolbox/Dockerfile
     image: cai-kali-toolbox:dev
     container_name: cai-kali-toolbox
+    # SEC-06: idem orchestrator — e aqui importa mais, porque é o container que a
+    # Onda 2 vai usar como executor do agente ofensivo.
+    cap_drop:
+      - ALL
     cap_add:
       - NET_RAW
-      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
     networks:
       - cai-net
     volumes:

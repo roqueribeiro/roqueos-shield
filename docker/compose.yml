@@ -23,9 +23,15 @@ services:
       dockerfile: docker/images/orchestrator/Dockerfile
     image: cai-orchestrator:dev
     container_name: cai-orchestrator
+    # SEC-06: dropa todas as capabilities e devolve só NET_RAW (nmap -sS precisa
+    # de raw socket). NET_ADMIN mexe em interface/rota e não é usado por scan
+    # nenhum. no-new-privileges impede escalada por binário setuid.
+    cap_drop:
+      - ALL
     cap_add:
       - NET_RAW
-      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
     env_file:
       - ../.env
     volumes:
@@ -53,9 +59,15 @@ services:
       dockerfile: docker/images/orchestrator/Dockerfile
     image: cai-orchestrator:dev
     container_name: cai-worker
+    # SEC-06: dropa todas as capabilities e devolve só NET_RAW (nmap -sS precisa
+    # de raw socket). NET_ADMIN mexe em interface/rota e não é usado por scan
+    # nenhum. no-new-privileges impede escalada por binário setuid.
+    cap_drop:
+      - ALL
     cap_add:
       - NET_RAW
-      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
     env_file:
       - ../.env
     volumes:

@@ -77,7 +77,15 @@ async def lifespan(app: FastAPI):
 
     # SEC-01: fail-closed no boot se houver config insegura (ex.: APP_TOKEN de
     # exemplo, que concede ADMIN de serviço). Recusa subir em vez de servir aberto.
-    from orchestrator.config import insecure_boot_errors
+    from orchestrator.config import audit_is_mutable, insecure_boot_errors
+
+    if audit_is_mutable(settings):
+        log.warning(
+            "audit.mutable_trail",
+            detail="banco SQLite: o trigger append-only do audit_log é Postgres-only, "
+            "então a trilha é editável. Em ambiente regulado use Postgres migrado e "
+            "REQUIRE_IMMUTABLE_AUDIT=true.",
+        )
 
     boot_errors = insecure_boot_errors(settings)
     if boot_errors:

@@ -44,9 +44,25 @@ async def test_matches_existing_by_idp_subject():
 
 
 async def test_links_subject_to_preexisting_email():
+    # SEC-11: o linking por email agora exige `email_verified` do IdP.
     pre = UserRow(email="admin@bank.com", role="admin", idp_subject=None, active=True)
     s = _session([None, pre])  # sub não acha; email acha (sem idp_subject)
-    u = await find_or_provision(s, sub="idp|new", email="Admin@Bank.com")
+    u = await find_or_provision(s, sub="idp|new", email="Admin@Bank.com", email_verified=True)
     assert u is pre
     assert u.idp_subject == "idp|new"  # vincula o sub ao usuário pré-criado
     assert u.role == "admin"  # papel pré-existente mantido
+
+
+async def test_does_not_link_when_email_unverified():
+    """SEC-11: sem email verificado, não se reivindica a conta (e o papel) de outro.
+
+    O IdP que aceita email não verificado permitiria a qualquer um registrar
+    admin@bank.com e herdar o papel admin. Agora provisiona um usuário novo com o
+    papel default, em vez de vincular.
+    """
+    pre = UserRow(email="admin@bank.com", role="admin", idp_subject=None, active=True)
+    s = _session([None, pre])
+    u = await find_or_provision(s, sub="idp|attacker", email="Admin@Bank.com")
+    assert u is not pre
+    assert u.role != "admin"  # papel default (viewer), não o do usuário pré-criado
+    assert pre.idp_subject is None  # a conta do admin não foi tocada

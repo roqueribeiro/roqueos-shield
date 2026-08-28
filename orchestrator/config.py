@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     # repo. O boot recusa isso (ver `insecure_boot_errors`); em dev local, para usar
     # o token de exemplo de propósito, setar ALLOW_INSECURE_APP_TOKEN=true.
     ALLOW_INSECURE_APP_TOKEN: bool = False
+    # SEC-07: a trilha de auditoria só é imutável no Postgres COM as migrations
+    # aplicadas (o trigger append-only da 0004 é PG-only). No default SQLite, o
+    # audit_log é editável. True recusa subir sem trilha imutável (prod regulado).
+    REQUIRE_IMMUTABLE_AUDIT: bool = False
 
     # Compliance gates — defaults seguros (lab-only).
     # Em prod regulado: LAB_ONLY=true + TARGET_ALLOWLIST=[escopo escrito do engagement]
@@ -146,7 +150,22 @@ def insecure_boot_errors(s: Settings) -> list[str]:
             "Defina um APP_TOKEN forte (ex.: `openssl rand -hex 32`) ou, só em dev local, "
             "ALLOW_INSECURE_APP_TOKEN=true."
         )
+    if s.REQUIRE_IMMUTABLE_AUDIT and audit_is_mutable(s):
+        errors.append(
+            "REQUIRE_IMMUTABLE_AUDIT=true mas o banco é SQLite — o trigger append-only "
+            "do audit_log é Postgres-only, então a trilha seria editável. Use Postgres "
+            "com `alembic upgrade head`."
+        )
     return errors
+
+
+def audit_is_mutable(s: Settings) -> bool:
+    """True quando a trilha de auditoria NÃO tem garantia de imutabilidade.
+
+    O trigger `audit_log_no_update` (migration 0004) existe só no Postgres. Em
+    SQLite — o default — o audit_log é uma tabela comum e pode ser editada.
+    """
+    return s.DATABASE_URL.startswith("sqlite")
 
 
 settings = Settings()

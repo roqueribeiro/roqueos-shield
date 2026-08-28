@@ -19,15 +19,29 @@ from orchestrator.persistence.models import UserRow
 
 
 async def find_or_provision(
-    session: AsyncSession, *, sub: str, email: str | None, name: str | None = None
+    session: AsyncSession,
+    *,
+    sub: str,
+    email: str | None,
+    name: str | None = None,
+    email_verified: bool = False,
 ) -> UserRow:
+    """Resolve o usuário do IdP, provisionando quando novo.
+
+    SEC-11: o passo (2) — vincular o `sub` do IdP a um usuário que um admin
+    pré-criou, achado POR EMAIL — só acontece com `email_verified=True`. Um IdP que
+    aceite email não verificado permitiria a alguém reivindicar a conta (e o papel)
+    de outra pessoa só registrando o mesmo endereço.
+    """
     email = (email or "").strip().lower()
 
     # 1) por idp_subject (identidade estável)
     user = (await session.exec(select(UserRow).where(UserRow.idp_subject == sub))).first()
 
-    # 2) por email — vincula o sub a um usuário que um admin pré-criou
-    if user is None and email:
+    # 2) por email — vincula o sub a um usuário que um admin pré-criou.
+    # Só com email verificado pelo IdP (SEC-11): senão é account-linking por
+    # endereço reivindicável.
+    if user is None and email and email_verified:
         user = (await session.exec(select(UserRow).where(UserRow.email == email))).first()
         if user is not None and not user.idp_subject:
             user.idp_subject = sub
