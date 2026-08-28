@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     # True mantém o fallback (com log de aviso); em ambiente regulado, defina False
     # para PROIBIR o cruzamento local→cloud (o scan falha em vez de vazar).
     ALLOW_CLOUD_FALLBACK: bool = True
+    # Modelo do LOOP AGÊNTICO (investigação). Separado do LLM_MODEL de propósito:
+    # a triagem em massa pode rodar local barato (soberania), mas o loop com
+    # ferramenta exige raciocínio e contexto grande — Qwen 27B q4 com 8-16k satura
+    # em poucos turnos. Vazio = usa o LLM_MODEL.
+    LLM_INVESTIGATION_MODEL: str = ""
+    # Liga o loop agêntico da investigação (ReAct com ferramenta real no Kali).
+    # A coleira (fase/escopo/anti-injeção/dry_run) vale sempre; ver
+    # `orchestrator.ai.agentic.executor`. False volta ao parecer de um prompt só.
+    AGENT_ENABLED: bool = True
     # Aliases legados (mantidos por compatibilidade, não usados pelo gateway)
     LLM_LOCAL_BASE_URL: str = "http://ollama:11434/v1"
     LLM_LOCAL_MODEL: str = "ollama/qwen2.5:32b-instruct-q4_K_M"

@@ -212,6 +212,49 @@ def _build_extra(
     return extra
 
 
+async def complete_with_tools(
+    messages: Sequence[dict[str, Any]],
+    *,
+    tools: list[dict[str, Any]],
+    model: str | None = None,
+    max_tokens: int = 4096,
+    temperature: float = 0.2,
+    purpose: str = "investigation",
+    scan_id: UUID | None = None,
+) -> Any:
+    """Uma volta do loop ReAct: devolve a MENSAGEM do modelo (com tool_calls, se houver).
+
+    `complete()` devolve só texto, o que basta pra triagem mas não pra um agente —
+    é por isto que a investigação nunca teve tool use. Aqui o modelo pode pedir a
+    execução de uma ferramenta; QUEM decide se ela roda é o executor
+    (`orchestrator.ai.agentic.executor`), nunca o prompt.
+    """
+    primary = model or settings.LLM_MODEL
+    extra = _build_extra(None, None, primary)
+    t0 = time.perf_counter()
+    r = await acompletion(
+        model=primary,
+        messages=list(messages),
+        tools=tools,
+        tool_choice="auto",
+        max_tokens=max_tokens,
+        temperature=temperature,
+        **extra,
+    )
+    await _persist_ai_run(
+        scan_id=scan_id,
+        purpose=purpose,
+        model=primary,
+        api_base=extra.get("api_base"),
+        response=r,
+        latency_ms=int((time.perf_counter() - t0) * 1000),
+        finding_count=0,
+        success=True,
+        error=None,
+    )
+    return r.choices[0].message
+
+
 async def complete_json(
     messages: Sequence[dict[str, Any]],
     *,

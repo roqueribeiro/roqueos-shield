@@ -78,6 +78,26 @@ async def investigate(
     except Exception as e:  # noqa: BLE001
         raise HTTPException(500, f"investigação falhou: {e}") from e
 
+    # SEC-05 (2ª metade): o que o agente REALMENTE fez também vai pra trilha —
+    # cada comando, se rodou ou foi recusado, e por quê.
+    commands = [t["decision"] for t in result.get("transcript", []) if "decision" in t]
+    if commands:
+        await log_audit_event(
+            session,
+            action="investigate.commands",
+            actor=principal.email,
+            resource_type="finding",
+            resource_id=finding_id,
+            metadata={
+                "engine": result.get("engine", "narrative"),
+                "dry_run": body.dry_run,
+                "tool_calls": result.get("tool_calls", 0),
+                "commands_executed": result.get("commands_executed", 0),
+                "commands": commands[:20],
+            },
+        )
+        await session.commit()
+
     return InvestigationOut(
         finding_id=finding_id,
         transcript=result.get("transcript", []),
