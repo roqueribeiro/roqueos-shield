@@ -19,6 +19,7 @@ from typing import Any
 import structlog
 
 from orchestrator.ai.gateway import complete
+from orchestrator.domain.scrubber import scrub, scrub_dict
 from orchestrator.persistence.models import FindingRow
 
 log = structlog.get_logger(__name__)
@@ -102,9 +103,9 @@ async def _investigate_fallback(
 FINDING:
 - id: {finding.id}
 - tool: {finding.source_tool}
-- title: {finding.title}
+- title: {scrub(finding.title)}
 - severity: {finding.severity}
-- payload: {finding.payload}
+- payload: {scrub_dict(finding.payload or {})}
 
 dry_run={dry_run}
 {f"INSTRUÇÕES ADICIONAIS DO OPERADOR: {extra}" if extra else ""}

@@ -287,7 +287,7 @@ def _finding_to_vuln(row: FindingRow) -> dict[str, Any]:
         "severity": row.severity,
         "severity_original": payload.get("severity", row.severity),
         "confidence": row.confidence,
-        "patch_priority": _patch_priority(sev_rank, row.confidence),
+        "patch_priority": _patch_priority(sev_rank, row.confidence, triage),
         "classification": {
             "owasp_top10_2021": triage.get("owasp_top10"),
             "cwe": cwe,
@@ -317,11 +317,21 @@ def _finding_to_vuln(row: FindingRow) -> dict[str, Any]:
     }
 
 
-def _patch_priority(sev_rank: int, confidence: str) -> int:
-    """1=urgente, 5=cosmético. Combina severity + confidence."""
+def _patch_priority(sev_rank: int, confidence: str, triage: dict[str, Any] | None = None) -> int:
+    """1=urgente, 5=cosmético. Combina severity + confidence + triagem da IA.
+
+    A severity aqui já é a AJUSTADA pela IA (o pipeline persiste
+    `ai_triage.adjusted_severity` em `FindingRow.severity`; o bundle guarda a do
+    scanner em `severity_original`). O que faltava era o outro lado da triagem:
+    um finding marcado como provável falso positivo ia pro topo da fila do patcher
+    com prioridade cheia. Agora ele vai pro fim — sem sumir do bundle, porque a
+    marcação é palpite do LLM, não veredito.
+    """
     base = sev_rank + 1  # critical=1, high=2, medium=3, low=4, info=5
     if confidence == "tentative":
         base = min(base + 1, 5)
+    if triage and triage.get("is_likely_false_positive"):
+        return 5
     return base
 
 
