@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     # api_key específico para o backend local. LM Studio ignora — qualquer string serve.
     # Se vazio + LLM_API_BASE setado, fallback "lm-studio".
     LLM_API_KEY: str = ""
+    # SEC-03: quando o modelo primário é LOCAL (soberania de dados) e falha, o
+    # gateway pode cair no LLM_FALLBACK_MODEL cloud — o que manda os findings pro
+    # provider externo. Isso fura o isolamento que o modo local existe pra garantir.
+    # True mantém o fallback (com log de aviso); em ambiente regulado, defina False
+    # para PROIBIR o cruzamento local→cloud (o scan falha em vez de vazar).
+    ALLOW_CLOUD_FALLBACK: bool = True
     # Aliases legados (mantidos por compatibilidade, não usados pelo gateway)
     LLM_LOCAL_BASE_URL: str = "http://ollama:11434/v1"
     LLM_LOCAL_MODEL: str = "ollama/qwen2.5:32b-instruct-q4_K_M"

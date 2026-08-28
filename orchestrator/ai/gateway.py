@@ -131,8 +131,30 @@ async def complete(
         )
 
         if fallback and fallback != primary:
-            # Fallback NÃO usa o api_base local — vai pro provider cloud
-            fallback_extra = _build_extra(response_format, None, fallback)
+            # Fallback NÃO usa o api_base local — vai pro provider cloud. Passar ""
+            # (não None) força isso: _build_extra com None reaplicaria o
+            # settings.LLM_API_BASE, fazendo o fallback rebater no endpoint local.
+            fallback_extra = _build_extra(response_format, "", fallback)
+            # SEC-03: se o primário era LOCAL e o fallback é cloud, mandar os
+            # findings pro provider externo fura a soberania de dados. Só cruza
+            # essa fronteira com ALLOW_CLOUD_FALLBACK=true, e sempre logando.
+            crosses_sovereignty = bool(primary_api_base) and not fallback_extra.get("api_base")
+            if crosses_sovereignty and not settings.ALLOW_CLOUD_FALLBACK:
+                log.error(
+                    "llm.cloud_fallback_blocked",
+                    primary=primary,
+                    fallback=fallback,
+                    reason="modelo local falhou e ALLOW_CLOUD_FALLBACK=false; "
+                    "não enviando findings pro cloud (soberania).",
+                )
+                raise
+            if crosses_sovereignty:
+                log.warning(
+                    "llm.cloud_fallback_crossing_sovereignty",
+                    fallback=fallback,
+                    detail="modelo local falhou; findings indo pro provider CLOUD "
+                    "(o scrubber é a única barreira). ALLOW_CLOUD_FALLBACK=false proíbe.",
+                )
             t1 = time.perf_counter()
             r = await acompletion(
                 model=fallback,
