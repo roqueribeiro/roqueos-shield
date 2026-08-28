@@ -93,12 +93,14 @@ pdf = ["weasyprint>=63.0"]            # PDF rendering (Fase 5)
 agentic = ["cai-framework>=0.1.0"]    # CAI agentic (Fase 4)
 tracing = ["arize-phoenix>=6.0.0", "openinference-instrumentation-litellm>=0.1.0"]
 censys = ["censys>=2.2.0"]
+sast = ["semgrep>=1.100.0"]           # SAST de código-fonte (adapter semgrep)
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    "semgrep>=1.100.0",               # roda o e2e do semgrep_adapter no CI
 ]
 
 [project.urls]

@@ -58,6 +58,7 @@ RUN uv pip install --system --no-cache-dir \
         authlib "python-jose[cryptography]" "passlib[bcrypt]" itsdangerous \
         jinja2 pyyaml \
         dnstwist \
+        semgrep \
         typer rich
 # NOTE: checkov (IaC scanner) is intentionally NOT bundled — its dep chain
 # (cyclonedx-python-lib `sha1sum`) is broken on Python 3.13. The checkov adapter

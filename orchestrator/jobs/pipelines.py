@@ -42,7 +42,7 @@ _DEFAULT_SCANNERS: dict[AssetType, list[str]] = {
     AssetType.HOST: ["nmap"],
     AssetType.PORT: ["nmap"],
     AssetType.IMAGE: ["trivy"],
-    AssetType.REPO: ["gitleaks", "trufflehog", "trivy", "checkov"],
+    AssetType.REPO: ["semgrep", "gitleaks", "trufflehog", "trivy", "checkov"],
 }
 
 
@@ -50,6 +50,7 @@ def _build_adapters(names: list[str]) -> list[ScannerAdapter]:
     """Instancia adapters a partir dos nomes pedidos; desconhecidos → warning."""
     from orchestrator.adapters.checkov_adapter import CheckovAdapter
     from orchestrator.adapters.gitleaks_adapter import GitleaksAdapter
+    from orchestrator.adapters.semgrep_adapter import SemgrepAdapter
     from orchestrator.adapters.trivy_adapter import TrivyAdapter
     from orchestrator.adapters.trufflehog_adapter import TrufflehogAdapter
 
@@ -60,6 +61,7 @@ def _build_adapters(names: list[str]) -> list[ScannerAdapter]:
         "gitleaks": lambda: GitleaksAdapter(),
         "trufflehog": lambda: TrufflehogAdapter(),
         "checkov": lambda: CheckovAdapter(),
+        "semgrep": lambda: SemgrepAdapter(),
     }
     out: list[ScannerAdapter] = []
     for n in names:
