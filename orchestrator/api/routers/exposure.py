@@ -25,9 +25,7 @@ class ExposureOut(BaseModel):
 
 
 @router.post("/scan", response_model=ExposureOut, status_code=status.HTTP_202_ACCEPTED)
-async def scan_exposure(
-    body: ExposureIn, _principal: Principal = RequireScansRun
-) -> ExposureOut:
+async def scan_exposure(body: ExposureIn, _principal: Principal = RequireScansRun) -> ExposureOut:
     pool = await create_pool(_redis_settings())
     job = await pool.enqueue_job(
         "run_exposure_job",

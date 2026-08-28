@@ -148,12 +148,9 @@ async def findings_queue(
         select(FindingRow, FindingStatusRow)
         .join(
             latest,
-            (FindingRow.deduped_key == latest.c.dk)
-            & (FindingRow.discovered_at == latest.c.max_at),
+            (FindingRow.deduped_key == latest.c.dk) & (FindingRow.discovered_at == latest.c.max_at),
         )
-        .outerjoin(
-            FindingStatusRow, FindingRow.deduped_key == FindingStatusRow.deduped_key
-        )
+        .outerjoin(FindingStatusRow, FindingRow.deduped_key == FindingStatusRow.deduped_key)
     )
     if status and status != "all":
         base = base.where(eff_status == status)
@@ -162,9 +159,7 @@ async def findings_queue(
     if source_tool:
         base = base.where(FindingRow.source_tool == source_tool)
 
-    total = (
-        await session.exec(select(func.count()).select_from(base.subquery()))
-    ).one()
+    total = (await session.exec(select(func.count()).select_from(base.subquery()))).one()
 
     page = base.order_by(_sev_case(), FindingRow.discovered_at.desc()).offset(offset).limit(limit)
     rows = (await session.exec(page)).all()
@@ -227,12 +222,9 @@ async def findings_summary(
         select(FindingRow.severity, eff_status, func.count().label("n"))
         .join(
             latest,
-            (FindingRow.deduped_key == latest.c.dk)
-            & (FindingRow.discovered_at == latest.c.max_at),
+            (FindingRow.deduped_key == latest.c.dk) & (FindingRow.discovered_at == latest.c.max_at),
         )
-        .outerjoin(
-            FindingStatusRow, FindingRow.deduped_key == FindingStatusRow.deduped_key
-        )
+        .outerjoin(FindingStatusRow, FindingRow.deduped_key == FindingStatusRow.deduped_key)
         .group_by(FindingRow.severity, eff_status)
     )
     rows = (await session.exec(stmt)).all()
@@ -371,9 +363,7 @@ async def list_findings(
 ) -> list[FindingOut]:
     stmt = (
         select(FindingRow, FindingStatusRow)
-        .outerjoin(
-            FindingStatusRow, FindingRow.deduped_key == FindingStatusRow.deduped_key
-        )
+        .outerjoin(FindingStatusRow, FindingRow.deduped_key == FindingStatusRow.deduped_key)
         .order_by(FindingRow.discovered_at.desc())
         .offset(offset)
         .limit(limit)

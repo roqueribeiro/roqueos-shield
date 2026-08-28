@@ -44,9 +44,7 @@ class Principal:
 
 
 # Principal do token de serviço (`APP_TOKEN`) — admin, sem hit no DB.
-SERVICE_PRINCIPAL = Principal(
-    id="service", email="service@local", role=Role.ADMIN, is_service=True
-)
+SERVICE_PRINCIPAL = Principal(id="service", email="service@local", role=Role.ADMIN, is_service=True)
 
 
 def token_hash(token: str) -> str:
@@ -85,9 +83,7 @@ async def get_principal(
                 role=coerce_role(user.role),
                 is_service=False,
             )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="X-API-Token inválido"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="X-API-Token inválido")
 
     # 3) sessão OIDC (Bearer JWT)
     if authorization and authorization.lower().startswith("bearer "):
@@ -108,9 +104,7 @@ async def get_principal(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="sessão inválida ou expirada"
         )
 
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED, detail="credenciais ausentes"
-    )
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="credenciais ausentes")
 
 
 PrincipalDep = Annotated[Principal, Depends(get_principal)]

@@ -35,9 +35,7 @@ async def test_provisions_new_user_with_default_role():
 
 
 async def test_matches_existing_by_idp_subject():
-    existing = UserRow(
-        email="op@bank.com", role="operator", idp_subject="idp|123", active=True
-    )
+    existing = UserRow(email="op@bank.com", role="operator", idp_subject="idp|123", active=True)
     s = _session([existing])  # acha por sub → não consulta email
     u = await find_or_provision(s, sub="idp|123", email="op@bank.com")
     assert u is existing

@@ -24,7 +24,9 @@ def _key() -> str:
     return settings.SESSION_SECRET or settings.APP_TOKEN
 
 
-def issue_session(*, user_id: UUID | str, email: str, role: str, ttl_hours: int | None = None) -> str:
+def issue_session(
+    *, user_id: UUID | str, email: str, role: str, ttl_hours: int | None = None
+) -> str:
     """Emite um JWT de sessão pra `user_id`."""
     ttl = settings.SESSION_TTL_HOURS if ttl_hours is None else ttl_hours
     now = datetime.now(UTC)

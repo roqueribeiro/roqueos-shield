@@ -86,9 +86,7 @@ def _to_out(u: UserRow) -> UserOut:
 async def create_user(
     body: UserCreate, session: SessionDep, principal: Principal = _ADMIN
 ) -> UserCreated:
-    existing = (
-        await session.exec(select(UserRow).where(UserRow.email == body.email))
-    ).first()
+    existing = (await session.exec(select(UserRow).where(UserRow.email == body.email))).first()
     if existing is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "e-mail já cadastrado")
 

@@ -105,7 +105,9 @@ async def executive_report(
         errors: list = field(default_factory=list)
 
     result = _Result(
-        scan_id=scan_id, target=target, findings=findings,
+        scan_id=scan_id,
+        target=target,
+        findings=findings,
         report_path=Path(scan.report_path) if scan.report_path else None,
     )
 

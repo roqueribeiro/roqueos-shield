@@ -40,9 +40,7 @@ async def test_run_scan_uses_the_passed_scan_id(tmp_path):
     for p in ctx:
         p.start()
     try:
-        result = await pipelines.run_scan(
-            _target(), adapters=[], skip_ai=True, scan_id=fixed
-        )
+        result = await pipelines.run_scan(_target(), adapters=[], skip_ai=True, scan_id=fixed)
     finally:
         for p in ctx:
             p.stop()

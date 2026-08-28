@@ -152,11 +152,13 @@ def test_critical_finding_drags_grade_down():
 
 
 def test_aggregates_coverage_across_findings():
-    rep = build_compliance_report([
-        _finding(cwe=["CWE-89"], severity=Severity.HIGH),   # A03
-        _finding(cwe=["CWE-79"], severity=Severity.MEDIUM),  # A03 (XSS)
-        _finding(cwe=["CWE-918"], severity=Severity.HIGH),   # A10
-    ])
+    rep = build_compliance_report(
+        [
+            _finding(cwe=["CWE-89"], severity=Severity.HIGH),  # A03
+            _finding(cwe=["CWE-79"], severity=Severity.MEDIUM),  # A03 (XSS)
+            _finding(cwe=["CWE-918"], severity=Severity.HIGH),  # A10
+        ]
+    )
     assert rep.owasp_coverage["A03:2021-Injection"] == 2
     assert rep.owasp_coverage["A10:2021-Server-Side Request Forgery"] == 1
     assert rep.total_findings == 3

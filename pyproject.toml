@@ -98,7 +98,7 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
-    "ruff>=0.8.0",
+    "ruff==0.16.5",   # pinado: formatação do ruff muda entre releases e quebra o gate
     "mypy>=1.13.0",
     "semgrep>=1.100.0",               # roda o e2e do semgrep_adapter no CI
 ]

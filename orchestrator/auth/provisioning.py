@@ -24,9 +24,7 @@ async def find_or_provision(
     email = (email or "").strip().lower()
 
     # 1) por idp_subject (identidade estável)
-    user = (
-        await session.exec(select(UserRow).where(UserRow.idp_subject == sub))
-    ).first()
+    user = (await session.exec(select(UserRow).where(UserRow.idp_subject == sub))).first()
 
     # 2) por email — vincula o sub a um usuário que um admin pré-criou
     if user is None and email:

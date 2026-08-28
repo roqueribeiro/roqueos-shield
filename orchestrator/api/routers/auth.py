@@ -25,9 +25,7 @@ log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 oauth = OAuth()
-_OIDC_READY = bool(
-    settings.OIDC_ISSUER and settings.OIDC_CLIENT_ID and settings.OIDC_CLIENT_SECRET
-)
+_OIDC_READY = bool(settings.OIDC_ISSUER and settings.OIDC_CLIENT_ID and settings.OIDC_CLIENT_SECRET)
 if _OIDC_READY:
     oauth.register(
         name="idp",

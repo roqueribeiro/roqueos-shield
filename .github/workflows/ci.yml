@@ -24,7 +24,9 @@ jobs:
           python-version: "3.13"
           cache: pip
       - name: Install ruff
-        run: python -m pip install --upgrade pip ruff
+        # Pin: ruff sem pin fazia o ÚNICO gate bloqueante do CI quebrar sozinho
+        # a cada release que muda formatação (main já estava vermelha por isso).
+        run: python -m pip install --upgrade pip 'ruff==0.16.5'
       - name: ruff check
         run: ruff check orchestrator tests
       - name: ruff format --check
