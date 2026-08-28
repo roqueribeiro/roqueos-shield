@@ -56,7 +56,14 @@ class AuthContext(BaseModel):
 class ScanIn(BaseModel):
     target_id: UUID
     profile: str = "web"  # web | network | exposure | cloud | full
-    scanners: list[str] = Field(default_factory=lambda: ["nmap", "zap"])
+    scanners: list[str] | None = Field(
+        default=None,
+        description=(
+            "Scanners a rodar. None (default) = escolhe pelo asset_type do target "
+            "(image→trivy, repo→semgrep+gitleaks+…, url→zap, host→nmap). O default "
+            "antigo era ['nmap','zap'] fixo, que zerava scan de IMAGE/REPO."
+        ),
+    )
     options: dict = Field(default_factory=dict)
     auth: AuthContext | None = Field(
         default=None,
@@ -149,7 +156,7 @@ async def create_scan(
         target_id=target.id,
         state=ScanState.PENDING.value,
         profile=body.profile,
-        requested_scanners=body.scanners,
+        requested_scanners=body.scanners or [],
         options=persisted_options,
         actor=principal.email,
         authorization_ref=body.authorization_ref,
@@ -200,9 +207,7 @@ async def create_scan(
 
 
 @router.get("/{scan_id}", response_model=ScanOut)
-async def get_scan(
-    scan_id: UUID, session: SessionDep, _principal: Principal = _READ
-) -> ScanOut:
+async def get_scan(scan_id: UUID, session: SessionDep, _principal: Principal = _READ) -> ScanOut:
     scan = await session.get(ScanRow, scan_id)
     if scan is None:
         raise HTTPException(404, "scan não encontrado")
@@ -210,9 +215,7 @@ async def get_scan(
 
 
 @router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_scan(
-    scan_id: UUID, session: SessionDep, principal: Principal = _RUN
-) -> None:
+async def delete_scan(scan_id: UUID, session: SessionDep, principal: Principal = _RUN) -> None:
     """Apaga um scan e tudo que depende dele (findings + AI runs). Registra
     `scan.delete` no audit_log append-only antes de remover."""
     scan = await session.get(ScanRow, scan_id)

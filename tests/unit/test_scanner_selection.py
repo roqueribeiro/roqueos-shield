@@ -51,3 +51,29 @@ def test_nuclei_and_greenbone_now_buildable() -> None:
     # antes caíam em scanner.unknown e sumiam do scan; agora instanciáveis se pedidos.
     adapters = _build_adapters(["nuclei", "greenbone"])
     assert {a.name for a in adapters} == {"nuclei", "greenbone"}
+
+
+# --- B4: "não achou nada" era "não rodou a ferramenta certa" ---
+from orchestrator.jobs.pipelines import _supported_for  # noqa: E402
+
+
+def test_legacy_default_on_image_falls_back_to_asset_default() -> None:
+    # cliente antigo manda ["nmap","zap"] pra uma IMAGE: os dois são incompatíveis,
+    # levantavam ValueError e o scan fechava com ZERO findings.
+    assert _supported_for(["nmap", "zap"], AssetType.IMAGE) == []
+
+
+def test_legacy_default_on_repo_falls_back_to_asset_default() -> None:
+    assert _supported_for(["nmap", "zap"], AssetType.REPO) == []
+
+
+def test_supported_keeps_compatible_scanners() -> None:
+    assert _supported_for(["trivy", "nmap"], AssetType.IMAGE) == ["trivy"]
+    assert _supported_for(["zap", "trivy"], AssetType.URL) == ["zap"]
+    assert _supported_for(["semgrep", "gitleaks"], AssetType.REPO) == ["semgrep", "gitleaks"]
+
+
+def test_port_target_supported_by_nmap() -> None:
+    # _DEFAULT_SCANNERS[PORT] == ["nmap"], mas o nmap rejeitava PORT (bug irmão).
+    assert _supported_for(["nmap"], AssetType.PORT) == ["nmap"]
+    assert _DEFAULT_SCANNERS[AssetType.PORT] == ["nmap"]

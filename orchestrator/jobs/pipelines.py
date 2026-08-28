@@ -46,6 +46,35 @@ _DEFAULT_SCANNERS: dict[AssetType, list[str]] = {
 }
 
 
+# Que asset types cada scanner realmente aceita (espelha o guard do start_scan de
+# cada adapter). Sem isto, um scanner incompatível era instanciado, levantava
+# ValueError, o erro era engolido, e o scan fechava com ZERO findings — "não achou
+# nada" quando na verdade era "não rodou a ferramenta certa".
+_SCANNER_ASSET_SUPPORT: dict[str, set[AssetType]] = {
+    "nmap": {AssetType.HOST, AssetType.URL, AssetType.DOMAIN, AssetType.PORT},
+    "zap": {AssetType.URL, AssetType.HOST, AssetType.DOMAIN},
+    "nuclei": {AssetType.URL, AssetType.HOST, AssetType.DOMAIN},
+    "greenbone": {AssetType.HOST, AssetType.DOMAIN},
+    "trivy": {AssetType.IMAGE, AssetType.REPO},
+    "gitleaks": {AssetType.REPO},
+    "trufflehog": {AssetType.REPO},
+    "checkov": {AssetType.REPO},
+    "semgrep": {AssetType.REPO},
+}
+
+
+def _supported_for(names: list[str], asset_type: AssetType) -> list[str]:
+    """Filtra os scanners pedidos pelos que aceitam este asset_type."""
+    out: list[str] = []
+    for n in names:
+        supported = _SCANNER_ASSET_SUPPORT.get(n)
+        if supported is not None and asset_type not in supported:
+            log.info("scanner.skipped_incompatible", scanner=n, asset_type=asset_type.value)
+            continue
+        out.append(n)
+    return out
+
+
 def _build_adapters(names: list[str]) -> list[ScannerAdapter]:
     """Instancia adapters a partir dos nomes pedidos; desconhecidos → warning."""
     from orchestrator.adapters.checkov_adapter import CheckovAdapter
@@ -173,11 +202,23 @@ async def run_scan(
     scan_id = scan_id or uuid4()
     options = dict(options or {})
     if adapters is None:
-        names = scanners or _DEFAULT_SCANNERS.get(target.asset_type, ["nmap", "zap"])
+        asset_default = _DEFAULT_SCANNERS.get(target.asset_type, ["nmap", "zap"])
+        # Filtra o que foi pedido pelo que aceita este asset_type. Um cliente antigo
+        # que manda ["nmap","zap"] para IMAGE/REPO não zera mais o scan: cai no
+        # default do tipo, que roda a ferramenta certa.
+        names = _supported_for(scanners, target.asset_type) if scanners else asset_default
+        if not names:
+            log.warning(
+                "scan.requested_scanners_incompatible",
+                requested=scanners,
+                asset_type=target.asset_type.value,
+                fallback=asset_default,
+            )
+            names = asset_default
         adapters = _build_adapters(names)
         if not adapters:
-            log.warning("scan.no_adapters_resolved", requested=names, fallback="nmap+zap")
-            adapters = _build_adapters(["nmap", "zap"])
+            log.warning("scan.no_adapters_resolved", requested=names, fallback=asset_default)
+            adapters = _build_adapters(asset_default)
     # Trivy: default internal scanners to vuln+secret+misconfig (CVEs + embedded
     # secrets + Dockerfile/IaC misconfig) unless the caller already set it.
     if any(getattr(a, "name", "") == "trivy" for a in adapters):

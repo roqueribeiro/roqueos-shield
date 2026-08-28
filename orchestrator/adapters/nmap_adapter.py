@@ -52,7 +52,12 @@ class NmapAdapter:
             return False
 
     async def start_scan(self, target: Target, options: dict[str, Any]) -> ScanHandle:
-        if target.asset_type not in (AssetType.HOST, AssetType.URL, AssetType.DOMAIN):
+        if target.asset_type not in (
+            AssetType.HOST,
+            AssetType.URL,
+            AssetType.DOMAIN,
+            AssetType.PORT,
+        ):
             raise ValueError(f"nmap não suporta asset_type={target.asset_type}")
 
         host = self._extract_host(target.value)
@@ -172,7 +177,12 @@ class NmapAdapter:
             from urllib.parse import urlparse
 
             return urlparse(value).hostname or value
-        return value.split("/")[0]  # remove path se vier "host:port/path"
+        host = value.split("/")[0]  # remove path/proto se vier "host:port/tcp"
+        # alvo PORT chega como "1.2.3.4:8080/tcp": nmap quer só o host. IPv6 entre
+        # colchetes ou com múltiplos ":" fica intacto.
+        if host.count(":") == 1 and not host.startswith("["):
+            host = host.split(":", 1)[0]
+        return host
 
     @staticmethod
     def _severity_for_service(service: str | None, port: int) -> Severity:
