@@ -101,7 +101,7 @@ async def build_bundle(scan_id: UUID) -> dict[str, Any]:
             "scanners_executed": list(scan.requested_scanners or []),
             "scanners_failed": [e.split(":")[0] for e in (scan.errors or []) if ":" in e],
         },
-        "target": _target_section(target),
+        "target": _target_section(target, rows),
         "summary": _summary(vulnerabilities),
         "compliance": _compliance_section(rows),
         "vulnerabilities": vulnerabilities,
@@ -167,14 +167,17 @@ def _detect_model_used(rows: list[FindingRow]) -> str | None:
     return None
 
 
-def _target_section(target: TargetRow | None) -> dict[str, Any]:
+def _target_section(
+    target: TargetRow | None, rows: list[FindingRow] | None = None
+) -> dict[str, Any]:
+    rows = rows or []
     if target is None:
         return {
             "primary_value": "unknown",
             "asset_type": "unknown",
             "scope": [],
             "out_of_scope": [],
-            "tech_stack_hints": _empty_tech_stack(),
+            "tech_stack_hints": derive_tech_stack(rows),
             "source_code_available_to_patcher": False,
         }
     return {
@@ -184,8 +187,109 @@ def _target_section(target: TargetRow | None) -> dict[str, Any]:
         "scope": [target.value],
         "out_of_scope": [],
         "contains_pii": target.contains_pii,
-        "tech_stack_hints": _empty_tech_stack(),  # TODO: derivar de evidências (Fase 2.5)
-        "source_code_available_to_patcher": False,
+        "tech_stack_hints": derive_tech_stack(rows, target),
+        # REPO = o patcher tem o código-fonte à mão (o scan veio dele).
+        "source_code_available_to_patcher": target.asset_type == "repo",
+    }
+
+
+# Sinais de stack que os scanners já entregam de graça — o bundle mandava tudo
+# vazio ("TODO: derivar de evidências"), então a IA de patch não sabia nem a
+# linguagem. Derivação determinística, sem I/O e sem LLM.
+_LANG_BY_EXT: dict[str, str] = {
+    ".py": "python",
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".jsx": "javascript",
+    ".java": "java",
+    ".go": "go",
+    ".rb": "ruby",
+    ".php": "php",
+    ".cs": "csharp",
+    ".rs": "rust",
+    ".kt": "kotlin",
+    ".swift": "swift",
+    ".scala": "scala",
+}
+_FILE_SIGNALS: dict[str, tuple[str, str]] = {
+    "requirements.txt": ("package_managers", "pip"),
+    "pyproject.toml": ("package_managers", "pip"),
+    "package.json": ("package_managers", "npm"),
+    "yarn.lock": ("package_managers", "yarn"),
+    "go.mod": ("package_managers", "go modules"),
+    "pom.xml": ("package_managers", "maven"),
+    "build.gradle": ("package_managers", "gradle"),
+    "gemfile": ("package_managers", "bundler"),
+    "composer.json": ("package_managers", "composer"),
+    "dockerfile": ("runtimes", "docker"),
+    "docker-compose.yml": ("runtimes", "docker compose"),
+}
+_SERVER_HINTS: tuple[str, ...] = (
+    "nginx",
+    "apache",
+    "iis",
+    "tomcat",
+    "jetty",
+    "gunicorn",
+    "uvicorn",
+    "express",
+    "openssh",
+    "mysql",
+    "postgresql",
+    "redis",
+    "mongodb",
+)
+
+
+def derive_tech_stack(rows: list[FindingRow], target: TargetRow | None = None) -> dict[str, Any]:
+    """Deriva pistas de stack das evidências que os scanners já produziram.
+
+    Fontes: caminho de arquivo (semgrep/gitleaks/checkov/trivy) para linguagem e
+    gerenciador de pacote; banner de serviço (nmap) para servidor; alvo REPO/IMAGE
+    para repositório e imagem. Determinístico: mesmo scan, mesmo resultado.
+    """
+    langs: set[str] = set()
+    pkgs: set[str] = set()
+    runtimes: set[str] = set()
+    servers: set[str] = set()
+    repos: set[str] = set()
+    images: set[str] = set()
+
+    for r in rows:
+        payload = r.payload or {}
+        value = str(((payload.get("target") or {}).get("value")) or "")
+        low = value.lower()
+        base = low.rsplit("/", 1)[-1].split(":", 1)[0]
+        for ext, lang in _LANG_BY_EXT.items():
+            if low.split(":", 1)[0].endswith(ext):
+                langs.add(lang)
+        if base in _FILE_SIGNALS:
+            bucket, name = _FILE_SIGNALS[base]
+            (pkgs if bucket == "package_managers" else runtimes).add(name)
+        if r.source_tool == "nmap":
+            blob = f"{value} {payload.get('description', '')}".lower()
+            for hint in _SERVER_HINTS:
+                if hint in blob:
+                    servers.add(hint)
+
+    if target is not None:
+        if target.asset_type == "repo":
+            repos.add(target.value)
+        elif target.asset_type == "image":
+            images.add(target.value)
+
+    found = any([langs, pkgs, runtimes, servers, repos, images])
+    return {
+        "languages": sorted(langs),
+        "frameworks": [],
+        "runtimes": sorted(runtimes),
+        "servers": sorted(servers),
+        "package_managers": sorted(pkgs),
+        "source_repos": sorted(repos),
+        "container_images": sorted(images),
+        # honesto: é derivação de evidência, não introspecção do projeto
+        "confidence": "medium" if found else "low",
     }
 
 
