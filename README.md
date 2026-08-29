@@ -58,7 +58,7 @@ CAI is **alpha (pre-1.0)**. Interfaces and DB schema may break. Production use a
         v                                          |
    +-------------------+      +----------------+   |
    | CAI Orchestrator  |----->| Canonical      |   |
-   |  - 14 adapters    |      | Finding (v2)   |   |
+   |  - 15 adapters    |      | Finding (v2)   |   |
    |  - PII scrubber   |      +-------+--------+   |
    |  - litellm AI     |              v            |
    |    triage         |      +----------------+   |
@@ -98,7 +98,7 @@ Open `http://127.0.0.1:8080/ui/` to see the dashboard, or `http://127.0.0.1:8080
 
 ## Features
 
-- **14 scanner adapters** following a single `ScannerAdapter` Protocol — easy to add new ones (see [CONTRIBUTING.md](CONTRIBUTING.md) and [`orchestrator/adapters/base.py`](orchestrator/adapters/base.py)). Coverage spans web/DAST, network, CVE templates, containers, IaC, Kubernetes, secrets, and external attack surface (Shodan/Censys/GitHub/subdomain-takeover).
+- **15 scanner adapters** following a single `ScannerAdapter` Protocol — easy to add new ones (see [CONTRIBUTING.md](CONTRIBUTING.md) and [`orchestrator/adapters/base.py`](orchestrator/adapters/base.py)). Coverage spans web/DAST, network, CVE templates, containers, IaC, Kubernetes, secrets, and external attack surface (Shodan/Censys/GitHub/subdomain-takeover).
 - **Canonical `Finding` schema** with deduplication, **CVSS v3 vector, CWE, OWASP Top 10**, evidence/PoC, confidence, references, and remediation hints — the structured data needed for compliance-mapped reporting.
 - **Authorized-scope enforcement** — target allow-list, SSRF / private-network / loopback blocking, argv-injection guard, and an optional `REQUIRE_AUTH_REF` gate that ties every scan to a written authorization (`orchestrator/domain/target_validator.py`).
 - **PII / PCI scrubber** that redacts CPF, CNPJ, card numbers, JWTs, AWS keys, and BR phone numbers _before_ anything leaves the orchestrator.
@@ -112,6 +112,7 @@ Open `http://127.0.0.1:8080/ui/` to see the dashboard, or `http://127.0.0.1:8080
 
 | Adapter                      | Scanner                    | Type                         |
 | ---------------------------- | -------------------------- | ---------------------------- |
+| `semgrep_adapter`            | Semgrep                    | **SAST** — reads the source code |
 | `nmap_adapter`               | Nmap                       | Network                      |
 | `zap_adapter`                | OWASP ZAP                  | Web app (DAST)               |
 | `nuclei_adapter`             | Nuclei                     | Templated vuln scan          |
@@ -126,6 +127,47 @@ Open `http://127.0.0.1:8080/ui/` to see the dashboard, or `http://127.0.0.1:8080
 | `github_exposure_adapter`    | GitHub Search              | Code / secret leaks          |
 | `censys_adapter`             | Censys                     | Internet exposure (optional) |
 | `subdomain_takeover_adapter` | subfinder + httpx + nuclei | Subdomain takeover           |
+
+## What keeps it honest
+
+A broken scanner and a clean target produce **the same output: zero findings**. In a
+report that goes to an auditor, that is the only difference that matters — so every
+adapter must be able to tell the two apart.
+
+| Situation | What the adapter does | What the report says |
+| --- | --- | --- |
+| Ran, found nothing | returns `[]` | no findings, coverage complete |
+| Could not verify | raises `ScanIntegrityError` | listed in `scanners_skipped`, `coverage_complete: false` |
+| Verified only in part | fills `RawResults.coverage_gaps` | an **INFO** finding naming the gap |
+
+Two CI gates hold the two halves of that promise, and both were validated by mutation
+testing — deliberately breaking the code and confirming the gate fails:
+
+- **`silencio`** (`scripts/check_no_silence.py`) parses the adapters' AST and rejects
+  an `except` in the scan lifecycle that ends in an empty result, a `poll()` that
+  decides on `task.done()` without reading `task.result()`, and a fabricated
+  success payload. An explicit `# silencio-ok: reason` is the only way past it.
+- **`efetividade`** (`tests/integration/test_efetividade_e2e.py`) builds a repository
+  with known flaws — command injection, tainted SQL, `pickle`, MD5, Flask `debug=True`,
+  a public S3 bucket, a `0.0.0.0/0` security group, an unencrypted volume — runs the
+  whole pipeline and requires real findings from every layer, while checking that a
+  missing scanner shows up as skipped. Without it, a tool that only raised exceptions
+  would pass every other test, because "zero findings" is the natural output of a
+  broken scanner.
+
+The full rule, with the nine historical cases that produced it, is in
+[`.claude/rules/60-contrato-do-silencio.md`](.claude/rules/60-contrato-do-silencio.md)
+(pt-BR) and [Architecture › O contrato do silêncio](docs/architecture.md).
+
+### SAST works without egress
+
+Semgrep's `--config auto` is incompatible with the `--metrics off` this project runs
+for data sovereignty, and the `p/...` packs are downloaded from the registry on every
+scan — which silently yields **zero rules** on a restricted corporate network. The
+image therefore ships the `semgrep-rules` set (LGPL-2.1) at `/opt/semgrep-rules`,
+pinned by commit and validated at build time, and the adapter loads only the language
+directories present in the checkout. Point `SEMGREP_RULES_DIR` elsewhere to use your
+own ruleset.
 
 ## Deeper documentation
 

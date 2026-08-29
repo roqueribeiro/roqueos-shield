@@ -16,6 +16,9 @@ O que ele checa, e por que cada um existe:
    dos controles de segurança.
 3. **Afirmações vencidas.** A doc não pode chamar de "stub" o que já é código
    executando, nem prometer que algo "está pendente" quando foi entregue.
+4. **Contagem de adapters.** "14 scanner adapters" escrito no README com 15 na
+   fábrica é doc velha do jeito mais fácil de não notar: o número não dá erro, só
+   fica errado. Aconteceu quando o Semgrep entrou.
 
 Rodar: `python scripts/check_docs_fresh.py` (exit != 0 reprova).
 """
@@ -59,6 +62,43 @@ def check_scanners() -> None:
                 f"'{nome}' é construível no pipeline e não aparece no README nem na "
                 "arquitetura — scanner que roda e ninguém documenta",
             )
+
+
+def check_contagem_de_adapters() -> None:
+    """O número anunciado tem que bater com a fábrica.
+
+    A checagem por nome (acima) não pega isto: o Semgrep entrou, ficou documentado na
+    tabela, e o README continuou dizendo "14 adapters". Número errado não quebra
+    nada — só mente para quem está decidindo se confia na ferramenta.
+    """
+    pipelines = _ler("orchestrator/jobs/pipelines.py")
+    bloco = pipelines.split("factories: dict[str, Any] = {", 1)
+    if len(bloco) < 2:
+        return  # já reportado por check_scanners
+    construiveis = set(re.findall(r'^\s*"([a-z_]+)":\s*lambda', bloco[1], re.MULTILINE))
+    # Os de OSINT não estão na fábrica do scan (rodam no pipeline de exposição), mas
+    # contam como adapter no README — a conta é sobre os arquivos `*_adapter.py`.
+    arquivos = {
+        p.stem.removesuffix("_adapter")
+        for p in (ROOT / "orchestrator" / "adapters").glob("*_adapter.py")
+    }
+    total = len(arquivos)
+    if not total:
+        falha("adapters", "não achei nenhum *_adapter.py — o parser quebrou?")
+        return
+
+    textos = {"README.md": _ler("README.md"), "docs/architecture.md": _ler("docs/architecture.md")}
+    padrao = re.compile(r"\b(\d{1,3})\s*(?:scanner\s+)?adapters?\b", re.IGNORECASE)
+    for arquivo, texto in textos.items():
+        for m in padrao.finditer(texto):
+            declarado = int(m.group(1))
+            if declarado != total:
+                falha(
+                    "adapters",
+                    f"{arquivo} anuncia '{m.group(0)}' e existem {total} arquivos "
+                    f"*_adapter.py ({', '.join(sorted(arquivos - construiveis)) or '—'} "
+                    "fora da fábrica do scan). Número errado não quebra nada, só mente",
+                )
 
 
 # ------------------------------------------------------------ 2. env / config
@@ -110,6 +150,7 @@ def check_afirmacoes_vencidas() -> None:
 
 def main() -> int:
     check_scanners()
+    check_contagem_de_adapters()
     check_env_documentado()
     check_afirmacoes_vencidas()
 

@@ -85,7 +85,7 @@ class ScannerAdapter(Protocol):
     async def normalize(self, raw) -> list[Finding]: ...
 ```
 
-**14 adapters implementados** — ver tabela em [README §7](../README.md#7-adapters-disponíveis).
+**15 adapters implementados** — ver tabela em [README §7](../README.md#7-adapters-disponíveis).
 
 **Princípios**:
 
