@@ -13,6 +13,13 @@
 
 # ---- scanner CLIs (download once, copy into the final image) ----------------
 FROM debian:bookworm-slim AS tools
+# TARGETARCH vem do buildx: `amd64` ou `arm64`. Ate 2026-08-29 as quatro URLs
+# abaixo eram amd64 fixo, entao a imagem so existia para amd64 — e a stack do
+# RoqueShield NAO subia num Mac Apple Silicon nem num servidor ARM, com um
+# "no matching manifest for linux/arm64/v8" que nao diz nada sobre a causa.
+# Cada projeto nomeia o asset de um jeito, e por isso os tres mapas: o gitleaks
+# chama o amd64 de `x64`, e o trivy usa `Linux-64bit`/`Linux-ARM64`.
+ARG TARGETARCH
 ARG NUCLEI_VERSION=3.3.7
 ARG GITLEAKS_VERSION=8.21.2
 ARG TRUFFLEHOG_VERSION=3.82.13
@@ -26,12 +33,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /tools
 RUN set -eux; \
-    curl -fsSL -o nuclei.zip "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" \
+    ARCH="${TARGETARCH:-amd64}"; \
+    case "$ARCH" in \
+      amd64) GL_ARCH=x64;   TV_ARCH=Linux-64bit ;; \
+      arm64) GL_ARCH=arm64; TV_ARCH=Linux-ARM64 ;; \
+      *) echo "arquitetura sem binario publicado: $ARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o nuclei.zip "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${ARCH}.zip" \
     && unzip -o nuclei.zip nuclei -d /usr/local/bin && rm nuclei.zip; \
-    curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz -C /usr/local/bin gitleaks; \
-    curl -fsSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz" | tar -xz -C /usr/local/bin trufflehog; \
-    curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar -xz -C /usr/local/bin trivy; \
-    chmod +x /usr/local/bin/nuclei /usr/local/bin/gitleaks /usr/local/bin/trufflehog /usr/local/bin/trivy
+    curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${GL_ARCH}.tar.gz" | tar -xz -C /usr/local/bin gitleaks; \
+    curl -fsSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${ARCH}.tar.gz" | tar -xz -C /usr/local/bin trufflehog; \
+    curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_${TV_ARCH}.tar.gz" | tar -xz -C /usr/local/bin trivy; \
+    chmod +x /usr/local/bin/nuclei /usr/local/bin/gitleaks /usr/local/bin/trufflehog /usr/local/bin/trivy; \
+    # Binario da arquitetura errada so falha quando alguem roda um scan, e ai o
+    # adapter vira scanners_skipped sem ninguem entender por que. Conferir aqui.
+    for b in nuclei gitleaks trufflehog trivy; do "$b" --version >/dev/null 2>&1 || "$b" -version >/dev/null 2>&1 || { echo "$b nao executa em $ARCH" >&2; exit 1; }; done
 
 # ---- ruleset do Semgrep, embarcado e validado no build ----------------------
 # POR QUE EMBARCAR: o default `--config p/security-audit` baixa as regras do
@@ -84,12 +100,13 @@ RUN set -eux; \
 # geraria imagem verde e vazia -- o mesmo silencio, agora no build. O gate conta os
 # templates e reprova se vierem menos que o piso.
 FROM debian:bookworm-slim AS nuclei-templates
+ARG TARGETARCH
 ARG NUCLEI_VERSION=3.3.7
 ARG NUCLEI_TEMPLATES_MIN=2000
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip \
     && rm -rf /var/lib/apt/lists/*
 RUN set -eux; \
-    curl -fsSL -o /tmp/nuclei.zip "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" \
+    curl -fsSL -o /tmp/nuclei.zip "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${TARGETARCH:-amd64}.zip" \
     && unzip -o /tmp/nuclei.zip nuclei -d /usr/local/bin && rm /tmp/nuclei.zip \
     && chmod +x /usr/local/bin/nuclei
 # `-templates-directory` NAO EXISTE no nuclei v3 e o build morria aqui com
@@ -157,13 +174,30 @@ RUN uv pip install --system --no-cache-dir \
         jinja2 pyyaml \
         dnstwist \
         semgrep \
-        checkov \
         typer rich
-# checkov (IaC) VOLTOU: a nota anterior dizia que a cadeia de dependência estava
-# quebrada no Python 3.13, e isso venceu — checkov 3.3.15 instala e roda (verificado:
-# 8 misconfigs num Terraform de teste). "Degrada graciosamente" era o problema, não a
-# solução: o health() falhava, o scanner era pulado em silêncio, e o relatório
-# continuava anunciando checkov num scan de REPO.
+# checkov (IaC) sai do ambiente do app e vai para um venv proprio.
+#
+# POR QUE, medido em 2026-08-29 na imagem publicada: `checkov` sem pin resolvia
+# para 3.0.34, e 3.0.34 NAO IMPORTA MAIS —
+#   ImportError: cannot import name 'sha1sum' from 'cyclonedx.model'
+# O resolvedor escolhia essa versao velha de proposito: checkov 3.3.15 exige
+# importlib-metadata<8 e o litellm exige >=8. Nao existe versao de checkov que
+# satisfaca os dois; forcar 3.3.15 no mesmo ambiente quebra a triagem por LLM.
+#
+# O adapter chama checkov como SUBPROCESSO (shutil.which("checkov")), entao ele
+# nao precisa dividir a arvore de dependencias com o app. Venv proprio resolve o
+# conflito inteiro, e o binario continua no PATH.
+#
+# O health() do adapter pegou isso e reportou como cobertura incompleta em vez de
+# zero achados — o contrato do silencio funcionando. Mas vetor de IaC nao
+# verificado num repo cheio de Dockerfile e compose e um buraco de verdade.
+RUN set -eux; \
+    python -m venv /opt/checkov-venv; \
+    /opt/checkov-venv/bin/pip install --no-cache-dir --quiet "checkov==3.3.15"; \
+    ln -sf /opt/checkov-venv/bin/checkov /usr/local/bin/checkov; \
+    # Instalado nao e o mesmo que executa: 3.0.34 tambem "instalava".
+    checkov --version; \
+    python -c "import litellm; print('litellm intacto')"
 
 COPY orchestrator /app/orchestrator
 COPY alembic.ini /app/
