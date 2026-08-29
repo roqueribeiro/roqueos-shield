@@ -56,7 +56,7 @@ scan fechava com **zero findings**, indistinguível de "alvo limpo".
 
 | Adapter | Tipo de alvo | O que encontra |
 | --- | --- | --- |
-| `semgrep` | repo | **SAST**: bug/vuln no código-fonte (injection, SSRF, path traversal, crypto fraca, desserialização). É o único que lê o CÓDIGO. |
+| `semgrep` | repo | **SAST**: bug/vuln no código-fonte (injection, SSRF, path traversal, crypto fraca, desserialização). É o único que lê o CÓDIGO. Roda **offline** com o ruleset embarcado (ver abaixo). |
 | `gitleaks`, `trufflehog` | repo | segredo commitado (o trufflehog verifica se a credencial ainda é válida) |
 | `checkov` | repo | misconfig de IaC (Terraform, CloudFormation, K8s, Dockerfile) |
 | `trivy` | image, repo | CVE de dependência e de pacote do SO, segredo embutido, misconfig |
@@ -93,6 +93,44 @@ class ScannerAdapter(Protocol):
 - `start_scan()` é não-bloqueante (subprocess/HTTP async)
 - `normalize()` produz `Finding` canônico — sem variantes
 - Severity é heurística do scanner; AI ajusta depois em `ai_triage.adjusted_severity`
+
+#### SAST sem depender do registry (por que o ruleset vem na imagem)
+
+O default do semgrep era `--config auto`. Medido:
+
+```
+$ semgrep scan --config auto --metrics off ...
+[ERROR]: Cannot create auto config when metrics are off.    → exit 2
+```
+
+`auto` exige telemetria ligada, e este projeto roda `--metrics off` por soberania de
+dados. O único scanner que lê o código falhava em **100%** das execuções.
+
+Trocar por `--config p/security-audit` resolve o erro mas cria outro problema no
+ambiente-alvo: os packs `p/...` são baixados do registry da Semgrep a cada scan. Numa
+rede corporativa restrita — que é o caso normal num banco — o semgrep sai com **código
+0, zero regras e zero achados**. O `_rules_ran` (via `--time`) pega esse silêncio e
+reprova, mas o SAST ficaria inútil justamente onde importa.
+
+Por isso a imagem embarca o **`semgrep-rules`** (LGPL-2.1) em `/opt/semgrep-rules`,
+pinado por commit no Dockerfile, com `semgrep --validate` como **gate de build** — se
+um diretório quebrar numa atualização do pin, a imagem não sai. São 22 diretórios por
+linguagem, 1894 regras. A raiz do repositório de regras **não** serve: ela contém
+config inválida, e passá-la faz o semgrep abortar com `1 configs were invalid` e zero
+regras (medido).
+
+O adapter escolhe, pelas extensões presentes no checkout, quais diretórios carregar:
+um repo Python não paga o parsing das regras de Kotlin (~2min → ~1min por scan, sem
+perder cobertura). `SEMGREP_RULES_DIR` aponta para outro caminho quando a instalação
+mantém ruleset próprio; caminho inexistente cai nos packs do registry.
+
+Medido no alvo de teste (app Flask + Terraform com defeitos conhecidos):
+
+| Config | Regras | Achados |
+| --- | --- | --- |
+| `auto` (default antigo) | 0 — erro de execução | 0 |
+| packs `p/...` do registry | 330 | 10 |
+| ruleset local, seleção por linguagem | 997 | 16 |
 
 #### O contrato do silêncio (leia antes de escrever ou revisar um adapter)
 

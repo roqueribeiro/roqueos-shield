@@ -1,7 +1,8 @@
 # CAI orchestrator — comprehensive image.
 #
-# Bundles the heavy scanner CLIs (nuclei / gitleaks / trufflehog) + Python
-# scanners (dnstwist / checkov) directly in the orchestrator+worker image so the
+# Bundles the heavy scanner CLIs (nuclei / gitleaks / trufflehog / trivy) + Python
+# scanners (dnstwist / checkov / semgrep) + o ruleset OFFLINE do semgrep, na
+# imagem do orchestrator+worker, para que os
 # adapters run them as in-process subprocesses (no docker.sock, no kali-toolbox
 # sidecar for the core scan set). This is the image RoqueOS (RoqueShield)
 # publishes + runs as a single shared stack.
@@ -27,6 +28,40 @@ RUN set -eux; \
     curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar -xz -C /usr/local/bin trivy; \
     chmod +x /usr/local/bin/nuclei /usr/local/bin/gitleaks /usr/local/bin/trufflehog /usr/local/bin/trivy
 
+# ---- ruleset do Semgrep, embarcado e validado no build ----------------------
+# POR QUE EMBARCAR: o default `--config p/security-audit` baixa as regras do
+# registry da Semgrep a cada scan. Num banco a rede e restrita, e sem alcancar o
+# registry o semgrep sai com codigo 0, ZERO regras e zero achados -- o silencio
+# classico. Com o ruleset em disco, ~1000 regras rodam OFFLINE.
+#
+# So os diretorios por linguagem, validados um a um: a RAIZ do repo tem config
+# invalida e passar a raiz faz o semgrep abortar com "1 configs were invalid" e
+# zero regras (medido). O `--validate` abaixo e um gate de BUILD: se um diretorio
+# quebrar numa atualizacao do pin, a imagem nao sai.
+# elixir fica de fora: exige extensao proprietaria que nao vem no open source.
+FROM python:3.13-slim AS rules
+ARG SEMGREP_RULES_COMMIT=40b8c63f75dc7c22c8a77482d73bfb864b146f7e
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir "semgrep>=1.100.0"
+RUN set -eux; \
+    git init -q /src && cd /src \
+    && git remote add origin https://github.com/semgrep/semgrep-rules.git \
+    && git fetch -q --depth 1 origin "${SEMGREP_RULES_COMMIT}" \
+    && git checkout -q FETCH_HEAD; \
+    mkdir -p /opt/semgrep-rules; \
+    for d in python javascript typescript java go ruby php csharp terraform \
+             dockerfile bash rust kotlin swift scala yaml json html c ocaml \
+             clojure generic; do \
+        cp -r "/src/$d" /opt/semgrep-rules/; \
+    done; \
+    find /opt/semgrep-rules -type d -name .semgrep_logs -prune -exec rm -rf {} +; \
+    rm -rf /src; \
+    for d in /opt/semgrep-rules/*/; do \
+        semgrep --validate --config "$d" --metrics off --disable-version-check; \
+    done; \
+    echo "${SEMGREP_RULES_COMMIT}" > /opt/semgrep-rules/PINNED_COMMIT
+
 # ---- orchestrator -----------------------------------------------------------
 FROM python:3.13-slim AS base
 
@@ -43,6 +78,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # container), então sem ele o health() falhava e o scan era pulado EM SILÊNCIO — um
 # scan de IMAGE não rodava nada e o relatório continuava listando "trivy".
 COPY --from=tools /usr/local/bin/nuclei /usr/local/bin/gitleaks /usr/local/bin/trufflehog /usr/local/bin/trivy /usr/local/bin/
+
+# Ruleset do Semgrep offline (~24MB). Sem ele o SAST -- o UNICO scanner que le o
+# codigo -- depende do registry, e some justamente na rede restrita que e o
+# ambiente-alvo deste projeto. O adapter escolhe por extensao do checkout quais
+# diretorios carregar (repo Python nao paga o parsing das regras de Kotlin).
+COPY --from=rules /opt/semgrep-rules /opt/semgrep-rules
+ENV SEMGREP_RULES_DIR=/opt/semgrep-rules
 
 # uv para instalação rápida
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv

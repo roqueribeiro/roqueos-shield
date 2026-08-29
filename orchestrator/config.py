@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://redis:6379/0"
 
     # Scanners
+    # Ruleset do Semgrep embarcado na imagem (semgrep-rules, LGPL-2.1, pinado no
+    # Dockerfile). Preferido sobre os packs `p/...` do registry porque funciona SEM
+    # egress — num banco a rede é restrita, e sem alcançar o registry o semgrep sai
+    # com código 0 e ZERO regras. Aponte para outro caminho se você mantém um
+    # ruleset próprio; vazio ou inexistente cai nos packs do registry.
+    SEMGREP_RULES_DIR: str = "/opt/semgrep-rules"
     ZAP_BASE_URL: str = "http://zap:8090"
     ZAP_API_KEY: str = ""
     TRIVY_SERVER_URL: str = "http://trivy:4954"
