@@ -81,6 +81,7 @@ async def test_agent_runs_real_tool_calls_and_sees_output(monkeypatch: pytest.Mo
     monkeypatch.setattr(cai_expert, "complete_with_tools", fake_llm, raising=False)
     monkeypatch.setattr("orchestrator.ai.gateway.complete_with_tools", fake_llm)
     monkeypatch.setattr("orchestrator.ai.agentic.executor._docker_exec", fake_runner)
+    monkeypatch.setattr("orchestrator.ai.agentic.executor._local_exec", fake_runner)
 
     out = await cai_expert.investigate_finding(_Finding(), dry_run=False, max_steps=5)
 
@@ -123,6 +124,7 @@ async def test_agent_cannot_escape_the_leash(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr("orchestrator.ai.gateway.complete_with_tools", fake_llm)
     monkeypatch.setattr("orchestrator.ai.agentic.executor._docker_exec", fake_runner)
+    monkeypatch.setattr("orchestrator.ai.agentic.executor._local_exec", fake_runner)
 
     out = await cai_expert.investigate_finding(_Finding(), dry_run=False, max_steps=5)
 

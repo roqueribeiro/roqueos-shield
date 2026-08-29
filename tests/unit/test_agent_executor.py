@@ -130,7 +130,7 @@ async def test_refused_command_never_reaches_the_runner() -> None:
     assert not called, "comando proibido chegou ao executor"
 
 
-async def test_allowed_command_executes_when_not_dry_run() -> None:
+async def test_allowed_command_executes_in_kali_mode() -> None:
     async def fake(argv: list[str]) -> tuple[int, str, str]:
         assert argv[:3] == ["docker", "exec", "cai-kali-toolbox"]
         return 0, "PORT 80/tcp open", ""
@@ -142,8 +142,54 @@ async def test_allowed_command_executes_when_not_dry_run() -> None:
         asset_type="host",
         dry_run=False,
         runner=fake,
+        mode="kali",
     )
     assert d.executed and d.exit_code == 0 and "80/tcp" in d.stdout
+
+
+async def test_allowed_command_executes_in_local_mode() -> None:
+    """O stack que o RoqueShield publica não sobe o kali-toolbox — sem o modo local o
+    agente não rodaria lá. A coleira é a mesma; muda só onde o processo nasce."""
+
+    async def fake(argv: list[str]) -> tuple[int, str, str]:
+        assert argv[0] == "nmap" and "docker" not in argv
+        return 0, "PORT 443/tcp open", ""
+
+    d = await run_in_kali(
+        ["nmap", "-sV", "juice-shop"],
+        phase=Phase.RECON,
+        target="juice-shop",
+        asset_type="host",
+        dry_run=False,
+        runner=fake,
+        mode="local",
+    )
+    assert d.executed and "443/tcp" in d.stdout
+
+
+async def test_leash_is_identical_in_local_mode() -> None:
+    """Mutante: o modo local NÃO pode ser um caminho mais frouxo que o Kali."""
+    called = False
+
+    async def spy(argv: list[str]) -> tuple[int, str, str]:
+        nonlocal called
+        called = True
+        return 0, "", ""
+
+    # o caminho aqui é só o argumento que a coleira precisa recusar (flag de escrita)
+    out_flag = ["nmap", "-oN", "/tmp/x", "juice-shop"]  # noqa: S108
+    for cmd in (["hydra", "-l", "admin", "juice-shop"], out_flag):
+        d = await run_in_kali(
+            cmd,
+            phase=Phase.EXPLOIT,
+            target="juice-shop",
+            asset_type="host",
+            dry_run=False,
+            runner=spy,
+            mode="local",
+        )
+        assert not d.allowed and not d.executed
+    assert not called
 
 
 def test_parse_command_never_uses_shell() -> None:

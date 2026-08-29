@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import re
 import shlex
+import shutil
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -223,6 +224,58 @@ def check_command(
     )
 
 
+async def _local_exec(argv: list[str]) -> tuple[int, str, str]:
+    """Executor local: o binário roda no próprio container do orchestrator.
+
+    É o mesmo modelo que os scanners já usam em produção — o Dockerfile do
+    orchestrator embute nmap/nuclei/gitleaks e diz, textualmente, "no kali-toolbox
+    sidecar for the core scan set". Sem este modo, o agente não rodaria no stack que
+    o RoqueShield publica, porque lá o container Kali não sobe. A coleira é a MESMA
+    nos dois modos: o que muda é onde o processo nasce, não o que ele pode ser.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        *argv,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out, err = await proc.communicate()
+    return proc.returncode or 0, out.decode(errors="replace"), err.decode(errors="replace")
+
+
+async def _kali_available(container: str) -> bool:
+    """O container Kali está de pé e alcançável?"""
+    docker = shutil.which("docker")
+    if not docker:
+        return False
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            docker,
+            "inspect",
+            "-f",
+            "{{.State.Running}}",
+            container,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=5.0)
+        return proc.returncode == 0 and out.decode().strip() == "true"
+    except (OSError, TimeoutError):
+        return False
+
+
+async def resolve_executor(container: str = "cai-kali-toolbox") -> str:
+    """Decide onde o comando roda: `kali` (isolado) ou `local` (in-process).
+
+    `AGENT_EXECUTOR=auto` (default) prefere o Kali quando ele existe — mais
+    isolamento — e cai para local quando não existe, que é o caso do stack padrão do
+    RoqueShield. `kali` e `local` forçam um dos dois.
+    """
+    mode = (settings.AGENT_EXECUTOR or "auto").strip().lower()
+    if mode in {"kali", "local"}:
+        return mode
+    return "kali" if await _kali_available(container) else "local"
+
+
 async def run_in_kali(
     command: list[str],
     *,
@@ -233,12 +286,13 @@ async def run_in_kali(
     timeout: float = DEFAULT_TIMEOUT,
     container: str = "cai-kali-toolbox",
     runner: Any = None,
+    mode: str | None = None,
 ) -> ExecDecision:
-    """Roda um comando no kali-toolbox — se, e só se, a coleira deixar.
+    """Roda um comando de segurança — se, e só se, a coleira deixar.
 
     `dry_run=True` (default) PLANEJA e não executa: é o que torna o parâmetro real,
     e não um bool decorativo como era antes. `runner` permite injetar o executor nos
-    testes (sem docker) sem afrouxar nenhuma checagem.
+    testes sem afrouxar nenhuma checagem. `mode` força kali/local (default: resolve).
     """
     decision = check_command(command, phase=phase, target=target, asset_type=asset_type)
     if not decision.allowed:
@@ -256,8 +310,14 @@ async def run_in_kali(
         return decision
 
     exec_timeout = min(max(timeout, 1.0), MAX_TIMEOUT)
-    argv = ["docker", "exec", container, *command]
-    _run = runner or _docker_exec
+    effective_mode = mode or await resolve_executor(container)
+    if effective_mode == "kali":
+        argv = ["docker", "exec", container, *command]
+        _run = runner or _docker_exec
+    else:
+        argv = list(command)
+        _run = runner or _local_exec
+    decision.reason = f"executando ({effective_mode})"
     try:
         rc, out, err = await asyncio.wait_for(_run(argv), timeout=exec_timeout)
     except TimeoutError:

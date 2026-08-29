@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # A coleira (fase/escopo/anti-injeção/dry_run) vale sempre; ver
     # `orchestrator.ai.agentic.executor`. False volta ao parecer de um prompt só.
     AGENT_ENABLED: bool = True
+    # Onde o comando do agente roda: "auto" (default: Kali se o container existir,
+    # senão in-process), "kali" (isolado) ou "local". O stack que o RoqueShield
+    # publica NÃO sobe o kali-toolbox — sem o modo local o agente não rodaria lá.
+    # A coleira do executor é idêntica nos dois modos.
+    AGENT_EXECUTOR: str = "auto"
     # Aliases legados (mantidos por compatibilidade, não usados pelo gateway)
     LLM_LOCAL_BASE_URL: str = "http://ollama:11434/v1"
     LLM_LOCAL_MODEL: str = "ollama/qwen2.5:32b-instruct-q4_K_M"
