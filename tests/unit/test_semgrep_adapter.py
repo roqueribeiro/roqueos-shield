@@ -77,3 +77,48 @@ async def test_semgrep_scans_real_vulnerable_code(tmp_path: Path) -> None:
     await adapter.cleanup(handle)
     assert any(f.source_tool == "semgrep" and "CWE-95" in f.cwe for f in findings)
     assert any(f.target.value.endswith(":2") for f in findings)  # eval está na linha 2
+
+
+# --- integridade: zero achados só vale se alguma regra rodou ---
+def test_zero_rules_is_not_clean_code() -> None:
+    """Config que não resolve (registry sem egress, pack privado, caminho errado)
+    faz o semgrep sair com código 0, zero regras e zero achados — indistinguível de
+    código são. Reproduzido com `rules: []`: exit 0 / 0 regras / 0 resultados."""
+    from orchestrator.adapters.semgrep_adapter import _rules_ran
+
+    assert _rules_ran({"time": {"rules": []}, "results": []}) == 0
+    assert _rules_ran({"results": []}) == 0
+    assert _rules_ran({}) == 0
+    assert _rules_ran({"time": {"rules": ["a", "b", "c"]}}) == 3
+
+
+async def test_fetch_results_refuses_a_scan_with_no_rules(tmp_path: Path) -> None:
+    from orchestrator.adapters.semgrep_adapter import ScanIntegrityError
+
+    adapter = SemgrepAdapter()
+    report = tmp_path / "report.json"
+    report.write_text('{"results": [], "time": {"rules": []}}', encoding="utf-8")
+
+    class _Done:
+        def result(self):
+            return 0, report
+
+    adapter._tasks["x"] = _Done()  # type: ignore[assignment]
+    handle = type("H", (), {"native_id": "x"})()
+    with pytest.raises(ScanIntegrityError, match="NENHUMA regra"):
+        await adapter.fetch_results(handle)  # type: ignore[arg-type]
+
+
+async def test_fetch_results_accepts_a_scan_that_ran_rules(tmp_path: Path) -> None:
+    adapter = SemgrepAdapter()
+    report = tmp_path / "report.json"
+    report.write_text('{"results": [], "time": {"rules": ["r1", "r2"]}}', encoding="utf-8")
+
+    class _Done:
+        def result(self):
+            return 0, report
+
+    adapter._tasks["y"] = _Done()  # type: ignore[assignment]
+    handle = type("H", (), {"native_id": "y"})()
+    raw = await adapter.fetch_results(handle)  # type: ignore[arg-type]
+    assert raw.payload["results"] == []  # limpo DE VERDADE: 2 regras rodaram

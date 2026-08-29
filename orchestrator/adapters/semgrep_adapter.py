@@ -118,6 +118,10 @@ class SemgrepAdapter:
                 "--metrics",
                 "off",
                 "--disable-version-check",
+                # `--time` põe em `time.rules` quantas regras REALMENTE rodaram. É o
+                # único sinal que separa "código limpo" de "nenhuma regra carregou"
+                # — ver `_rules_ran` abaixo.
+                "--time",
                 str(clone_dir),
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
@@ -156,6 +160,19 @@ class SemgrepAdapter:
                 payload = json.loads(report_path.read_text(encoding="utf-8")) or {}
             except json.JSONDecodeError:
                 payload = {}
+
+        # Zero achados só vale como "limpo" se ALGUMA regra rodou. Um `--config`
+        # que não resolve (registry sem egress no cliente, pack privado sem
+        # credencial, caminho errado) faz o semgrep sair com código 0, zero regras e
+        # zero resultados — indistinguível de código são. Reproduzido: config com
+        # `rules: []` dá exit 0 / 0 regras / 0 achados. Num banco, egress restrito é
+        # o caso normal, então este silêncio seria o comportamento padrão.
+        if not _rules_ran(payload):
+            raise ScanIntegrityError(
+                "semgrep terminou sem carregar NENHUMA regra: o resultado seria um "
+                "'limpo' falso. Verifique o --config (registry alcançável? pack "
+                "existe? caminho local correto?)."
+            )
         return RawResults(adapter=self.name, payload=payload)
 
     async def normalize(self, raw: RawResults) -> list[Finding]:
@@ -209,6 +226,18 @@ class SemgrepAdapter:
             output_paths=self._workdirs,
             adapter_name=self.name,
         )
+
+
+class ScanIntegrityError(RuntimeError):
+    """O scan terminou, mas o resultado não é confiável (ex.: nenhuma regra rodou)."""
+
+
+def _rules_ran(payload: dict[str, Any]) -> int:
+    """Quantas regras o semgrep realmente executou (`--time` popula `time.rules`)."""
+    if not isinstance(payload, dict):
+        return 0
+    regras = (payload.get("time") or {}).get("rules")
+    return len(regras) if isinstance(regras, list) else 0
 
 
 def _extract_cwes(raw: Any) -> list[str]:
