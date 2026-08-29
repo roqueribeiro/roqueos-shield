@@ -86,11 +86,24 @@ class NucleiAdapter:
             severity_filter,
             "-silent",
             "-no-color",
+            # Rede restrita (o caso de um banco): sem estes dois o nuclei tenta
+            # alcançar a internet — update check dos templates e o servidor
+            # interactsh (OAST) — e PENDURA até o timeout do adapter, devolvendo zero
+            # findings. Zero por travamento é indistinguível de "alvo limpo", e foi
+            # reproduzido: com egress bloqueado o scan nunca terminava; com -duc -ni
+            # terminou em segundos e achou o .git exposto.
+            "-duc",  # disable update check
+            "-ni",  # no interactsh (OAST sai por padrão; ligue quando houver egress)
         ]
         if self.templates_dir:
             cmd.extend(["-t", self.templates_dir])
         if templates := options.get("templates"):
-            cmd.extend(["-t", templates])
+            # nuclei aceita -t repetido. Passar a LISTA inteira como um argumento
+            # quebrava com "TypeError: expected str, bytes or os.PathLike object, not
+            # list" — bug latente que ninguém via porque o nuclei era órfão (não
+            # entrava na fábrica de adapters, então nunca rodava).
+            for tpl in [templates] if isinstance(templates, str) else templates:
+                cmd.extend(["-t", str(tpl)])
 
         log.info("nuclei.start_scan", cmd=cmd)
         proc = await asyncio.create_subprocess_exec(
