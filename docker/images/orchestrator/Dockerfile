@@ -16,7 +16,12 @@ FROM debian:bookworm-slim AS tools
 ARG NUCLEI_VERSION=3.3.7
 ARG GITLEAKS_VERSION=8.21.2
 ARG TRUFFLEHOG_VERSION=3.82.13
-ARG TRIVY_VERSION=0.58.1
+# 0.58.1 nao baixa mais: o asset trivy_0.58.1_Linux-64bit.tar.gz devolve 404, e o
+# mesmo vale para 0.58.2, 0.59.1 e 0.60.0 -- a aquasecurity podou os binarios das
+# releases antigas. Medido em 2026-08-29: das cinco versoes testadas so a atual
+# responde 200. Um pin de release do GitHub nao e imutavel como um digest de
+# imagem; se este 404 voltar, e subir a versao de novo, nao vendorizar o binario.
+ARG TRIVY_VERSION=0.74.0
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /tools
@@ -56,7 +61,12 @@ RUN set -eux; \
         cp -r "/src/$d" /opt/semgrep-rules/; \
     done; \
     find /opt/semgrep-rules -type d -name .semgrep_logs -prune -exec rm -rf {} +; \
-    rm -rf /src; \
+    cd /; rm -rf /src; \
+    # O `cd /` acima nao e enfeite: o RUN faz `cd /src` no comeco, e apagar /src
+    # deixava o processo com um cwd inexistente. O semgrep seguinte morria em
+    # Semgrep_envvars.of_current_sys_env com Sys_error("No such file or
+    # directory") -- erro que nao diz nada sobre diretorio apagado, e que so
+    # aparece no `docker build` inteiro.
     for d in /opt/semgrep-rules/*/; do \
         semgrep --validate --config "$d" --metrics off --disable-version-check; \
     done; \
@@ -82,9 +92,14 @@ RUN set -eux; \
     curl -fsSL -o /tmp/nuclei.zip "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" \
     && unzip -o /tmp/nuclei.zip nuclei -d /usr/local/bin && rm /tmp/nuclei.zip \
     && chmod +x /usr/local/bin/nuclei
+# `-templates-directory` NAO EXISTE no nuclei v3 e o build morria aqui com
+# "flag provided but not defined". O flag certo e `-ud/-update-template-dir`
+# para baixar, e `-t <dir>` para listar. Medido em 2026-08-29, na primeira vez
+# que a imagem foi buildada inteira -- ate entao os estagios tinham sido
+# rodados um a um, e este erro so aparece no `docker build` completo.
 RUN set -eux; \
-    nuclei -update-templates -templates-directory /opt/nuclei-templates; \
-    total="$(nuclei -tl -templates-directory /opt/nuclei-templates -silent 2>/dev/null | wc -l)"; \
+    nuclei -update-templates -update-template-dir /opt/nuclei-templates; \
+    total="$(nuclei -tl -t /opt/nuclei-templates -silent 2>/dev/null | wc -l)"; \
     echo "templates do nuclei: ${total}"; \
     if [ "${total}" -lt "${NUCLEI_TEMPLATES_MIN}" ]; then \
         echo "FALHA: so ${total} templates (piso ${NUCLEI_TEMPLATES_MIN}). O download" \
