@@ -11,6 +11,7 @@ from typing import Any
 import structlog
 from libnmap.parser import NmapParser, NmapParserException
 
+from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -120,8 +121,13 @@ class NmapAdapter:
         try:
             report = NmapParser.parse(raw.payload)
         except NmapParserException as e:
-            log.error("nmap.parse_failed", error=str(e))
-            return findings
+            # "Nenhuma porta aberta" é das afirmações mais fortes de um relatório de
+            # segurança. Ela não pode nascer de um parser que engasgou com XML
+            # truncado (nmap morto por OOM/sinal).
+            raise ScanIntegrityError(
+                f"nmap: XML ilegível ({e}). O resultado não diz nada sobre as portas "
+                "do alvo — não confunda com 'nenhuma porta aberta'."
+            ) from e
 
         # scan_id é injetado fora — aqui usamos placeholder; o pipeline reescreve.
         placeholder_scan_id = uuid4()

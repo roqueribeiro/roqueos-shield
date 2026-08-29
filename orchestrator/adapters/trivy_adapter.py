@@ -17,6 +17,7 @@ from uuid import uuid4
 
 import structlog
 
+from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -131,7 +132,13 @@ class TrivyAdapter:
     async def fetch_results(self, handle: ScanHandle) -> RawResults:
         path = self._outputs.get(handle.native_id)
         if path is None or not path.exists():
-            return RawResults(adapter=self.name, payload={"Results": []})
+            # `{"Results": []}` é a resposta canônica de "imagem sem CVE" — construí-la
+            # a partir de "o trivy não escreveu nada" é inventar um laudo limpo. E o
+            # trivy é o vetor INTEIRO de IMAGE.
+            raise ScanIntegrityError(
+                "trivy não produziu arquivo de saída: o scan não verificou a imagem. "
+                "Zero CVEs aqui seria um laudo inventado."
+            )
         return RawResults(
             adapter=self.name,
             payload=json.loads(path.read_text(encoding="utf-8")),

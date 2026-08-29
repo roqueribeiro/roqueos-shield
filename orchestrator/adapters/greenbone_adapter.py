@@ -18,6 +18,7 @@ from gvm.connections import TLSConnection, UnixSocketConnection
 from gvm.protocols.gmp import Gmp
 from gvm.transforms import EtreeTransform
 
+from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -144,8 +145,13 @@ class GreenboneAdapter:
                 return (resp.findtext(".//task/status") or "").strip()
 
         status = await asyncio.to_thread(_check)
-        if status in ("Done", "Stopped"):
+        # "Stopped" no GMP é scan INTERROMPIDO, não concluído — o irmão semântico de
+        # "Interrupted", que já era FAILED. Tratá-lo como Done entrega relatório
+        # parcial como se fosse varredura completa.
+        if status == "Done":
             return ScanStatus.DONE
+        if status == "Stopped":
+            return ScanStatus.FAILED
         if status in ("Interrupted", "Stop Requested"):
             return ScanStatus.FAILED
         return ScanStatus.RUNNING
@@ -184,8 +190,10 @@ class GreenboneAdapter:
         try:
             root = ET.fromstring(raw.payload)
         except (ET.ParseError, EntitiesForbidden, NotSupportedError) as e:
-            log.error("greenbone.parse_failed", error=str(e))
-            return findings
+            raise ScanIntegrityError(
+                f"greenbone: relatório XML ilegível ({e}). Nenhuma conclusão sobre "
+                "vulnerabilidades pode ser tirada daqui."
+            ) from e
 
         for result in root.iter("result"):
             host = result.findtext("host", default="")

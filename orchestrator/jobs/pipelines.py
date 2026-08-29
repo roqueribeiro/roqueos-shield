@@ -196,6 +196,11 @@ async def _run_adapter(
 ) -> list[Finding]:
     """Lifecycle completo de um scan: start → poll → fetch → normalize → cleanup.
 
+    REGRA: lista vazia significa "rodou e não achou". Qualquer coisa que impeça a
+    verificação — health falso, handle inválido, status FAILED, timeout — levanta
+    `AdapterUnavailableError`, e o `run_scan` registra em `scanners_skipped`. Sem
+    isso, um clone que falha vira "0 segredos, cobertura completa".
+
     Garante via `finally` que `adapter.cleanup(handle)` seja chamado, quando
     o adapter expoe o metodo opcional. Previne vazamento de asyncio.Task,
     diretorios temp, e excecoes nao-resgatadas (H7).
@@ -214,8 +219,9 @@ async def _run_adapter(
 
     handle = await adapter.start_scan(target, options)
     if not handle or not handle.native_id:
-        log.error("adapter.invalid_handle", adapter=adapter.name)
-        return []
+        raise AdapterUnavailableError(
+            f"{adapter.name} não devolveu um handle válido: o scan não começou."
+        )
     log.info("scan.started", adapter=adapter.name, native_id=handle.native_id)
 
     try:
@@ -225,13 +231,18 @@ async def _run_adapter(
             if status == ScanStatus.DONE:
                 break
             if status in (ScanStatus.FAILED, ScanStatus.CANCELED):
-                log.error("scan.failed", adapter=adapter.name, status=status)
-                return []
+                raise AdapterUnavailableError(
+                    f"{adapter.name} terminou com status {status.value}: clone que "
+                    "falhou, binário que estourou, serviço que caiu. NÃO verificou "
+                    "este vetor."
+                )
             await asyncio.sleep(poll_every)
             elapsed += poll_every
         else:
-            log.error("scan.timeout", adapter=adapter.name, timeout=timeout)
-            return []
+            raise AdapterUnavailableError(
+                f"{adapter.name} estourou o timeout de {timeout:.0f}s. Ferramenta "
+                "pendurada (rede sem egress é a causa clássica) não é alvo limpo."
+            )
 
         raw = await adapter.fetch_results(handle)
         return await adapter.normalize(raw)

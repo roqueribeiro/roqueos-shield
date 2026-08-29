@@ -98,6 +98,10 @@ async def run_exposure_scan(
 
     # 4. Shodan (opt-in)
     sh = ShodanAdapter()
+    if not await sh.health():
+        # Sem registro, o relatório de exposição afirmaria cobertura completa tendo
+        # pulado um vetor inteiro (o dnstwist logo acima já fazia certo).
+        result.errors.append("shodan: indisponível (chave ausente ou API fora do ar)")
     if await sh.health():
         try:
             sh_findings = await _run_adapter(
@@ -113,6 +117,10 @@ async def run_exposure_scan(
 
     # 5. Subdomain takeover por domínio (paralelo)
     st = SubdomainTakeoverAdapter()
+    if not await st.health():
+        result.errors.append(
+            "subdomain_takeover: indisponível (subfinder/httpx/nuclei ausentes)"
+        )
     if await st.health() and domains:
         coros = []
         for d in domains:

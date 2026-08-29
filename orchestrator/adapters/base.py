@@ -1,5 +1,6 @@
 """ScannerAdapter contract — every integration implements this Protocol."""
 
+
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
@@ -11,6 +12,17 @@ from orchestrator.domain.schemas import (
     ScanStatus,
     Target,
 )
+
+
+class ScanIntegrityError(RuntimeError):
+    """O scanner terminou, mas o resultado não é confiável.
+
+    Existe para separar "rodou e não achou" de "não deu para verificar". Um arquivo
+    de saída ausente, um XML que não parseia, uma ferramenta que não avaliou nenhum
+    controle: nada disso é alvo limpo, e devolver lista vazia nesses casos faz a
+    ferramenta mentir sem querer. O pipeline transforma esta exceção em cobertura
+    incompleta declarada.
+    """
 
 
 @runtime_checkable
