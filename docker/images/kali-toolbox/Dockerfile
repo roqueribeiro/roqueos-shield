@@ -48,8 +48,15 @@ RUN curl -sL https://github.com/aquasecurity/trivy/releases/latest/download/triv
 # kube-bench
 RUN curl -sL https://github.com/aquasecurity/kube-bench/releases/latest/download/kube-bench_0.10.5_linux_amd64.tar.gz | tar -xz -C /usr/local/bin/ kube-bench || true
 
-# Templates do nuclei
-RUN nuclei -update-templates || true
+# Templates do nuclei. O `|| true` que estava aqui gerava imagem verde e VAZIA:
+# medido, o `-update-templates` falha com um WRN e devolve rc 0 quando nao alcanca
+# o GitHub, e o nuclei so descobre no scan, com "no templates provided".
+ARG NUCLEI_TEMPLATES_MIN=2000
+RUN set -eux; \
+    nuclei -update-templates; \
+    total="$(nuclei -tl -silent 2>/dev/null | wc -l)"; \
+    echo "templates do nuclei: ${total}"; \
+    [ "${total}" -ge "${NUCLEI_TEMPLATES_MIN}" ] || { echo "FALHA: so ${total} templates"; exit 1; }
 
 # gvm-tools (cliente Greenbone GMP)
 RUN pip install --break-system-packages --no-cache-dir gvm-tools python-gvm || pip install --no-cache-dir gvm-tools python-gvm

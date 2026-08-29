@@ -338,6 +338,10 @@ class ZAPAdapter:
                     target=target,
                     source_tool=self.name,
                     source_rule_id=str(a.get("pluginId", a.get("alertRef", ""))),
+                    # O ZAP alerta por PARÂMETRO: XSS em `?q=` e em `?sort=` da mesma
+                    # URL têm o mesmo pluginId e o mesmo target.value. Sem isto a
+                    # chave de dedupe colidia e um dos dois sumia do relatório.
+                    dedup_discriminator=(a.get("param") or None),
                     cwe=cwe,
                     title=a.get("name", "ZAP alert"),
                     description=a.get("description", ""),

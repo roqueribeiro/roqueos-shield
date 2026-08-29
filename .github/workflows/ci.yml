@@ -170,7 +170,7 @@ jobs:
     runs-on: ubuntu-latest
     # Gate bloqueante: a suíte reprova o merge (o teste do scrubber que "falhava"
     # era o SEC-02, agora consertado). O piso de cobertura é catraca que só sobe —
-    # hoje 64%; a varredura do silêncio (adapters + integridade) subiu o piso de 34.
+    # hoje 65%; a varredura do silêncio (adapters + integridade) subiu o piso de 34.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -182,7 +182,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
       - name: pytest
-        run: pytest --cov=orchestrator --cov-report=term-missing --cov-fail-under=63
+        run: pytest --cov=orchestrator --cov-report=term-missing --cov-fail-under=64
 
   build-image:
     name: Build orchestrator image

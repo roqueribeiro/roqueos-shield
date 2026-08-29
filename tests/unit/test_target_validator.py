@@ -170,3 +170,49 @@ def test_rejects_image_registry_imds_literal(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(settings, "TARGET_ALLOWLIST", "")
     with pytest.raises(TargetValidationError, match="registry"):
         validate_target_value("169.254.169.254/evil:latest", asset_type="image")
+
+
+def test_host_que_nao_resolve_e_bloqueado_e_nao_liberado(monkeypatch) -> None:
+    """A guarda de SSRF falhava ABERTA numa indisponibilidade de DNS.
+
+    `_resolve_host_ips` devolve `[]` quando o DNS falha, e `any([])` é False — então
+    o host passava como seguro. Defesa que se comporta como aprovação é o mesmo
+    defeito de "não rodou parece não achou", com consequência pior.
+
+    Bloquear não custa alvo legítimo: host que não resolve não seria escaneado de
+    qualquer forma, e o que está na TARGET_ALLOWLIST é liberado ANTES desta checagem.
+    """
+    from orchestrator.domain import target_validator as tv
+
+    monkeypatch.setattr(tv, "_resolve_host_ips", lambda h: [])
+    assert tv._is_blocked_network("host-que-nao-resolve.invalid") is True
+
+
+def test_host_que_resolve_para_ip_publico_continua_liberado(monkeypatch) -> None:
+    from orchestrator.domain import target_validator as tv
+
+    monkeypatch.setattr(tv, "_resolve_host_ips", lambda h: ["93.184.216.34"])
+    assert tv._is_blocked_network("example.com") is False
+
+
+def test_imagem_sem_registry_nao_e_tratada_como_host() -> None:
+    """`nginx:1.27-alpine` não tem registry — o `:` ali é a TAG, não uma porta.
+
+    A heurística antiga (primeiro componente com "." ou ":") tratava `nginx` como
+    host de registry. Não incomodava enquanto a resolução de DNS falhava ABERTA; com
+    o fail-closed, passou a recusar a imagem oficial mais comum do mundo. Registry só
+    existe quando há uma barra depois do primeiro componente.
+    """
+    for imagem in ("nginx:1.27-alpine", "alpine:3.19", "myorg/app:2"):
+        assert validate_target_value(imagem, asset_type="image") == imagem
+
+
+def test_registry_em_rede_interna_continua_bloqueado() -> None:
+    """O conserto acima não pode abrir o buraco do SEC-04."""
+    for imagem in (
+        "169.254.169.254/evil:latest",
+        "127.0.0.1:5000/x:1",
+        "metadata.google.internal/x:1",
+    ):
+        with pytest.raises(TargetValidationError, match="registry"):
+            validate_target_value(imagem, asset_type="image")

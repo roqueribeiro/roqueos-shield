@@ -48,7 +48,16 @@ class NucleiAdapter:
         templates_dir: str | None = None,
     ) -> None:
         self.nuclei_bin = nuclei_bin or shutil.which("nuclei") or "nuclei"
-        self.templates_dir = templates_dir
+        # Templates embarcados na imagem (`/opt/nuclei-templates`, pinados e
+        # CONFERIDOS no build). Sem eles o nuclei sai com "no templates provided" e
+        # rc 1 — honesto, mas inútil em 100% dos scans "web" e "full". O env permite
+        # apontar para outro conjunto; caminho inexistente cai no default do nuclei.
+        import os
+
+        embarcado = os.environ.get("NUCLEI_TEMPLATES_DIR", "/opt/nuclei-templates")
+        self.templates_dir = templates_dir or (
+            embarcado if Path(embarcado).is_dir() else None
+        )
         self._tasks: dict[str, asyncio.Task[int]] = {}
         self._output_paths: dict[str, Path] = {}
 

@@ -57,3 +57,42 @@ async def test_nuclei_does_not_hang_on_restricted_network(monkeypatch: pytest.Mo
         await NucleiAdapter().start_scan(target, {})
     assert "-duc" in cap.argv, "update check ligado: pendura sem egress"
     assert "-ni" in cap.argv, "interactsh ligado: pendura sem egress"
+
+
+def test_usa_o_diretorio_embarcado_quando_existe(tmp_path, monkeypatch) -> None:
+    """Sem templates o nuclei sai com "no templates provided" e rc 1.
+
+    Honesto (vira `scanners_skipped`), mas inútil em 100% dos scans "web" e "full" —
+    que são justamente os que a UI do RoqueShield promete com nuclei. A imagem passa
+    a embarcar os templates, e o adapter os usa por padrão.
+    """
+    from orchestrator.adapters.nuclei_adapter import NucleiAdapter
+
+    monkeypatch.setenv("NUCLEI_TEMPLATES_DIR", str(tmp_path))
+    assert NucleiAdapter().templates_dir == str(tmp_path)
+
+
+def test_sem_diretorio_embarcado_deixa_o_nuclei_decidir(tmp_path, monkeypatch) -> None:
+    from orchestrator.adapters.nuclei_adapter import NucleiAdapter
+
+    monkeypatch.setenv("NUCLEI_TEMPLATES_DIR", str(tmp_path / "nao-existe"))
+    assert NucleiAdapter().templates_dir is None
+
+
+def test_dockerfile_confere_a_contagem_de_templates() -> None:
+    """`nuclei -update-templates` falha com um WRN e devolve **rc 0**.
+
+    Medido nesta máquina, com o proxy recusando o repo: warning, exit 0, zero
+    templates. Um `RUN` ingênuo (ou com `|| true`, que era o caso do kali) geraria
+    imagem verde e vazia — o mesmo silêncio, agora no build.
+    """
+    from pathlib import Path
+
+    for arquivo in (
+        "docker/images/orchestrator/Dockerfile",
+        "docker/images/kali-toolbox/Dockerfile",
+    ):
+        fonte = Path(arquivo).read_text(encoding="utf-8")
+        assert "NUCLEI_TEMPLATES_MIN" in fonte, f"{arquivo} sem piso de templates"
+        assert "nuclei -tl" in fonte, f"{arquivo} não conta o que baixou"
+        assert "-update-templates || true" not in fonte, f"{arquivo} ainda engole a falha"

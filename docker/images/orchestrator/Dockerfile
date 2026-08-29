@@ -62,6 +62,37 @@ RUN set -eux; \
     done; \
     echo "${SEMGREP_RULES_COMMIT}" > /opt/semgrep-rules/PINNED_COMMIT
 
+# ---- templates do nuclei, embarcados e CONFERIDOS no build ------------------
+# Mesma logica do ruleset do semgrep, e pela mesma razao: o binario do nuclei era
+# instalado e os TEMPLATES nunca. Sem eles o nuclei sai com
+# "[FTL] Could not run nuclei: no templates provided for scan" e rc 1 -- o adapter e
+# honesto (vira scanners_skipped), mas o nuclei NAO FUNCIONA em 100% dos scans
+# "web" e "full", que sao justamente os que a UI promete com nuclei.
+#
+# Medido, e e por isso que existe o `-tl` abaixo: `nuclei -update-templates` falha
+# com um WRN e devolve **rc 0** quando nao alcanca o GitHub. Um `RUN` ingenuo
+# geraria imagem verde e vazia -- o mesmo silencio, agora no build. O gate conta os
+# templates e reprova se vierem menos que o piso.
+FROM debian:bookworm-slim AS nuclei-templates
+ARG NUCLEI_VERSION=3.3.7
+ARG NUCLEI_TEMPLATES_MIN=2000
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip \
+    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    curl -fsSL -o /tmp/nuclei.zip "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" \
+    && unzip -o /tmp/nuclei.zip nuclei -d /usr/local/bin && rm /tmp/nuclei.zip \
+    && chmod +x /usr/local/bin/nuclei
+RUN set -eux; \
+    nuclei -update-templates -templates-directory /opt/nuclei-templates; \
+    total="$(nuclei -tl -templates-directory /opt/nuclei-templates -silent 2>/dev/null | wc -l)"; \
+    echo "templates do nuclei: ${total}"; \
+    if [ "${total}" -lt "${NUCLEI_TEMPLATES_MIN}" ]; then \
+        echo "FALHA: so ${total} templates (piso ${NUCLEI_TEMPLATES_MIN}). O download" \
+             "falhou em silencio -- o nuclei sairia sem verificar nada."; \
+        exit 1; \
+    fi; \
+    echo "${total}" > /opt/nuclei-templates/TEMPLATE_COUNT
+
 # ---- orchestrator -----------------------------------------------------------
 FROM python:3.13-slim AS base
 
@@ -85,6 +116,11 @@ COPY --from=tools /usr/local/bin/nuclei /usr/local/bin/gitleaks /usr/local/bin/t
 # diretorios carregar (repo Python nao paga o parsing das regras de Kotlin).
 COPY --from=rules /opt/semgrep-rules /opt/semgrep-rules
 ENV SEMGREP_RULES_DIR=/opt/semgrep-rules
+
+# Templates do nuclei, offline. Sem eles o nuclei nao roda -- e ele e metade do que
+# os profiles "web" e "full" prometem na tela do RoqueShield.
+COPY --from=nuclei-templates /opt/nuclei-templates /opt/nuclei-templates
+ENV NUCLEI_TEMPLATES_DIR=/opt/nuclei-templates
 
 # uv para instalação rápida
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv

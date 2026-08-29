@@ -83,7 +83,16 @@ def _is_blocked_network(host: str) -> bool:
         return True
     if _is_ip_literal(host):
         return _ip_is_blocked(host)
-    return any(_ip_is_blocked(ip) for ip in _resolve_host_ips(host))
+    ips = _resolve_host_ips(host)
+    if not ips:
+        # FAIL CLOSED. `any([])` é False, então uma falha de DNS fazia a guarda de
+        # SSRF liberar o host — a defesa se comportando como aprovação, que é o mesmo
+        # defeito de "não rodou parece não achou", com consequência pior.
+        # Bloquear não custa alvo legítimo: um host que não resolve não seria
+        # escaneado de qualquer forma, e o que está na TARGET_ALLOWLIST é liberado
+        # ANTES desta checagem (ver `validate_target_value`).
+        return True
+    return any(_ip_is_blocked(ip) for ip in ips)
 
 
 def _host_in_allowlist(host: str, allowlist: list[str]) -> bool:
@@ -155,8 +164,15 @@ def validate_target_value(value: str, *, asset_type: str | None = None) -> str:
         # Image: registry/name:tag. SEC-04: se o primeiro componente for um host de
         # registry (tem "." ou ":") e apontar para rede interna/IMDS, bloquear —
         # senão `169.254.169.254/evil:latest` alcança o metadata pelo scanner.
-        first = v.split("/", 1)[0]
-        if "." in first or ":" in first or first == "localhost":
+        # Só há registry quando existe uma BARRA depois do primeiro componente.
+        # `nginx:1.27-alpine` não tem registry — o `:` ali é a tag, não uma porta —
+        # e a heurística antiga tratava `nginx` como host. Isso não incomodava
+        # enquanto a resolução falhava ABERTA; com o fail-closed, passou a recusar
+        # a imagem oficial mais comum do mundo. Regra do Docker: registry é o
+        # primeiro componente SE contiver "." ou ":" ou for "localhost", E houver
+        # "/" depois dele.
+        first = v.split("/", 1)[0] if "/" in v else ""
+        if first and ("." in first or ":" in first or first == "localhost"):
             registry_host = first.split(":", 1)[0]
             if (
                 settings.LAB_ONLY

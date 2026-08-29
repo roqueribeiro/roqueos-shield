@@ -245,6 +245,10 @@ class TrivyAdapter:
                         target=sub_target,
                         source_tool=self.name,
                         source_rule_id=s.get("RuleID"),
+                        # Três segredos distintos no MESMO arquivo casados pela mesma
+                        # regra (`generic-api-key`) colapsavam numa chave só e dois
+                        # sumiam. A linha os separa.
+                        dedup_discriminator=str(s.get("StartLine") or ""),
                         title=f"Secret exposto: {s.get('Title')}",
                         description=f"Linha {s.get('StartLine')}: {s.get('Match', '')[:300]}",
                         severity=sev,

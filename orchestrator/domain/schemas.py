@@ -124,6 +124,16 @@ class Finding(BaseModel):
         default=None,
         description="Caminho no volume reports_out para a saída bruta do scanner",
     )
+    # Entra na chave de dedupe quando dois achados DIFERENTES compartilham alvo e
+    # regra. Caso real: o ZAP alerta por PARÂMETRO — XSS refletido em `?q=` e em
+    # `?sort=` da mesma URL têm o mesmo pluginId e o mesmo target.value, então a
+    # chave colidia e um dos dois era descartado sem registro. Mesmo problema no
+    # trivy Secrets: três chaves distintas casadas pela regra `generic-api-key` no
+    # mesmo arquivo colapsavam em uma.
+    dedup_discriminator: str | None = Field(
+        default=None,
+        description="Parâmetro/campo que distingue dois achados da mesma regra no mesmo alvo",
+    )
 
     discovered_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deduped_key: str = Field(default="")
@@ -135,7 +145,8 @@ class Finding(BaseModel):
         if self.deduped_key:
             return self
         rule_id = self.source_rule_id or self.vuln_id or self.title or ""
-        material = f"{self.target.value}::{rule_id}".encode()
+        extra = self.dedup_discriminator or ""
+        material = f"{self.target.value}::{rule_id}::{extra}".encode()
         # set via __dict__ to avoid re-triggering validation
         object.__setattr__(self, "deduped_key", hashlib.sha256(material).hexdigest()[:32])
         return self
