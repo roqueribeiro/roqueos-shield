@@ -4,7 +4,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/release/python-3130/)
-[![CI](https://github.com/roqueribeiro/more4cai/actions/workflows/ci.yml/badge.svg)](https://github.com/roqueribeiro/more4cai/actions/workflows/ci.yml)
+[![CI](https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#status)
 
 **Documentation in other languages:** [Português (Brasil)](README.pt-BR.md)
@@ -82,8 +82,8 @@ CAI is **alpha (pre-1.0)**. Interfaces and DB schema may break. Production use a
 Prerequisites: Docker Desktop (WSL2 on Windows) or Docker Engine, 8 GB of free RAM, optionally a Claude/OpenAI API key.
 
 ```bash
-git clone https://github.com/roqueribeiro/more4cai.git
-cd more4cai
+git clone https://github.com/roqueribeiro/roqueos-shield.git
+cd roqueos-shield
 cp .env.example .env
 # fill in APP_TOKEN, POSTGRES_PASSWORD, ZAP_API_KEY (any random strings)
 # optional: ANTHROPIC_API_KEY or OPENAI_API_KEY

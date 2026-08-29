@@ -490,24 +490,24 @@ Stream SSE de todo log do orchestrator. Filtrável por `event`/`level`/qualquer 
 
 ## Integração RoqueOS (RoqueShield)
 
-O more4cai (engine "CAI") é embarcado no **RoqueOS** como a feature **admin-only RoqueShield** — mesmo padrão dos módulos Agent/Android/Windows: opt-in, container-backed, proxy admin-gated. Arquitetura da integração:
+O roqueos-shield (engine "CAI") é embarcado no **RoqueOS** como a feature **admin-only RoqueShield** — mesmo padrão dos módulos Agent/Android/Windows: opt-in, container-backed, proxy admin-gated. Arquitetura da integração:
 
 ```
 RoqueOS Frontend (Vue) — app "RoqueShield" (ROSPentest.vue, admin-only)
    │  REST + SSE via apiService → roqueos-server (session-token, ADMIN-gated)
    ▼
 roqueos-server (NestJS) — módulo `pentest`
-   ├─ provisiona o STACK more4cai (reusa o motor de Compose Stacks)
+   ├─ provisiona o STACK roqueos-shield (reusa o motor de Compose Stacks)
    ├─ guarda APP_TOKEN + chaves de IA CRIPTOGRAFADOS (AES, ENCRYPTION_KEY)
    ├─ proxy reverso  ALL /pentest/api/* → orchestrator:8080  (injeta X-API-Token; o browser NUNCA vê o token)
    ├─ pipa SSE (text/event-stream) pro progresso ao vivo
    └─ @RequirePermission(ADMIN) em tudo
    │  dockerode → sobe a stack na roqueos-network
    ▼
-stack more4cai: orchestrator + worker + postgres + redis + zap + trivy  (+ greenbone/ollama opt-in)
+stack roqueos-shield: orchestrator + worker + postgres + redis + zap + trivy  (+ greenbone/ollama opt-in)
 ```
 
-- **Modelo de auth:** o RoqueOS gera/guarda o `APP_TOKEN` do more4cai criptografado em repouso e injeta `X-API-Token` em cada request proxiado. O gate real é `ApiKeyGuard` + `@RequirePermission(ADMIN)` + o app `adminOnly` no front; o browser autentica por **session-token** curto (nunca apiKey na URL).
+- **Modelo de auth:** o RoqueOS gera/guarda o `APP_TOKEN` do roqueos-shield criptografado em repouso e injeta `X-API-Token` em cada request proxiado. O gate real é `ApiKeyGuard` + `@RequirePermission(ADMIN)` + o app `adminOnly` no front; o browser autentica por **session-token** curto (nunca apiKey na URL).
 - **Config de IA guiada:** a aba **IA** lista os modelos reais por chave (`POST /pentest/ai/models` — bate no `/models` de cada provider server-side; as chaves nunca vão pro browser) e os campos de modelo viram **select**.
 - **Relatórios abrem nas ferramentas nativas do RoqueOS:** md/json/csv no Editor de Texto, HTML no Navegador — nunca `window.open`/download (não escapam o OS).
 - **UX nativa:** dashboard (postura de segurança + cards de scan), novo scan (com confirmação de autorização + `authorization_ref`), **stepper de fases ao vivo via SSE**, findings por severidade, e os 4 formatos de relatório (PDF/MD/JSON-AI-Bundle/CSV).

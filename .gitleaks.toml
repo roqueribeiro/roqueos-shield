@@ -10,7 +10,7 @@
 # mais provável deste projeto, porque toda instalação configura uma. As regras abaixo
 # cobrem os provedores que este código realmente usa.
 
-title = "more4cai — secret scanning"
+title = "roqueos-shield — secret scanning"
 
 [extend]
 useDefault = true

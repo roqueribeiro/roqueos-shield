@@ -90,7 +90,7 @@
 ### Setup
 
 ```bash
-git clone https://github.com/roqueribeiro/more4cai.git && cd more4cai
+git clone https://github.com/roqueribeiro/roqueos-shield.git && cd roqueos-shield
 cp .env.example .env
 
 # Gera secrets fortes

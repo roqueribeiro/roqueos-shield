@@ -33,8 +33,8 @@ Prerequisites:
 Clone and bootstrap:
 
 ```bash
-git clone https://github.com/roqueribeiro/more4cai.git
-cd more4cai
+git clone https://github.com/roqueribeiro/roqueos-shield.git
+cd roqueos-shield
 cp .env.example .env
 # fill in at least APP_TOKEN, POSTGRES_PASSWORD, ZAP_API_KEY (any random strings)
 
@@ -127,4 +127,4 @@ Some files have extra review requirements because they affect compliance/securit
 
 ## Questions?
 
-Open a [Discussion](https://github.com/roqueribeiro/more4cai/discussions) (preferred for design questions) or an issue.
+Open a [Discussion](https://github.com/roqueribeiro/roqueos-shield/discussions) (preferred for design questions) or an issue.

@@ -104,13 +104,13 @@ dev = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/roqueribeiro/more4cai"
-Repository    = "https://github.com/roqueribeiro/more4cai"
-Documentation = "https://github.com/roqueribeiro/more4cai#readme"
-Issues        = "https://github.com/roqueribeiro/more4cai/issues"
-Discussions   = "https://github.com/roqueribeiro/more4cai/discussions"
-Changelog     = "https://github.com/roqueribeiro/more4cai/blob/main/CHANGELOG.md"
-Security      = "https://github.com/roqueribeiro/more4cai/blob/main/SECURITY.md"
+Homepage      = "https://github.com/roqueribeiro/roqueos-shield"
+Repository    = "https://github.com/roqueribeiro/roqueos-shield"
+Documentation = "https://github.com/roqueribeiro/roqueos-shield#readme"
+Issues        = "https://github.com/roqueribeiro/roqueos-shield/issues"
+Discussions   = "https://github.com/roqueribeiro/roqueos-shield/discussions"
+Changelog     = "https://github.com/roqueribeiro/roqueos-shield/blob/main/CHANGELOG.md"
+Security      = "https://github.com/roqueribeiro/roqueos-shield/blob/main/SECURITY.md"
 
 [project.scripts]
 cai = "orchestrator.cli:app"

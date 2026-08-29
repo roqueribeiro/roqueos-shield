@@ -247,8 +247,8 @@ def test_repo_passa_pelo_guarda_de_rede(repo: str, monkeypatch) -> None:
 @pytest.mark.parametrize(
     "repo",
     [
-        "https://github.com/roqueribeiro/more4cai.git",
-        "git@github.com:roqueribeiro/more4cai.git",
+        "https://github.com/roqueribeiro/roqueos-shield.git",
+        "git@github.com:roqueribeiro/roqueos-shield.git",
     ],
 )
 def test_repo_publico_continua_aceito(repo: str, monkeypatch) -> None:

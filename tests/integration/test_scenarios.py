@@ -70,7 +70,7 @@ async def test_service_token_is_the_gate(headers, esperado) -> None:
         ("url", "http://127.0.0.1:8088"),
         ("host", "127.0.0.1"),
         ("image", "alpine:3.19"),
-        ("repo", "https://github.com/roqueribeiro/more4cai"),
+        ("repo", "https://github.com/roqueribeiro/roqueos-shield"),
     ],
 )
 async def test_every_asset_type_can_be_registered(asset_type: str, value: str) -> None:

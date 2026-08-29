@@ -17,7 +17,7 @@ CAI is in **alpha** (pre-1.0). Only the `main` branch is supported for security 
 
 Use one of the following private channels:
 
-1. **Preferred** — [GitHub Security Advisories](https://github.com/roqueribeiro/more4cai/security/advisories/new) (private to maintainers; coordinated-disclosure workflow built in)
+1. **Preferred** — [GitHub Security Advisories](https://github.com/roqueribeiro/roqueos-shield/security/advisories/new) (private to maintainers; coordinated-disclosure workflow built in)
 2. **Backup** — open a private "Draft Advisory" via the same page, or contact a maintainer listed in [`MAINTAINERS.md`](MAINTAINERS.md) (when present) via the email on their GitHub profile
 
 Include the following whenever possible:
