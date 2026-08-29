@@ -44,11 +44,27 @@ async def run_exposure_scan(
     3. DnstwistAdapter em cada domínio do banco.
     4. ShodanAdapter (opt-in via SHODAN_API_KEY).
     5. SubdomainTakeoverAdapter em cada domínio.
+
+    COBERTURA: cada vetor que não roda entra em `scanners_skipped` com o motivo, e
+    cada um que roda entra em `scanners_ran`. Antes, as onze saídas de falha daqui
+    escreviam só em `errors` e o resultado saía com `coverage_is_complete = True` —
+    ou seja, na configuração de estreia (sem GITHUB_TOKEN, sem SHODAN_API_KEY, sem
+    dnstwist e sem subfinder no PATH) o relatório de exposição dizia
+    "nenhuma exposição encontrada, cobertura completa" tendo consultado NADA.
     """
 
     scan_id = uuid4()
     company_target = Target(asset_type=AssetType.DOMAIN, value=company_name)
     result = ScanResult(scan_id=scan_id, target=company_target)
+
+    def pulou(nome: str, motivo: str) -> None:
+        """Vetor NÃO verificado. Vai para a cobertura, não só para `errors`."""
+        result.scanners_skipped[nome] = motivo
+        result.errors.append(f"{nome}: {motivo}")
+
+    def rodou(nome: str) -> None:
+        if nome not in result.scanners_ran:
+            result.scanners_ran.append(nome)
 
     # 1. GitHub dorks
     gh = GitHubExposureAdapter()
@@ -60,26 +76,39 @@ async def run_exposure_scan(
             for f in github_findings:
                 f.scan_id = scan_id
             result.findings.extend(github_findings)
+            rodou("github_exposure")
 
             # 2. Top-N repos descobertos → gitleaks + trufflehog
             top_repos = list({f.target.value for f in github_findings})[:deep_secrets_in_top_repos]
             for repo_url in top_repos:
                 repo_target = Target(asset_type=AssetType.REPO, value=repo_url)
                 for adapter in (GitleaksAdapter(), TrufflehogAdapter()):
-                    if await adapter.health():
-                        try:
-                            secrets_findings = await _run_adapter(adapter, repo_target, options={})
-                            for f in secrets_findings:
-                                f.scan_id = scan_id
-                            result.findings.extend(secrets_findings)
-                        except Exception as e:  # noqa: BLE001
-                            log.exception("exposure.secret_adapter_failed", error=str(e))
-                            result.errors.append(f"{adapter.name}@{repo_url}: {e}")
+                    # O `else` faltava aqui: sem o binário, a varredura profunda de
+                    # segredo nos repos descobertos simplesmente não acontecia, e o
+                    # relatório dizia "5 repos expostos, nenhum segredo neles".
+                    if not await adapter.health():
+                        pulou(
+                            adapter.name,
+                            "binário ausente — os repos descobertos NÃO foram varridos "
+                            "atrás de segredo",
+                        )
+                        continue
+                    try:
+                        secrets_findings = await _run_adapter(adapter, repo_target, options={})
+                        for f in secrets_findings:
+                            f.scan_id = scan_id
+                        result.findings.extend(secrets_findings)
+                        rodou(adapter.name)
+                    except Exception as e:  # noqa: BLE001
+                        log.exception("exposure.secret_adapter_failed", error=str(e))
+                        pulou(adapter.name, f"falhou em {repo_url}: {e}")
         except Exception as e:  # noqa: BLE001
             log.exception("exposure.github_failed", error=str(e))
-            result.errors.append(f"github_exposure: {e}")
+            pulou("github_exposure", str(e))
     elif dorks:
-        result.errors.append("github_exposure: GITHUB_TOKEN ausente — pulei dorks")
+        pulou("github_exposure", "GITHUB_TOKEN ausente — as dorks não foram consultadas")
+    else:
+        pulou("github_exposure", "nenhuma dork configurada — nada foi buscado no GitHub")
 
     # 3. dnstwist por domínio
     dt = DnstwistAdapter()
@@ -91,18 +120,19 @@ async def run_exposure_scan(
                 for f in dn_findings:
                     f.scan_id = scan_id
                 result.findings.extend(dn_findings)
+                rodou("dnstwist")
             except Exception as e:  # noqa: BLE001
-                result.errors.append(f"dnstwist@{d}: {e}")
+                pulou("dnstwist", f"falhou em {d}: {e}")
     else:
-        result.errors.append("dnstwist: binário não disponível")
+        pulou("dnstwist", "binário não disponível — typosquatting não foi verificado")
 
     # 4. Shodan (opt-in)
     sh = ShodanAdapter()
+    # health() UMA vez: chamado duas, um blip entre as duas chamadas fazia o vetor
+    # sumir sem registro nenhum (True no primeiro, False no segundo).
     if not await sh.health():
-        # Sem registro, o relatório de exposição afirmaria cobertura completa tendo
-        # pulado um vetor inteiro (o dnstwist logo acima já fazia certo).
-        result.errors.append("shodan: indisponível (chave ausente ou API fora do ar)")
-    if await sh.health():
+        pulou("shodan", "indisponível (chave ausente ou API fora do ar)")
+    else:
         try:
             sh_findings = await _run_adapter(
                 sh,
@@ -112,14 +142,18 @@ async def run_exposure_scan(
             for f in sh_findings:
                 f.scan_id = scan_id
             result.findings.extend(sh_findings)
+            rodou("shodan")
         except Exception as e:  # noqa: BLE001
-            result.errors.append(f"shodan: {e}")
+            pulou("shodan", str(e))
 
     # 5. Subdomain takeover por domínio (paralelo)
     st = SubdomainTakeoverAdapter()
-    if not await st.health():
-        result.errors.append("subdomain_takeover: indisponível (subfinder/httpx/nuclei ausentes)")
-    if await st.health() and domains:
+    st_ok = await st.health()  # idem shodan: uma chamada só
+    if not st_ok:
+        pulou("subdomain_takeover", "indisponível (subfinder/httpx/nuclei ausentes)")
+    elif not domains:
+        pulou("subdomain_takeover", "nenhum domínio informado — nada foi enumerado")
+    if st_ok and domains:
         coros = []
         for d in domains:
             dn_target = Target(asset_type=AssetType.DOMAIN, value=d)
@@ -128,13 +162,14 @@ async def run_exposure_scan(
             results_list = await asyncio.gather(*coros, return_exceptions=True)
             for r in results_list:
                 if isinstance(r, Exception):
-                    result.errors.append(f"subdomain_takeover: {r}")
+                    pulou("subdomain_takeover", str(r))
                     continue
                 for f in r:
                     f.scan_id = scan_id
                 result.findings.extend(r)
+                rodou("subdomain_takeover")
         except Exception as e:  # noqa: BLE001
-            result.errors.append(f"subdomain_takeover: {e}")
+            pulou("subdomain_takeover", str(e))
 
     # AI triage
     if not skip_ai and result.findings:

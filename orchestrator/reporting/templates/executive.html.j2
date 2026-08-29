@@ -39,6 +39,14 @@
   .posture .meta b { font-size: 1.15rem; }
   .fw-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
   .fw-tables table { margin: 0.25rem 0; }
+  .cobertura { border: 2px solid #b45309; background: #fffbeb; border-radius: 6px;
+               padding: 1rem 1.5rem; margin: 1.25rem 0; }
+  .cobertura h3 { margin: 0 0 0.5rem; color: #92400e; font-size: 1.05rem; }
+  .cobertura ul { margin: 0.5rem 0 0; padding-left: 1.25rem; }
+  .cobertura .aviso { font-weight: 700; color: #7f1d1d; }
+  .cobertura-ok { border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 6px;
+                  padding: 0.75rem 1.5rem; margin: 1.25rem 0; color: #475569;
+                  font-size: 0.9rem; }
   .pill { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px;
           background: #e0e7ff; color: #3730a3; font-size: 0.8rem; font-weight: 600; }
   @media (max-width: 640px) { .fw-tables { grid-template-columns: 1fr; }
@@ -54,6 +62,40 @@
 <strong>Criticidade do ativo:</strong> {{ target.criticality }}<br>
 {% if target.contains_pii %}<strong>Dados sensíveis:</strong> ativo trata dados pessoais (PII)<br>{% endif %}
 </p>
+
+{% if not coverage.completa %}
+<div class="cobertura">
+  <h3>&#9888; Cobertura incompleta — leia antes da nota</h3>
+  <p class="aviso">
+    {% if not coverage.rodaram %}
+      NENHUM scanner foi executado neste scan. Os números abaixo são zero porque nada
+      foi verificado, não porque o alvo está limpo.
+    {% else %}
+      {{ coverage.pulados | length }} de
+      {{ (coverage.rodaram | length) + (coverage.pulados | length) }} scanner(s) não
+      executaram. Os vetores que eles cobrem NÃO foram verificados, e a ausência de
+      achados neles não indica ausência de problema.
+    {% endif %}
+  </p>
+  {% if coverage.rodaram %}
+  <p style="margin:0.5rem 0 0"><b>Executados:</b> {{ coverage.rodaram | join(', ') }}</p>
+  {% endif %}
+  <p style="margin:0.5rem 0 0"><b>Não executados:</b></p>
+  <ul>
+    {% for nome, motivo in coverage.pulados.items() %}
+    <li><b>{{ nome }}</b> — {{ motivo }}</li>
+    {% endfor %}
+  </ul>
+  <p style="margin:0.75rem 0 0; font-size:0.9rem">
+    A nota de postura e o mapeamento de compliance abaixo foram calculados apenas
+    sobre o que foi de fato verificado.
+  </p>
+</div>
+{% elif coverage.rodaram %}
+<div class="cobertura-ok">
+  Cobertura completa: {{ coverage.rodaram | join(', ') }} executaram sem falha.
+</div>
+{% endif %}
 
 <h2>1. Sumário Executivo</h2>
 

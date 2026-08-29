@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -368,16 +369,10 @@ async def run_scan(
             log.exception("ai.triage_failed", error=str(e))
             result.errors.append(f"ai_triage: {e}")
 
-    # Persistência (Fase 2+) — best-effort: se DB indisponível, segue com HTML
-    await _update_phase(scan_id, "persisting")
-    emit_phase(sid, "persisting")
-    try:
-        await _persist_findings(scan_id, target, result.findings)
-    except Exception as e:  # noqa: BLE001
-        log.warning("persist.failed", error=str(e))
-        result.errors.append(f"persist: {e}")
-
-    # report
+    # Relatório ANTES da persistência: o `report_path` precisa existir para ser
+    # gravado na linha do scan. Sem isso `GET /reports/{id}` devolvia 404 SEMPRE, e
+    # o relatório técnico — o único artefato que renderiza `errors` — ficava num
+    # arquivo em disco que rota nenhuma servia.
     await _update_phase(scan_id, "reporting")
     emit_phase(sid, "reporting")
     settings.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -385,7 +380,17 @@ async def run_scan(
     render_html(result, report_path)
     result.report_path = report_path
 
-    final_phase = "failed" if result.errors and not result.findings else "done"
+    # Persistência (Fase 2+) — best-effort: se DB indisponível, segue com HTML
+    await _update_phase(scan_id, "persisting")
+    emit_phase(sid, "persisting")
+    try:
+        await _persist_findings(scan_id, target, result.findings, result)
+    except Exception as e:  # noqa: BLE001
+        log.warning("persist.failed", error=str(e))
+        result.errors.append(f"persist: {e}")
+
+    # A fase segue o mesmo critério do state: nada rodou = falhou.
+    final_phase = "failed" if (result.scanners_skipped and not result.scanners_ran) else "done"
     await _update_phase(scan_id, final_phase)
     emit_phase(sid, final_phase)
 
@@ -485,8 +490,23 @@ async def _update_phase(scan_id: UUID, phase: str, progress: int | None = None) 
         log.debug("phase.update_failed", scan_id=str(scan_id), phase=phase, error=str(e))
 
 
-async def _persist_findings(scan_id: Any, target: Target, findings: list[Finding]) -> None:
-    """Best-effort: grava Findings em DB. Silencia falha (DB pode não estar ar)."""
+async def _persist_findings(
+    scan_id: Any,
+    target: Target,
+    findings: list[Finding],
+    result: ScanResult | None = None,
+) -> None:
+    """Best-effort: grava Findings E A COBERTURA em DB.
+
+    A cobertura é a parte que faltava, e era o elo que anulava todo o resto: o
+    pipeline calculava `scanners_skipped` corretamente e esta função gravava só
+    `state=done` e as findings. Tudo o que a API, a tela e o Fix Bundle liam vinha
+    daqui — então um scan em que NENHUM scanner rodou aparecia verde, com
+    `errors: []` e `coverage_complete: true`.
+
+    `state` também deixa de ser sempre DONE: quando nada rodou, o scan não terminou,
+    ele falhou. Verde é a cor de "alvo limpo".
+    """
     from orchestrator.persistence.db import session
     from orchestrator.persistence.models import FindingRow, ScanRow, ScanState, TargetRow
 
@@ -508,14 +528,29 @@ async def _persist_findings(scan_id: Any, target: Target, findings: list[Finding
         else:
             target_row = existing
 
-        # ScanRow já criado em _ensure_scan_row. Atualiza pra DONE.
+        # ScanRow já criado em _ensure_scan_row. Atualiza estado E cobertura.
+        rodaram = list(result.scanners_ran) if result else []
+        pulados = dict(result.scanners_skipped) if result else {}
+        erros = list(result.errors) if result else []
+        # FAILED quando NADA rodou: o scan não verificou coisa alguma, e "done" com
+        # zero achados seria lido como alvo limpo. Cobertura parcial continua "done"
+        # (houve verificação real) e a lacuna vai nas colunas de cobertura.
+        estado = ScanState.FAILED if (pulados and not rodaram) else ScanState.DONE
+        caminho = str(result.report_path) if result and result.report_path else None
+
         existing_scan = await s.get(ScanRow, scan_id)
-        if existing_scan is not None:
-            existing_scan.state = ScanState.DONE.value
-            existing_scan.target_id = target_row.id
+        if existing_scan is None:
+            existing_scan = ScanRow(id=scan_id, target_id=target_row.id)
             s.add(existing_scan)
-        else:
-            s.add(ScanRow(id=scan_id, target_id=target_row.id, state=ScanState.DONE.value))
+        existing_scan.state = estado.value
+        existing_scan.target_id = target_row.id
+        existing_scan.errors = erros
+        existing_scan.scanners_ran = rodaram
+        existing_scan.scanners_skipped = pulados
+        existing_scan.finished_at = datetime.now(UTC)
+        if caminho:
+            existing_scan.report_path = caminho
+        s.add(existing_scan)
         await s.flush()
 
         for f in findings:

@@ -62,7 +62,7 @@ class NucleiAdapter:
             )
             await proc.communicate()
             return proc.returncode == 0
-        except (FileNotFoundError, PermissionError):
+        except OSError:  # binário ausente, sem permissão, e os primos do OSError
             return False
 
     async def start_scan(self, target: Target, options: dict[str, Any]) -> ScanHandle:

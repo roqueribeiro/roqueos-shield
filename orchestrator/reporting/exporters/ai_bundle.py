@@ -179,12 +179,34 @@ def _coverage(scan: ScanRow) -> dict[str, Any]:
     coisa se o SAST rodou.
     """
     pedidos = list(scan.requested_scanners or [])
-    falhos = sorted({e.split(":", 1)[0].strip() for e in (scan.errors or []) if ":" in e})
-    executados = [s for s in pedidos if s not in falhos]
+    # Fonte: as colunas ESTRUTURADAS do scan (migration 0007). A versão anterior
+    # deduzia a cobertura fazendo string-parsing de `scan.errors` — e `errors` nunca
+    # era gravado, então o bundle afirmava cobertura completa em todo scan, inclusive
+    # naquele em que nenhum scanner rodou. Deduzir estado de mensagem de erro é
+    # frágil por natureza: "ai_triage: timeout" viraria "o scanner ai_triage não
+    # rodou".
+    pulados = dict(getattr(scan, "scanners_skipped", None) or {})
+    rodaram = list(getattr(scan, "scanners_ran", None) or [])
+    if not rodaram and not pulados:
+        # Linha antiga (anterior à 0007) ou DB indisponível na hora de gravar: sem
+        # dado de cobertura, o honesto é dizer que não dá para afirmar.
+        return {
+            "scanners_requested": pedidos,
+            "scanners_executed": [],
+            "scanners_failed": [],
+            "coverage_complete": False,
+            "coverage_note": (
+                "COBERTURA DESCONHECIDA: este scan não registrou quais scanners "
+                "rodaram (linha anterior à migration 0007, ou falha ao persistir). "
+                "Não é possível afirmar que os vetores pedidos foram verificados."
+            ),
+        }
+    falhos = sorted(pulados)
     return {
         "scanners_requested": pedidos,
-        "scanners_executed": executados,
+        "scanners_executed": rodaram,
         "scanners_failed": falhos,
+        "scanners_failed_reason": pulados,
         "coverage_complete": not falhos,
         "coverage_note": (
             "Todos os scanners pedidos rodaram."

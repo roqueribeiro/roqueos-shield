@@ -187,6 +187,50 @@ mutação por adapter (reverter o conserto reprova). E o outro lado da moeda —
 provar que a ferramenta **acha** de verdade, não só que falha alto — é o job
 `efetividade` do CI (`tests/integration/test_efetividade_e2e.py`).
 
+#### O sinal precisa CHEGAR à tela (a parte que quase ficou de fora)
+
+Consertar o adapter é metade. Uma auditoria adversarial mostrou que a outra metade
+estava toda quebrada: o pipeline montava `scanners_skipped` corretamente e o
+`_persist_findings` gravava **só `state=DONE` e as findings**. `ScanRow.errors`
+existia como coluna e nunca era escrita; `ScanState.FAILED` não aparecia uma única
+vez no código; `report_path` também não era gravado, então `GET /reports/{id}`
+devolvia **404 sempre** — e o relatório técnico é o único artefato que renderiza
+`errors`. Resultado: um scan em que NENHUM scanner rodou chegava assim à API:
+
+```json
+{ "state": "done", "errors": [], "coverage_complete": true, "findings": 0 }
+```
+
+O conserto inteiro do silêncio era **inerte ponta a ponta**, e a suíte estava verde
+porque o teste montava o scan com `SimpleNamespace(errors=[...])` — um mock do
+exato elo quebrado. A lição, que virou regra: **teste de cobertura afirma sobre o
+dado PERSISTIDO.** Mock de estrutura prova serialização; só o que a produção grava
+prova comportamento (`tests/integration/test_cobertura_persistida.py`).
+
+O que mudou:
+
+- **Migration 0007** cria `scans.scanners_ran` e `scans.scanners_skipped`. Estruturado
+  de propósito: o Fix Bundle deduzia cobertura fazendo *string-parsing* de mensagem
+  de erro, e `"ai_triage: timeout"` viraria "o scanner ai_triage não rodou".
+- **`_persist_findings`** grava cobertura, `errors`, `report_path` e `finished_at`, e
+  o `state` vira `FAILED` quando **nada** rodou — cobertura parcial continua `DONE`
+  (houve verificação real) com a lacuna declarada nas colunas.
+- **O relatório executivo** — o documento que vai para auditoria — ganhou um bloco de
+  cobertura **antes** da nota de postura. Sem ele, um scan em que nada rodou saía com
+  "nota A, índice 0/100, zero achados" e mapeamento OWASP/PCI/LGPD zerado.
+- **`run_exposure_scan`** passa a preencher `scanners_skipped`. Antes, as onze saídas
+  de falha escreviam só em `errors`, e a configuração de estreia (sem `GITHUB_TOKEN`,
+  sem `SHODAN_API_KEY`, sem os binários) produzia "nenhuma exposição encontrada,
+  cobertura completa" tendo consultado nada.
+- **`health()` nunca levanta**, agora com teste parametrizado em todos os adapters. O
+  `github_exposure` levantava `SSLError` — o `except` pegava só `GithubException` e
+  `RuntimeError` — e em `run_exposure_scan` a chamada não está dentro de `try`: o
+  pipeline OSINT inteiro morria por um erro de rede.
+- **O gate `check_no_silence.py`** deixou de olhar só `adapters/`: cobre `jobs/` e
+  `reporting/exporters/`, e verifica que `_persist_findings` grava a cobertura —
+  defeito que nenhuma regra de `except` pegaria, porque é uma atribuição que não
+  existe.
+
 ### Domain (`orchestrator/domain/`)
 
 - **`schemas.py`** — Pydantic v2: `Finding`, `Target`, `AITriage`, `Severity`, `Confidence`, `AssetType`, etc. **Forma canônica** que todos os adapters produzem

@@ -66,7 +66,12 @@ class GitHubExposureAdapter:
             user = self._gh().get_user()
             _ = user.login  # força round-trip
             return True
-        except (GithubException, RuntimeError) as e:
+        except Exception as e:  # noqa: BLE001
+            # `except (GithubException, RuntimeError)` deixava passar erro de REDE
+            # (SSLError, ConnectionError do requests). Medido: com CA store estranha,
+            # o health LEVANTAVA — e no `run_exposure_scan` a chamada não está dentro
+            # de try, então o pipeline OSINT inteiro morria. O contrato do
+            # `ScannerAdapter` é explícito: health() SEMPRE devolve bool, nunca lança.
             log.warning("github.health_failed", error=str(e))
             return False
 

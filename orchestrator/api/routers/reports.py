@@ -6,12 +6,15 @@ import tempfile
 from pathlib import Path
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlmodel import select
 
 from orchestrator.api.deps import Principal, RequireScansRead, RequireScansRun, SessionDep
 from orchestrator.persistence.models import FindingRow, ScanRow, TargetRow
+
+log = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -22,11 +25,25 @@ async def _load_findings(session, scan_id: UUID):
 
     rows = (await session.exec(select(FindingRow).where(FindingRow.scan_id == scan_id))).all()
     findings = []
+    descartadas = 0
     for r in rows:
         try:
             findings.append(Finding.model_validate(r.payload))
-        except Exception:  # noqa: BLE001, S112 — linha corrompida não derruba o relatório
-            continue
+        except Exception:  # noqa: BLE001 — linha corrompida não derruba o relatório
+            descartadas += 1
+    if descartadas:
+        # NÃO é detalhe: a UI conta as findings direto do FindingRow e mostra "1
+        # critical", enquanto o executivo e o compliance recalculam do payload e,
+        # descartando a linha, mostravam "nota A, zero achados". Duas telas do mesmo
+        # produto discordando, e a que discorda para baixo é a que vai para auditoria.
+        log.error(
+            "report.findings_descartadas",
+            scan_id=str(scan_id),
+            descartadas=descartadas,
+            total=len(rows),
+            detail="payload que não valida no schema atual — o relatório mostra MENOS "
+            "achados do que o scan encontrou",
+        )
     return findings
 
 
@@ -103,12 +120,20 @@ async def executive_report(
         findings: list
         report_path: Path | None = None
         errors: list = field(default_factory=list)
+        # A cobertura vem da LINHA do scan. Antes estes três eram default vazio
+        # hardcoded, então o executivo — o documento que vai para auditoria — não
+        # tinha como saber que um scanner não rodou, e saía "nota A, zero achados".
+        scanners_ran: list = field(default_factory=list)
+        scanners_skipped: dict = field(default_factory=dict)
 
     result = _Result(
         scan_id=scan_id,
         target=target,
         findings=findings,
         report_path=Path(scan.report_path) if scan.report_path else None,
+        errors=list(scan.errors or []),
+        scanners_ran=list(scan.scanners_ran or []),
+        scanners_skipped=dict(scan.scanners_skipped or {}),
     )
 
     with tempfile.TemporaryDirectory() as tmp:

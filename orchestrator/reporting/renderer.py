@@ -100,8 +100,19 @@ def render_executive(
 
     compliance = build_compliance_report(result.findings)
 
+    # COBERTURA no executivo. Este é o documento que vai para auditoria, e era o
+    # único que estruturalmente não conseguia expressar cobertura: sem `errors` no
+    # contexto e sem bloco no template, um scan em que NADA rodou saía com "nota A,
+    # índice 0/100, zero achados" e mapeamento OWASP/PCI/LGPD todo zerado.
+    cobertura = {
+        "rodaram": list(getattr(result, "scanners_ran", None) or []),
+        "pulados": dict(getattr(result, "scanners_skipped", None) or {}),
+    }
+    cobertura["completa"] = not cobertura["pulados"]
+
     template = _env.get_template("executive.html.j2")
     html = template.render(
+        coverage=cobertura,
         scan_id=str(result.scan_id),
         target=result.target,
         findings=result.findings,

@@ -68,7 +68,7 @@ class SubdomainTakeoverAdapter:
                 await p.communicate()
                 if p.returncode != 0:
                     return False
-            except (FileNotFoundError, PermissionError):
+            except OSError:  # binário ausente, sem permissão, e os primos do OSError
                 return False
         return True
 

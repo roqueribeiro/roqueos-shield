@@ -69,6 +69,14 @@ class ScanRow(SQLModel, table=True):
     started_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     finished_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     errors: list[str] = Field(default_factory=list, sa_type=JSON)
+    # COBERTURA — quem realmente rodou e quem não rodou, com o motivo.
+    # Existe porque `state=done` + zero achados tem dois significados opostos: alvo
+    # limpo, ou scanner que não rodou. Sem estas duas colunas, o pipeline calculava a
+    # diferença e ela morria no worker: a API, a tela e o Fix Bundle continuavam
+    # dizendo "todos os scanners pedidos rodaram". Estruturado de propósito — o
+    # bundle deduzia cobertura fazendo string-parsing de mensagem de erro.
+    scanners_ran: list[str] = Field(default_factory=list, sa_type=JSON)
+    scanners_skipped: dict[str, str] = Field(default_factory=dict, sa_type=JSON)
     report_path: str | None = None
     # Granularidade de fase: queued|nmap_running|zap_spider|zap_passive|zap_active|
     # dedup|ai_triage|persisting|reporting|done|failed
