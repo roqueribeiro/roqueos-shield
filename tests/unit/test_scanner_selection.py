@@ -97,3 +97,40 @@ def test_profile_does_not_override_explicit_option() -> None:
     from orchestrator.api.routers.scans import apply_profile
 
     assert apply_profile({"zap": {"active": False}}, "full")["zap"]["active"] is False
+
+
+# --- o profile da UI vira a lista de verdade (contrato com o ROSPentest.vue) ---
+def test_web_profile_delivers_what_the_ui_promises() -> None:
+    """A UI diz 'Aplicação web (OWASP): nmap + ZAP + Nuclei'. O nuclei era órfão e o
+    front não manda `scanners`, então o scan web rodava só ZAP passivo."""
+    from orchestrator.jobs.pipelines import resolve_scanners
+
+    assert resolve_scanners(None, AssetType.URL, "web") == ["zap", "nuclei"]
+
+
+def test_full_profile_runs_all_applicable() -> None:
+    from orchestrator.jobs.pipelines import resolve_scanners
+
+    assert resolve_scanners(None, AssetType.URL, "full") == ["nmap", "zap", "nuclei"]
+    assert "semgrep" in resolve_scanners(None, AssetType.REPO, "full")
+
+
+def test_network_profile_is_ports_only() -> None:
+    from orchestrator.jobs.pipelines import resolve_scanners
+
+    assert resolve_scanners(None, AssetType.HOST, "network") == ["nmap"]
+
+
+def test_explicit_scanners_win_over_profile() -> None:
+    from orchestrator.jobs.pipelines import resolve_scanners
+
+    assert resolve_scanners(["zap"], AssetType.URL, "full") == ["zap"]
+
+
+def test_resolved_list_is_never_empty() -> None:
+    """O front mostra `scanners_executed`: lista vazia deixaria a tela com '—'."""
+    from orchestrator.jobs.pipelines import resolve_scanners
+
+    for at in (AssetType.URL, AssetType.HOST, AssetType.IMAGE, AssetType.REPO, AssetType.PORT):
+        assert resolve_scanners(None, at, "web")
+        assert resolve_scanners(["nmap", "zap"], at, None)  # cliente antigo, alvo incompatível

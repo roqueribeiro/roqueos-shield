@@ -28,6 +28,7 @@ async def run_scan_job(
     scan_id: str | None = None,
     auth_headers: dict[str, str] | None = None,
     openapi_url: str | None = None,
+    profile: str | None = None,
 ) -> dict[str, Any]:
     """Job arq: roda pipeline de scan completo.
 
@@ -55,6 +56,7 @@ async def run_scan_job(
         scan_id=UUID(scan_id) if scan_id else None,
         auth_headers=auth_headers or None,
         openapi_url=openapi_url or None,
+        profile=profile,
     )
 
     log.info(

@@ -63,6 +63,56 @@ _SCANNER_ASSET_SUPPORT: dict[str, set[AssetType]] = {
 }
 
 
+# O que cada profile da UI promete. Fonte: os textos que o usuário lê no
+# RoqueShield (`pentest.wizard.profileDesc`) — "Aplicação web (OWASP): nmap + ZAP +
+# Nuclei". O nuclei era órfão e o front não manda `scanners`, então a promessa era
+# falsa: o scan web rodava só ZAP passivo. Aqui o profile vira a lista de verdade.
+_PROFILE_SCANNERS: dict[str, dict[AssetType, list[str]]] = {
+    "web": {
+        AssetType.URL: ["zap", "nuclei"],
+        AssetType.DOMAIN: ["zap", "nuclei"],
+        AssetType.HOST: ["nmap", "zap", "nuclei"],
+    },
+    "network": {
+        AssetType.HOST: ["nmap"],
+        AssetType.PORT: ["nmap"],
+        AssetType.DOMAIN: ["nmap"],
+        AssetType.URL: ["nmap"],
+    },
+    # "Todos os scanners aplicáveis (mais demorado)" — e liga o active scan do ZAP.
+    "full": {
+        AssetType.URL: ["nmap", "zap", "nuclei"],
+        AssetType.DOMAIN: ["nmap", "zap", "nuclei"],
+        AssetType.HOST: ["nmap", "zap", "nuclei"],
+        AssetType.PORT: ["nmap"],
+        AssetType.IMAGE: ["trivy"],
+        AssetType.REPO: ["semgrep", "gitleaks", "trufflehog", "trivy", "checkov"],
+    },
+}
+
+
+def resolve_scanners(
+    requested: list[str] | None, asset_type: AssetType, profile: str | None = None
+) -> list[str]:
+    """A lista EFETIVA de scanners: pedido explícito > profile > default do tipo.
+
+    Sempre filtrada pelo que aceita o asset_type, e nunca vazia. É o que o scan roda
+    e o que fica em `requested_scanners` (o front mostra isso como "Scanners").
+    """
+    if requested:
+        names = _supported_for(requested, asset_type)
+        if names:
+            return names
+    by_profile = _PROFILE_SCANNERS.get((profile or "").strip().lower(), {}).get(asset_type)
+    if by_profile:
+        names = _supported_for(by_profile, asset_type)
+        if names:
+            return names
+    return _supported_for(_DEFAULT_SCANNERS.get(asset_type, ["nmap", "zap"]), asset_type) or [
+        "nmap"
+    ]
+
+
 def _supported_for(names: list[str], asset_type: AssetType) -> list[str]:
     """Filtra os scanners pedidos pelos que aceitam este asset_type."""
     out: list[str] = []
@@ -189,6 +239,7 @@ async def run_scan(
     scan_id: UUID | None = None,
     auth_headers: dict[str, str] | None = None,
     openapi_url: str | None = None,
+    profile: str | None = None,
 ) -> ScanResult:
     """Pipeline completo da Fase 1.
 
@@ -202,23 +253,13 @@ async def run_scan(
     scan_id = scan_id or uuid4()
     options = dict(options or {})
     if adapters is None:
-        asset_default = _DEFAULT_SCANNERS.get(target.asset_type, ["nmap", "zap"])
-        # Filtra o que foi pedido pelo que aceita este asset_type. Um cliente antigo
-        # que manda ["nmap","zap"] para IMAGE/REPO não zera mais o scan: cai no
-        # default do tipo, que roda a ferramenta certa.
-        names = _supported_for(scanners, target.asset_type) if scanners else asset_default
-        if not names:
-            log.warning(
-                "scan.requested_scanners_incompatible",
-                requested=scanners,
-                asset_type=target.asset_type.value,
-                fallback=asset_default,
-            )
-            names = asset_default
+        names = resolve_scanners(scanners, target.asset_type, profile)
+        log.info("scan.scanners_resolved", scanners=names, profile=profile)
         adapters = _build_adapters(names)
         if not adapters:
-            log.warning("scan.no_adapters_resolved", requested=names, fallback=asset_default)
-            adapters = _build_adapters(asset_default)
+            fallback = _DEFAULT_SCANNERS.get(target.asset_type, ["nmap"])
+            log.warning("scan.no_adapters_resolved", requested=names, fallback=fallback)
+            adapters = _build_adapters(fallback)
     # Trivy: default internal scanners to vuln+secret+misconfig (CVEs + embedded
     # secrets + Dockerfile/IaC misconfig) unless the caller already set it.
     if any(getattr(a, "name", "") == "trivy" for a in adapters):

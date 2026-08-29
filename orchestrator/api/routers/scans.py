@@ -20,10 +20,12 @@ from orchestrator.api.deps import Principal, SessionDep, require_permission
 from orchestrator.audit import log_audit_event
 from orchestrator.config import settings
 from orchestrator.domain.roles import Permission
+from orchestrator.domain.schemas import AssetType
 from orchestrator.domain.target_validator import (
     TargetValidationError,
     validate_target_value,
 )
+from orchestrator.jobs.pipelines import resolve_scanners
 from orchestrator.jobs.queue import _redis_settings
 from orchestrator.persistence.models import AIRun, FindingRow, ScanRow, ScanState, TargetRow
 
@@ -171,13 +173,17 @@ async def create_scan(
     # efêmero e redigem o audit.
     persisted_options, auth_headers, openapi_url = split_scan_auth(body.options, body.auth)
     persisted_options = apply_profile(persisted_options, body.profile)
+    # A lista EFETIVA (pedido > profile > default do tipo). O front não manda
+    # `scanners` e mostra `scanners_executed` no relatório: persistir [] deixaria a
+    # tela com "Scanners: —". Além disso é o que faz o profile da UI virar verdade.
+    effective_scanners = resolve_scanners(body.scanners, AssetType(target.asset_type), body.profile)
     audit_body = redact_audit_auth(body.model_dump(mode="json"))
 
     scan = ScanRow(
         target_id=target.id,
         state=ScanState.PENDING.value,
         profile=body.profile,
-        requested_scanners=body.scanners or [],
+        requested_scanners=effective_scanners,
         options=persisted_options,
         actor=principal.email,
         authorization_ref=body.authorization_ref,
@@ -198,7 +204,7 @@ async def create_scan(
             "target_value": target.value,
             "target_asset_type": target.asset_type,
             "profile": body.profile,
-            "scanners": body.scanners,
+            "scanners": effective_scanners,
             "lab_only": settings.LAB_ONLY,
         },
     )
@@ -214,10 +220,11 @@ async def create_scan(
         asset_type=target.asset_type,
         criticality=target.criticality,
         contains_pii=target.contains_pii,
-        scanners=body.scanners,
+        scanners=effective_scanners,
         options=persisted_options,
         actor=principal.email,
         scan_id=str(scan.id),
+        profile=body.profile,
         # Segredo efêmero: vai pro job (Redis, consumido) — NÃO pra `scans`.
         auth_headers=auth_headers or None,
         openapi_url=openapi_url,
