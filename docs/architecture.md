@@ -47,6 +47,32 @@ CAI é uma plataforma de **pentest comercial** com triagem AI e dashboard em tem
 
 ### Adapters (`orchestrator/adapters/`)
 
+**O que roda, e quando.** A escolha do scanner não é livre: ela sai de
+`resolve_scanners(pedido, asset_type, profile)` em `jobs/pipelines.py`, nesta ordem —
+lista explícita do chamador, depois o `profile` da UI, depois o default do tipo de
+alvo — e é sempre filtrada pelo que aquele adapter aceita. Um scanner incompatível
+não é instanciado: antes ele era, levantava `ValueError`, o erro era engolido e o
+scan fechava com **zero findings**, indistinguível de "alvo limpo".
+
+| Adapter | Tipo de alvo | O que encontra |
+| --- | --- | --- |
+| `semgrep` | repo | **SAST**: bug/vuln no código-fonte (injection, SSRF, path traversal, crypto fraca, desserialização). É o único que lê o CÓDIGO. |
+| `gitleaks`, `trufflehog` | repo | segredo commitado (o trufflehog verifica se a credencial ainda é válida) |
+| `checkov` | repo | misconfig de IaC (Terraform, CloudFormation, K8s, Dockerfile) |
+| `trivy` | image, repo | CVE de dependência e de pacote do SO, segredo embutido, misconfig |
+| `nmap` | host, port, url, domain | porta aberta e versão de serviço (descoberta, não classificação) |
+| `zap` | url, host, domain | DAST: passivo por default; **active scan** (payloads reais de injection) quando o profile é `full`/`active` |
+| `nuclei` | url, host, domain | template de CVE conhecida, painel exposto, credencial default, misconfig |
+| `greenbone` | host, domain | VAS de rede (OpenVAS). Opt-in: exige a stack Greenbone e o feed |
+
+Os de OSINT (`shodan`, `censys`, `dnstwist`, `github_exposure`, `subdomain_takeover`,
+`kube_bench`) rodam no pipeline separado de exposição (`jobs/exposure.py`).
+
+**Profiles da UI** (`web`, `network`, `full`, `exposure`) são traduzidos em lista de
+scanner por `_PROFILE_SCANNERS`. O texto que o usuário lê no RoqueShield é o contrato:
+"web: nmap + ZAP + Nuclei" precisa entregar isso.
+
+
 Cada scanner implementa `ScannerAdapter` Protocol em `base.py`:
 
 ```python
@@ -360,7 +386,10 @@ stack more4cai: orchestrator + worker + postgres + redis + zap + trivy  (+ green
 - **Escala:** docker-compose single-host, adapters em sequência no pipeline — sem scan distribuído/horizontal.
 - **Bug ZAP `scan_id=0`** — corrigido com retry (`zap_adapter._start_spider_with_retry`).
 - **Greenbone:** feed sync inicial 30min-3h, ~5GB. **Ollama:** 32B q4 cabe em 24GB VRAM mas com context curto (8-16k).
-- **CAI agentic** (`cai_expert.py`) — fallback Claude funcional; integração total `cai-framework` é stub.
+- **Agente agêntico** (`cai_expert.py` + `agentic/executor.py`) — loop ReAct real com
+  ferramenta de verdade, sob a coleira do executor. O que ainda **não** está medido é a
+  profundidade com modelo forte em produção (quantos findings o agente confirma por PoC);
+  a coleira e o executor têm e2e real.
 - **DefectDojo:** Generic Findings Import — pode precisar ajuste de campos.
 - **Live logs (SSE in-process):** o ring buffer é do processo do **orchestrator**; logs do **worker** (onde rodam os scanners) não chegam ao SSE — o RoqueShield deriva uma trilha de log das transições de fase. Histórico em `docker logs`.
 

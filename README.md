@@ -11,9 +11,37 @@
 
 ---
 
-CAI is an open-source platform that orchestrates **14 security scanners** (Nmap, OWASP ZAP, Nuclei, Trivy, Greenbone/OpenVAS, Gitleaks, Trufflehog, dnstwist, Checkov, kube-bench, Shodan, Censys, GitHub Code Search, Subdomain Takeover — all behind one `ScannerAdapter` Protocol), normalizes their output into a canonical `Finding` schema (CVSS v3, CWE, OWASP Top 10, evidence/PoC), and runs a privacy-aware AI triage step before exporting an **AI Fix Bundle JSON** that another AI agent (Claude Code, Cursor, Copilot) can consume to propose — and re-verify — patches in the target codebase.
+CAI orchestrates **15 security scanners** behind one `ScannerAdapter` Protocol,
+normalizes everything into a canonical `Finding` (CVSS v3, CWE, OWASP Top 10,
+evidence), triages it with an LLM, and — when you ask it to — sends an **agent** to
+confirm the finding by running real tools against the target, under a leash.
 
-The goal: **close the loop between scan and fix** for regulated environments (banking, fintech, healthcare) where findings cannot leak to the public internet but human pentesters cannot scale to every codebase. The whole stack is **self-hostable** and runs AI triage against a **local LLM** (LM Studio / Ollama), so vulnerability data never has to leave your infrastructure.
+The four layers, in the order a scan goes through them:
+
+| Layer | What it does | Where |
+| --- | --- | --- |
+| **1. Scan** | Runs the right tool for the target. **Semgrep** reads source code (SAST); Gitleaks/Trufflehog hunt secrets; Trivy covers CVEs in dependencies and images; Checkov covers IaC; ZAP and Nuclei probe the running app; Nmap and Greenbone cover the network. | `orchestrator/adapters/` |
+| **2. Triage** | An LLM re-ranks severity, flags likely false positives, maps to OWASP, and proposes remediation — over evidence that a PII/PCI scrubber cleaned first. | `orchestrator/ai/analyzer.py` |
+| **3. Investigate** | A ReAct agent picks a finding and tries to **confirm it**: it calls a real tool, reads the output, decides the next step, and closes with a verdict. Every command passes the executor's leash before it runs. | `orchestrator/ai/agentic/` |
+| **4. Hand off** | An **AI Fix Bundle** (stable IDs, priority, location, tech-stack hints, verification steps) that another AI — Claude Code, Cursor, Copilot — consumes to propose the patch. | `orchestrator/reporting/exporters/` |
+
+**The leash is the part that matters** if you plan to point this at anything real.
+The agent's scope is not a sentence in a prompt — prompts do not constrain a process
+with a shell. It is code in `agentic/executor.py`, checked before every command:
+an allowlist per phase (recon vs. directed exploitation), a named deny list (brute
+force, DoS, heavy fuzzing, shells), the target validated by the same validator the
+scanners use, `argv` with no shell, refusal of shell metacharacters and of any flag
+that writes to disk, hard timeouts, and a `dry_run` that plans without executing.
+Twenty-seven mutation tests keep it honest, plus an end-to-end test that runs `nmap`
+for real and confirms the forbidden command never reaches the executor.
+
+The goal: **close the loop between scan and fix** for regulated environments —
+banking, fintech, healthcare — where findings cannot leak to the public internet but
+human pentesters cannot scale to every codebase. The stack is **self-hostable** and
+the AI can run against a **local LLM** (LM Studio / Ollama), so vulnerability data
+never has to leave your infrastructure. `ALLOW_CLOUD_FALLBACK=false` makes that a
+rule instead of a hope: if the local model fails, the scan fails rather than sending
+findings to a cloud provider.
 
 > **RoqueShield** is CAI productized inside [RoqueOS](https://roqueos.com.br) — an admin-only, container-backed security app with a native desktop UI (live scan stepper over SSE, guided AI-provider config, one-click reports), an immutable audit trail, and AES-encrypted secrets. CAI is the engine; RoqueShield is the product surface. See [Architecture › Integração RoqueOS](docs/architecture.md#integração-roqueos-roqueshield).
 

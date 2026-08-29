@@ -45,6 +45,22 @@ jobs:
       - name: uv lock --check
         run: uv lock --check
 
+  docs:
+    name: Documentação em dia
+    runs-on: ubuntu-latest
+    # Regra sem mecanismo é decoração. "Manter a doc atualizada" é um bom propósito
+    # e um péssimo controle: ninguém percebe quando ela envelhece. Este gate compara
+    # a documentação com o CÓDIGO e reprova quando divergem. Mutação confirmada:
+    # scanner novo sem documentar, Settings sem .env.example, e doc chamando de
+    # "stub" o que já roda — os três dão exit 1.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: check docs fresh
+        run: python scripts/check_docs_fresh.py
+
   typecheck:
     name: Typecheck (mypy)
     runs-on: ubuntu-latest
