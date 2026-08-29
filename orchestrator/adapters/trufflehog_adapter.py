@@ -154,6 +154,15 @@ class TrufflehogAdapter:
                     target=target,
                     source_tool=self.name,
                     source_rule_id=detector,
+                    # Idem gitleaks: dois segredos distintos do mesmo detector no
+                    # mesmo arquivo:linha (rotação) colapsavam num só.
+                    dedup_discriminator=(
+                        (item.get("SourceMetadata") or {})
+                        .get("Data", {})
+                        .get("Git", {})
+                        .get("commit")
+                        or (item.get("Raw") or None)
+                    ),
                     title=(
                         f"Secret VERIFICADO ({detector})"
                         if verified

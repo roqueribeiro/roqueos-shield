@@ -158,6 +158,8 @@ def validate_target_value(value: str, *, asset_type: str | None = None) -> str:
         if v.startswith(("http://", "https://")):
             return _validate_url_repo(v)
         if v.startswith("git@"):
+            # `git@host:owner/repo` — o host fica entre o "@" e o ":".
+            _guarda_de_rede(v[4:].split(":", 1)[0].split("/", 1)[0], rotulo="repo")
             return v
         raise TargetValidationError("repo deve usar http(s):// ou git@host:owner/repo (ssh)")
     elif asset_type == "image":
@@ -203,14 +205,11 @@ def validate_target_value(value: str, *, asset_type: str | None = None) -> str:
         if not _HOSTNAME_RE.match(host) and not _is_ip_literal(host):
             raise TargetValidationError(f"hostname/IP malformado: {host!r}")
 
-    # H5: SSRF — bloqueia hosts privados/loopback fora da allowlist quando LAB_ONLY=true
-    if host is not None and settings.LAB_ONLY:
-        if not _host_in_allowlist(host, settings.target_allowlist):
-            if _is_blocked_network(host):
-                raise TargetValidationError(
-                    f"host {host!r} em rede privada/loopback/IMDS "
-                    f"e nao esta em TARGET_ALLOWLIST. Para autorizar, adicione em settings."
-                )
+    # H5: SSRF — bloqueia hosts privados/loopback fora da allowlist quando LAB_ONLY=true.
+    # Mesmo caminho que REPO usa (`_guarda_de_rede`): a duplicata anterior era o que
+    # deixava um tipo de alvo inteiro de fora do controle.
+    if host is not None:
+        _guarda_de_rede(host, rotulo="host")
 
     return v
 
@@ -224,10 +223,60 @@ def _is_ip_literal(s: str) -> bool:
 
 
 def _validate_url_repo(url: str) -> str:
-    """Validacao adicional pra repo url — sem auth embutido no URL (vaza em log)."""
+    """Valida repo url: sem credencial embutida (vaza em log) E com host no escopo.
+
+    O guarda de rede FALTAVA aqui. `asset_type="repo"` retornava antes do gate H5, e
+    REPO é justamente o tipo que vai direto para `git clone <target.value>` e
+    `trufflehog git <target.value>` a partir do worker, dentro da rede interna.
+    Medido antes do conserto, com LAB_ONLY=true e allowlist vazia:
+
+        repo  https://169.254.169.254/x/y.git   -> ACEITO
+        repo  http://127.0.0.1:3000/a/b.git     -> ACEITO
+        repo  https://postgres/x/y.git          -> ACEITO
+        url   http://127.0.0.1:8080/            -> RECUSADO
+
+    A assimetria ficou pior quando url/host/image ganharam fail-closed: um operador
+    com `scans:run` alcançava o Gitea/GitLab interno e os serviços da rede do banco,
+    e o "coração do compliance gate" não via.
+    """
     parsed = urlparse(url)
     if parsed.username or parsed.password:
         raise TargetValidationError(
             "URL de repo nao deve conter credenciais embutidas (use SSH key ou GITHUB_TOKEN env)"
         )
+    _guarda_de_rede(parsed.hostname or "", rotulo="repo")
     return url
+
+
+def _guarda_de_rede(host: str, *, rotulo: str) -> None:
+    """Aplica o gate H5 (LAB_ONLY + allowlist + rede bloqueada) a um host qualquer.
+
+    Extraído para que REPO use exatamente o mesmo caminho de URL e HOST — a duplicata
+    anterior era o que deixava um tipo de alvo de fora.
+    """
+    if not host:
+        raise TargetValidationError(f"{rotulo}: nao consegui extrair o host do alvo")
+    if not settings.LAB_ONLY:
+        return
+    if _host_in_allowlist(host, settings.target_allowlist):
+        return
+    if _is_blocked_network(host):
+        raise TargetValidationError(_motivo_bloqueio(host, rotulo))
+
+
+def _motivo_bloqueio(host: str, rotulo: str) -> str:
+    """Diz o que REALMENTE aconteceu.
+
+    A mensagem única acusava todo host de estar "em rede privada/loopback/IMDS",
+    inclusive quando o motivo real era "não consegui resolver o nome". Numa rede
+    corporativa sem DNS externo — o ambiente-alvo — isso mandaria o operador caçar um
+    problema de escopo que não existe.
+    """
+    if not _is_ip_literal(host) and not _resolve_host_ips(host):
+        return (
+            f"{rotulo} {host!r} nao resolve em DNS e nao esta em TARGET_ALLOWLIST. "
+            "Alvo que nao resolve e recusado por precaucao (fail closed): sem resolver, "
+            "nao da para saber se ele aponta para a rede interna. Se o alvo e legitimo, "
+            "confira o DNS do container ou adicione o host a TARGET_ALLOWLIST."
+        )
+    return f"{rotulo} {host!r} em rede privada/loopback/IMDS e nao esta em TARGET_ALLOWLIST"

@@ -141,13 +141,34 @@ def _compliance_section(rows: list[FindingRow]) -> dict[str, Any]:
     from orchestrator.reporting.compliance import build_compliance_report
 
     findings = []
+    descartadas = 0
     for r in rows:
         try:
             findings.append(Finding.model_validate(r.payload))
-        except Exception:  # noqa: BLE001, S112
-            continue
+        except Exception:  # noqa: BLE001
+            descartadas += 1
+    if descartadas:
+        # `Finding` usa `extra="forbid"`: qualquer descompasso de schema (rollback,
+        # dois workers de versões diferentes durante um deploy) faz a linha antiga
+        # parar de validar. Aqui o descarte era SEM contador e SEM log — e no MESMO
+        # bundle, `vulnerabilities` é montado dos rows crus e INCLUI a finding,
+        # enquanto a nota de risco a ignora. O JSON trazia a vulnerabilidade e uma
+        # nota que fingia não a ver, sempre errando para o lado limpo.
+        log.error(
+            "bundle.compliance_findings_descartadas",
+            descartadas=descartadas,
+            total=len(rows),
+        )
     rep = build_compliance_report(findings)
     return {
+        "findings_descartadas": descartadas,
+        "nota_de_integridade": (
+            None
+            if not descartadas
+            else f"{descartadas} de {len(rows)} achado(s) não puderam ser lidos no "
+            "schema atual e ficaram DE FORA desta nota. O bloco `vulnerabilities` "
+            "deste mesmo bundle os inclui: a nota abaixo está otimista."
+        ),
         "risk_grade": rep.risk_grade,
         "risk_index": rep.risk_index,
         "max_cvss": rep.max_cvss,
@@ -178,43 +199,17 @@ def _coverage(scan: ScanRow) -> dict[str, Any]:
     A IA de patch precisa desta distinção: "zero achados de SAST" só vale alguma
     coisa se o SAST rodou.
     """
-    pedidos = list(scan.requested_scanners or [])
-    # Fonte: as colunas ESTRUTURADAS do scan (migration 0007). A versão anterior
-    # deduzia a cobertura fazendo string-parsing de `scan.errors` — e `errors` nunca
-    # era gravado, então o bundle afirmava cobertura completa em todo scan, inclusive
-    # naquele em que nenhum scanner rodou. Deduzir estado de mensagem de erro é
-    # frágil por natureza: "ai_triage: timeout" viraria "o scanner ai_triage não
-    # rodou".
-    pulados = dict(getattr(scan, "scanners_skipped", None) or {})
-    rodaram = list(getattr(scan, "scanners_ran", None) or [])
-    if not rodaram and not pulados:
-        # Linha antiga (anterior à 0007) ou DB indisponível na hora de gravar: sem
-        # dado de cobertura, o honesto é dizer que não dá para afirmar.
-        return {
-            "scanners_requested": pedidos,
-            "scanners_executed": [],
-            "scanners_failed": [],
-            "coverage_complete": False,
-            "coverage_note": (
-                "COBERTURA DESCONHECIDA: este scan não registrou quais scanners "
-                "rodaram (linha anterior à migration 0007, ou falha ao persistir). "
-                "Não é possível afirmar que os vetores pedidos foram verificados."
-            ),
-        }
-    falhos = sorted(pulados)
+    from orchestrator.reporting.coverage import resumo
+
+    c = resumo(scan)
     return {
-        "scanners_requested": pedidos,
-        "scanners_executed": rodaram,
-        "scanners_failed": falhos,
-        "scanners_failed_reason": pulados,
-        "coverage_complete": not falhos,
-        "coverage_note": (
-            "Todos os scanners pedidos rodaram."
-            if not falhos
-            else "COBERTURA INCOMPLETA: "
-            + ", ".join(falhos)
-            + " não rodaram. Zero achados destes vetores NÃO significa alvo limpo."
-        ),
+        "scanners_requested": c["pedidos"],
+        "scanners_executed": c["rodaram"],
+        "scanners_failed": sorted(c["pulados"]),
+        "scanners_failed_reason": c["pulados"],
+        "coverage_complete": c["completa"],
+        "coverage_state": c["estado"],
+        "coverage_note": c["nota"],
     }
 
 

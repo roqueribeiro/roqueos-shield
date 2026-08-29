@@ -210,7 +210,8 @@ async def test_bundle_le_a_cobertura_da_linha_persistida() -> None:
     assert cov["coverage_complete"] is False
     assert cov["scanners_executed"] == []
     assert cov["scanners_failed"] == ["trivy"]
-    assert "NÃO significa alvo limpo" in cov["coverage_note"]
+    assert cov["coverage_state"] == "incompleta"
+    assert "NENHUM scanner foi executado" in cov["coverage_note"]
 
 
 # ============================================ o executivo, que vai para auditoria
@@ -361,3 +362,86 @@ async def test_health_full_reporta_scanner_ausente(monkeypatch) -> None:
     assert r["status"] == "degraded"
     assert "nmap" in r["detail"]["ausentes"]
     assert "sem verificação" in r["detail"]["note"]
+
+
+# ============================== "não tenho o dado" != "tudo rodou" (fonte única)
+
+
+def test_cobertura_desconhecida_nao_vira_completa() -> None:
+    """`pulados` vazio significa DUAS coisas opostas.
+
+    "Nada foi pulado" e "não tenho o dado". O bundle aprendeu a distinguir; o
+    executivo continuou tratando as duas como "tudo rodou" — a mesma mentira, mais
+    discreta. Agora a conta mora em UM lugar (`reporting/coverage.py`) e as três
+    superfícies leem de lá.
+
+    Caminhos reais que produzem o estado desconhecido: scan ainda em andamento, o
+    `_persist_findings` (best-effort) falhando com o DB fora, e toda linha anterior à
+    migration 0007.
+    """
+    from types import SimpleNamespace
+
+    from orchestrator.reporting.coverage import resumo
+
+    c = resumo(SimpleNamespace(requested_scanners=["nmap", "zap"]))
+    assert c["estado"] == "desconhecida"
+    assert c["completa"] is False
+    assert "DESCONHECIDA" in c["nota"]
+
+
+def test_executivo_sem_dado_de_cobertura_avisa(tmp_path) -> None:
+    from pathlib import Path
+
+    from orchestrator.jobs.pipelines import ScanResult
+    from orchestrator.reporting.renderer import render_executive
+
+    r = ScanResult(
+        scan_id=uuid.uuid4(), target=Target(asset_type=AssetType.HOST, value="10.0.0.1")
+    )  # nada rodou, nada pulado: o pipeline não registrou
+    html = render_executive(r, Path(tmp_path) / "e.html").read_text(encoding="utf-8")
+    assert "Cobertura desconhecida" in html
+    assert html.index("Cobertura desconhecida") < html.index("Sumário Executivo")
+
+
+def test_as_tres_superficies_concordam() -> None:
+    """Bundle, executivo e UI leem a MESMA função. Divergir de novo exige mudá-la."""
+    import inspect
+
+    from orchestrator.api.routers import ui
+    from orchestrator.reporting import renderer
+    from orchestrator.reporting.exporters import ai_bundle
+
+    for mod in (ai_bundle, renderer, ui):
+        fonte = inspect.getsource(mod)
+        assert "reporting.coverage import resumo" in fonte, (
+            f"{mod.__name__} calcula cobertura por conta própria — é assim que as "
+            "telas voltam a discordar"
+        )
+
+
+# ============================ o OSINT também tem que chegar ao banco e à tela
+
+
+async def test_exposure_persiste_findings_e_cobertura() -> None:
+    """`run_exposure_scan` não tinha UMA referência a `session`/`ScanRow`.
+
+    Renderizava o HTML e dava `return result`; o `POST /exposure/scan` devolve só um
+    `job_id`. Findings, cobertura e `report_path` do OSINT nunca chegavam ao banco,
+    à API, à fila de findings nem ao executivo — o `scanners_skipped` que este job
+    passou a preencher morria no worker. O mesmo defeito do `run_scan`, intacto uma
+    camada ao lado.
+    """
+    from orchestrator.jobs.exposure import run_exposure_scan
+
+    r = await run_exposure_scan(
+        company_name="Banco Teste Persistencia",
+        domains=["banco.test"],
+        github_orgs=[],
+        dorks=["banco password"],
+        skip_ai=True,
+    )
+    row = await _linha(r.scan_id)
+    assert row.scanners_skipped, "cobertura do OSINT não chegou ao banco"
+    assert "shodan" in row.scanners_skipped
+    assert row.report_path, "o relatório de exposição não é recuperável pela API"
+    assert row.state in ("done", "failed")

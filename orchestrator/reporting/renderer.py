@@ -9,7 +9,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader
 
 from orchestrator.domain.schemas import Finding, Severity
 
@@ -21,7 +21,17 @@ _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 _env = Environment(
     loader=FileSystemLoader(_TEMPLATES_DIR),
-    autoescape=select_autoescape(["html", "xml"]),
+    # autoescape=True, NÃO `select_autoescape(["html","xml"])`. O select casa pelo
+    # SUFIXO do nome do template, e os arquivos aqui se chamam `report.html.j2` e
+    # `executive.html.j2` — terminam em `.j2`. Medido (jinja2 3.1.6):
+    #   report.html.j2  -> False    executive.html.j2 -> False    x.html -> True
+    # Ou seja: escape DESLIGADO nos dois relatórios. O título de um finding, o
+    # `errors`, a evidência e o motivo do scanner pulado saíam CRUS — e o executivo é
+    # servido como HTMLResponse inline, na MESMA origem da API e autenticado. O alvo
+    # escaneado escolhe o conteúdo do relatório: numa ferramenta ofensiva isso é
+    # entrada hostil por definição. Um `<title>` com `<img src=x onerror=...>` viraria
+    # script rodando como o analista, contra a API.
+    autoescape=True,
     trim_blocks=True,
     lstrip_blocks=True,
 )
@@ -100,15 +110,15 @@ def render_executive(
 
     compliance = build_compliance_report(result.findings)
 
-    # COBERTURA no executivo. Este é o documento que vai para auditoria, e era o
-    # único que estruturalmente não conseguia expressar cobertura: sem `errors` no
-    # contexto e sem bloco no template, um scan em que NADA rodou saía com "nota A,
-    # índice 0/100, zero achados" e mapeamento OWASP/PCI/LGPD todo zerado.
-    cobertura = {
-        "rodaram": list(getattr(result, "scanners_ran", None) or []),
-        "pulados": dict(getattr(result, "scanners_skipped", None) or {}),
-    }
-    cobertura["completa"] = not cobertura["pulados"]
+    # COBERTURA no executivo, pela fonte ÚNICA (`reporting/coverage.py`). Este é o
+    # documento que vai para auditoria, e era o único que estruturalmente não
+    # conseguia expressar cobertura: sem `errors` no contexto e sem bloco no
+    # template, um scan em que nada rodou saía com "nota A, índice 0/100, zero
+    # achados". Depois, com o bloco, ainda tratava "não tenho o dado" como
+    # "tudo rodou" — a mesma mentira, mais discreta.
+    from orchestrator.reporting.coverage import resumo
+
+    cobertura = resumo(result)
 
     template = _env.get_template("executive.html.j2")
     html = template.render(

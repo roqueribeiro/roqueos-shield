@@ -70,13 +70,27 @@ CICLO_DE_VIDA = {
 }
 MARCA_ESCAPE = "silencio-ok"
 
+# Nomes de parâmetro que CARREGAM o resultado do scanner. Vazio aqui é vazio de
+# verdade, ainda que o literal seja `""` ou `0`.
+_KWARGS_DE_RESULTADO = {"payload", "findings", "results", "data", "items", "alerts"}
+
 # `health()` é o único que PODE devolver vazio calado: o contrato dele é retornar
 # bool sem lançar, e o pipeline já trata False como cobertura incompleta.
-ISENTAS = {"health"}
+# `health()` PODE devolver vazio calado: o contrato dele é retornar bool sem lançar,
+# e o pipeline já trata False como cobertura incompleta. `cleanup` roda DEPOIS do
+# resultado — engolir erro lá não some com achado nenhum.
+ISENTAS = {"health", "cleanup", "aclose", "__init__"}
 
 
 def _vazio(no: ast.AST) -> bool:
-    """True para literal de coleção vazia (`[]`, `{}`, `()`, `""`, `0`)."""
+    """True para literal de coleção vazia (`[]`, `{}`, `()`, `""`, `0`).
+
+    Também entra o ternário com um ramo vazio — `texto if texto.strip() else ""` —
+    porque ele É um caminho que devolve vazio, só que sem `except` para o gate
+    reclamar. Era a última burla que passava.
+    """
+    if isinstance(no, ast.IfExp):
+        return _vazio(no.body) or _vazio(no.orelse)
     if isinstance(no, ast.List | ast.Tuple | ast.Set):
         return not no.elts
     if isinstance(no, ast.Dict):
@@ -111,44 +125,107 @@ def _retorno_vazio(no: ast.AST | None) -> str | None:
     if _vazio(no):
         return "devolve vazio"
     if isinstance(no, ast.Call):
-        args = list(no.args) + [kw.value for kw in no.keywords]
-        for a in args:
+        for a in no.args:
             if _dict_de_sucesso_falso(a):
                 return "fabrica sucesso falso"
             if _vazio(a) and not isinstance(a, ast.Constant):
+                return "devolve resultado vazio embrulhado"
+        for kw in no.keywords:
+            if _dict_de_sucesso_falso(kw.value):
+                return "fabrica sucesso falso"
+            # Num keyword de RESULTADO, `""`/`0`/`None` também é vazio: o bypass era
+            # `RawResults(payload="")`, que a exceção a `ast.Constant` deixava passar.
+            if _vazio(kw.value) and (
+                kw.arg in _KWARGS_DE_RESULTADO or not isinstance(kw.value, ast.Constant)
+            ):
                 return "devolve resultado vazio embrulhado"
     return None
 
 
 def _tem_raise(corpo: list[ast.stmt]) -> bool:
-    return any(isinstance(n, ast.Raise) for stmt in corpo for n in ast.walk(stmt))
+    """`raise` que VALE: no corpo direto, ou dentro de um `if` sobre o erro.
 
-
-def _registra_lacuna(corpo: list[ast.stmt]) -> bool:
-    """O except alimenta `coverage_gaps`/`errors`/contador de descarte?"""
+    A versão anterior aceitava qualquer `raise` no `ast.walk` — então
+    `if _ESTRITO: raise ...` com `_ESTRITO = False` desligava o controle e passava.
+    Um `raise` que só roda numa flag desligada não é tratamento de erro, é enfeite.
+    """
     for stmt in corpo:
-        for n in ast.walk(stmt):
-            if isinstance(n, ast.Attribute) and n.attr in ("append", "extend"):
+        if isinstance(stmt, ast.Raise):
+            return True
+        if isinstance(stmt, ast.If):
+            # `if <condicao>: raise` conta, MENOS quando a condição é um literal
+            # falso ou um nome em maiúsculas (flag de módulo, que pode estar off).
+            cond = stmt.test
+            if isinstance(cond, ast.Constant) and not cond.value:
+                continue
+            if isinstance(cond, ast.Name) and cond.id.isupper():
+                continue
+            if any(isinstance(n, ast.Raise) for n in ast.walk(stmt)):
                 return True
-            if isinstance(n, ast.AugAssign):  # `ruins += 1` no read_jsonl
+        if isinstance(stmt, ast.With | ast.Try):
+            if any(isinstance(n, ast.Raise) for n in ast.walk(stmt)):
                 return True
     return False
 
 
-def _funcoes_do_ciclo(arvore: ast.AST) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
-    """Funções do ciclo de vida, incluindo closures declaradas dentro delas."""
+# Nomes que de fato SAEM do adapter e chegam ao relatório. A versão anterior aceitava
+# `.append` em QUALQUER objeto — inclusive numa lista local que ninguém lê, que é o
+# jeito mais fácil de fingir que se registrou a lacuna.
+_DESTINOS_DE_LACUNA = ("gap", "gaps", "lacuna", "lacunas", "erro", "erros", "errors")
+
+
+def _registra_lacuna(corpo: list[ast.stmt]) -> bool:
+    """O except alimenta um destino de lacuna que REALMENTE sai daqui?"""
+    for stmt in corpo:
+        for n in ast.walk(stmt):
+            if isinstance(n, ast.AugAssign):  # `ruins += 1` no read_jsonl
+                return True
+            if not (isinstance(n, ast.Attribute) and n.attr in ("append", "extend")):
+                continue
+            alvo = n.value
+            nome = ""
+            if isinstance(alvo, ast.Name):
+                nome = alvo.id
+            elif isinstance(alvo, ast.Attribute):
+                nome = alvo.attr
+            if nome.lower() in _DESTINOS_DE_LACUNA:
+                return True
+    return False
+
+
+def _funcoes_do_ciclo(
+    arvore: ast.AST, *, todas: bool = False
+) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """Funções a inspecionar, incluindo closures declaradas dentro delas.
+
+    `todas=True` para arquivos de `adapters/`: mover o silêncio para um helper com
+    outro nome (`_ler_report()` chamado pelo `fetch_results`) burlava a checagem por
+    nome, porque não há grafo de chamada aqui. Num arquivo de adapter, TODA função
+    faz parte do ciclo de vida na prática.
+    """
     achadas: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    # A isenção segue para as closures declaradas DENTRO de uma função isenta: o
+    # `_check()` do `health()` do greenbone é o health, com outro nome.
+    dentro_de_isenta: set[int] = set()
     for no in ast.walk(arvore):
-        if isinstance(no, ast.FunctionDef | ast.AsyncFunctionDef):
-            if no.name in CICLO_DE_VIDA and no.name not in ISENTAS:
-                achadas.append(no)
+        if isinstance(no, ast.FunctionDef | ast.AsyncFunctionDef) and no.name in ISENTAS:
+            for filho in ast.walk(no):
+                if isinstance(filho, ast.FunctionDef | ast.AsyncFunctionDef):
+                    dentro_de_isenta.add(id(filho))
+    for no in ast.walk(arvore):
+        if not isinstance(no, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        if no.name in ISENTAS or id(no) in dentro_de_isenta:
+            continue
+        if todas or no.name in CICLO_DE_VIDA:
+            achadas.append(no)
     return achadas
 
 
 def _checar_excepts(caminho: Path, fonte: str, arvore: ast.AST) -> list[str]:
     linhas = fonte.splitlines()
     problemas: list[str] = []
-    for fn in _funcoes_do_ciclo(arvore):
+    for fn in _funcoes_do_ciclo(arvore, todas=DIR_ADAPTERS in caminho.parents):
         for no in ast.walk(fn):
             if not isinstance(no, ast.ExceptHandler):
                 continue
@@ -179,6 +256,45 @@ def _checar_excepts(caminho: Path, fonte: str, arvore: ast.AST) -> list[str]:
                         f"(ou justifique com `# {MARCA_ESCAPE}: motivo`)."
                     )
                     break
+    return problemas
+
+
+def _checar_fetch_sem_saida_de_erro(caminho: Path, fonte: str, arvore: ast.AST) -> list[str]:
+    """`fetch_results` que constrói resultado VAZIO e não levanta em lugar nenhum.
+
+    Fecha o buraco que nenhuma regra de `except` pega: o silêncio sem `except`.
+        texto = self._ler(handle)
+        return RawResults(payload=texto if texto.strip() else "")
+    Exit 0, zero achados, nada avisado. Um `fetch_results` honesto ou levanta
+    `ScanIntegrityError` quando não dá para verificar, ou nunca constrói um resultado
+    vazio a partir de literal — devolve o que o scanner produziu.
+    """
+    linhas = fonte.splitlines()
+    problemas: list[str] = []
+    for no in ast.walk(arvore):
+        if not isinstance(no, ast.AsyncFunctionDef | ast.FunctionDef):
+            continue
+        if no.name != "fetch_results":
+            continue
+        if any(isinstance(n, ast.Raise) for n in ast.walk(no)):
+            continue
+        for n in ast.walk(no):
+            if not isinstance(n, ast.Call):
+                continue
+            vazios = [
+                kw.arg for kw in n.keywords if kw.arg in _KWARGS_DE_RESULTADO and _vazio(kw.value)
+            ]
+            if not vazios:
+                continue
+            linha = linhas[n.lineno - 1] if n.lineno <= len(linhas) else ""
+            if MARCA_ESCAPE in linha:
+                continue
+            problemas.append(
+                f"{caminho.relative_to(RAIZ)}:{n.lineno}: `fetch_results()` constrói "
+                f"resultado vazio ({', '.join(vazios)}) e a função não levanta em "
+                "lugar nenhum — zero achados aqui é indistinguível de alvo limpo."
+            )
+            break
     return problemas
 
 
@@ -238,6 +354,8 @@ def main() -> int:
         arvore = ast.parse(fonte, filename=str(caminho))
         problemas += _checar_excepts(caminho, fonte, arvore)
         problemas += _checar_poll(caminho, arvore)
+        if DIR_ADAPTERS in caminho.parents:
+            problemas += _checar_fetch_sem_saida_de_erro(caminho, fonte, arvore)
     problemas += _persistencia_grava_cobertura()
 
     if problemas:

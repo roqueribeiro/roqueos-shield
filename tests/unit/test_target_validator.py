@@ -216,3 +216,60 @@ def test_registry_em_rede_interna_continua_bloqueado() -> None:
     ):
         with pytest.raises(TargetValidationError, match="registry"):
             validate_target_value(imagem, asset_type="image")
+
+
+@pytest.mark.parametrize(
+    "repo",
+    [
+        "https://169.254.169.254/x/y.git",
+        "http://127.0.0.1:3000/a/b.git",
+        "https://postgres/x/y.git",
+        "git@169.254.169.254:x/y.git",
+        "git@postgres:x/y.git",
+    ],
+)
+def test_repo_passa_pelo_guarda_de_rede(repo: str, monkeypatch) -> None:
+    """`asset_type="repo"` retornava ANTES do gate H5.
+
+    E REPO é justamente o tipo que vai direto para `git clone <target.value>` e
+    `trufflehog git <target.value>` a partir do worker, dentro da rede interna. Um
+    operador com `scans:run` alcançava o Gitea/GitLab interno e os serviços da rede
+    do banco — e o "coração do compliance gate" não via. Medido antes do conserto:
+    os cinco alvos acima eram ACEITOS, enquanto os equivalentes com `asset_type=url`
+    eram recusados.
+    """
+    monkeypatch.setattr(settings, "LAB_ONLY", True)
+    monkeypatch.setattr(settings, "TARGET_ALLOWLIST", "")
+    with pytest.raises(TargetValidationError):
+        validate_target_value(repo, asset_type="repo")
+
+
+@pytest.mark.parametrize(
+    "repo",
+    [
+        "https://github.com/roqueribeiro/more4cai.git",
+        "git@github.com:roqueribeiro/more4cai.git",
+    ],
+)
+def test_repo_publico_continua_aceito(repo: str, monkeypatch) -> None:
+    """O conserto acima não pode recusar o caso normal."""
+    monkeypatch.setattr(settings, "LAB_ONLY", True)
+    monkeypatch.setattr(settings, "TARGET_ALLOWLIST", "")
+    assert validate_target_value(repo, asset_type="repo") == repo
+
+
+def test_recusa_por_dns_nao_acusa_rede_interna(monkeypatch) -> None:
+    """A mensagem afirmava o que não foi medido.
+
+    Todo host não resolvido era acusado de estar "em rede privada/loopback/IMDS".
+    Numa rede corporativa sem DNS externo — o ambiente-alvo que a própria doc
+    descreve — todo alvo público legítimo seria recusado com uma acusação falsa, e o
+    operador iria caçar um problema de escopo que não existe.
+    """
+    from orchestrator.domain import target_validator as tv
+
+    monkeypatch.setattr(settings, "LAB_ONLY", True)
+    monkeypatch.setattr(settings, "TARGET_ALLOWLIST", "")
+    monkeypatch.setattr(tv, "_resolve_host_ips", lambda h: [])
+    with pytest.raises(TargetValidationError, match="nao resolve em DNS"):
+        validate_target_value("https://alvo-legitimo.example/", asset_type="url")

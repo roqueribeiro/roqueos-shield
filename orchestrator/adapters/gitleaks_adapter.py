@@ -68,7 +68,11 @@ class GitleaksAdapter:
         profundidade = int(options.get("clone_depth", 0) or 0)
         depth = str(profundidade)
 
+        native_id = str(uuid4())
+
         async def _run() -> tuple[int, Path]:
+            from orchestrator.adapters._cleanup import registrar_processo
+
             # 1. clone --depth N
             argv = [self.git_bin, "clone", "--quiet"]
             if profundidade > 0:
@@ -80,6 +84,7 @@ class GitleaksAdapter:
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
             )
+            registrar_processo(native_id, clone)
             _, stderr = await clone.communicate()
             if clone.returncode != 0:
                 log.error("gitleaks.clone_failed", err=stderr.decode(errors="replace"))
@@ -104,10 +109,10 @@ class GitleaksAdapter:
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
             )
+            registrar_processo(native_id, scan)
             await scan.communicate()
             return scan.returncode or 0, report_path
 
-        native_id = str(uuid4())
         self._workdirs[native_id] = workdir
         self._depths[native_id] = profundidade
         self._tasks[native_id] = asyncio.create_task(_run())
@@ -183,6 +188,15 @@ class GitleaksAdapter:
                     target=target,
                     source_tool=self.name,
                     source_rule_id=rule,
+                    # Uma chave ROTACIONADA aparece na mesma linha do mesmo arquivo,
+                    # com valores diferentes em commits diferentes. Sem discriminador
+                    # a chave de dedupe colidia e sobrava UM — e o que sobrava era o
+                    # mais ANTIGO, então o relatório mandava rotacionar a credencial
+                    # de 2024 em vez da que está em produção. O fingerprint do
+                    # gitleaks (ou o commit) separa as ocorrências.
+                    dedup_discriminator=(
+                        item.get("Fingerprint") or item.get("Commit") or item.get("Secret")
+                    ),
                     title=f"Secret detectado: {item.get('Description', rule)}",
                     description=(
                         f"Arquivo {item.get('File')} linha {item.get('StartLine')}, "

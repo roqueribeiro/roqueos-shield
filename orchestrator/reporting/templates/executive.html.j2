@@ -63,20 +63,19 @@
 {% if target.contains_pii %}<strong>Dados sensíveis:</strong> ativo trata dados pessoais (PII)<br>{% endif %}
 </p>
 
-{% if not coverage.completa %}
+{% if coverage.desconhecida %}
+<div class="cobertura">
+  <h3>&#9888; Cobertura desconhecida — leia antes da nota</h3>
+  <p class="aviso">{{ coverage.nota }}</p>
+  {% if coverage.pedidos %}
+  <p style="margin:0.5rem 0 0"><b>Scanners pedidos:</b> {{ coverage.pedidos | join(', ') }}
+  — não há registro de quais deles chegaram a rodar.</p>
+  {% endif %}
+</div>
+{% elif not coverage.completa %}
 <div class="cobertura">
   <h3>&#9888; Cobertura incompleta — leia antes da nota</h3>
-  <p class="aviso">
-    {% if not coverage.rodaram %}
-      NENHUM scanner foi executado neste scan. Os números abaixo são zero porque nada
-      foi verificado, não porque o alvo está limpo.
-    {% else %}
-      {{ coverage.pulados | length }} de
-      {{ (coverage.rodaram | length) + (coverage.pulados | length) }} scanner(s) não
-      executaram. Os vetores que eles cobrem NÃO foram verificados, e a ausência de
-      achados neles não indica ausência de problema.
-    {% endif %}
-  </p>
+  <p class="aviso">{{ coverage.nota }}</p>
   {% if coverage.rodaram %}
   <p style="margin:0.5rem 0 0"><b>Executados:</b> {{ coverage.rodaram | join(', ') }}</p>
   {% endif %}
@@ -91,10 +90,8 @@
     sobre o que foi de fato verificado.
   </p>
 </div>
-{% elif coverage.rodaram %}
-<div class="cobertura-ok">
-  Cobertura completa: {{ coverage.rodaram | join(', ') }} executaram sem falha.
-</div>
+{% else %}
+<div class="cobertura-ok">{{ coverage.nota }}</div>
 {% endif %}
 
 <h2>1. Sumário Executivo</h2>

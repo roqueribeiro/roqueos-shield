@@ -88,6 +88,22 @@ liberado por uma dessas linhas, o motivo escrito é o que denuncia.
 primeira versão do gate, e por isso ela foi corrigida antes de entrar); `poll`
 decidindo só por `task.done()`; dict de sucesso fabricado. Árvore limpa: `exit 0`.
 
+**E o gate tem gate.** Uma auditoria adversarial burlou a primeira versão de quatro
+formas e reintroduziu o silêncio no nmap com o gate em `exit 0` e a suíte verde. As
+quatro viraram teste (`tests/unit/test_gate_do_silencio.py`), e o gate foi
+endurecido para pegar cada uma:
+
+| burla | por que passava | o que mudou |
+| --- | --- | --- |
+| `if _ESTRITO: raise` com a flag desligada | qualquer `raise` no `ast.walk` contava | `raise` sob condição constante ou flag em maiúsculas não conta |
+| `.append` numa lista local que ninguém lê | bastava um atributo chamado `append` | o destino precisa se chamar `gap`/`erro`/`lacuna`/`errors` |
+| silêncio movido para um helper `_ler_report()` | a checagem era por NOME de função | num adapter, **toda** função conta (menos `health`/`cleanup`) |
+| `payload=texto if texto.strip() else ""` | não há `except` para o gate reclamar | `fetch_results` que constrói resultado vazio e nunca levanta reprova |
+
+Um controle que o autor do código contorna em quatro tentativas não é controle. E
+mesmo assim o gate é o **piso**, não o teto: os testes por adapter e o
+`efetividade` continuam sendo o que segura o resto.
+
 ### 2. Os testes, que provam os dois lados
 
 - `tests/unit/test_silencio_adapters.py` — a ferramenta **não mente quando falha**.

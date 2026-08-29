@@ -55,9 +55,7 @@ class NucleiAdapter:
         import os
 
         embarcado = os.environ.get("NUCLEI_TEMPLATES_DIR", "/opt/nuclei-templates")
-        self.templates_dir = templates_dir or (
-            embarcado if Path(embarcado).is_dir() else None
-        )
+        self.templates_dir = templates_dir or (embarcado if Path(embarcado).is_dir() else None)
         self._tasks: dict[str, asyncio.Task[int]] = {}
         self._output_paths: dict[str, Path] = {}
 

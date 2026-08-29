@@ -22,7 +22,12 @@ from orchestrator.adapters.trufflehog_adapter import TrufflehogAdapter
 from orchestrator.ai.analyzer import triage_batch
 from orchestrator.config import settings
 from orchestrator.domain.schemas import AssetType, Target
-from orchestrator.jobs.pipelines import ScanResult, _run_adapter
+from orchestrator.jobs.pipelines import (
+    ScanResult,
+    _ensure_scan_row,
+    _persist_findings,
+    _run_adapter,
+)
 from orchestrator.reporting.renderer import render_html
 
 log = structlog.get_logger(__name__)
@@ -184,6 +189,20 @@ async def run_exposure_scan(
     report_path = settings.REPORTS_DIR / f"exposure-{scan_id}.html"
     render_html(result, report_path)
     result.report_path = report_path
+
+    # PERSISTÊNCIA. Faltava inteira: este job não tinha uma referência a `session`,
+    # `ScanRow` ou `_persist_findings`. Renderizava o HTML e dava `return result` —
+    # e o `POST /exposure/scan` devolve só um `job_id`. Findings, cobertura e
+    # report_path do OSINT nunca chegavam ao banco, à API, à fila de findings nem ao
+    # executivo. É exatamente o defeito que a auditoria achou no `run_scan` ("o
+    # conserto era inerte ponta a ponta"), intacto uma camada ao lado: o
+    # `scanners_skipped` que este job passou a preencher morria no worker.
+    try:
+        await _ensure_scan_row(scan_id, company_target)
+        await _persist_findings(scan_id, company_target, result.findings, result)
+    except Exception as e:  # noqa: BLE001
+        log.warning("exposure.persist_failed", error=str(e))
+        result.errors.append(f"persist: {e}")
 
     log.info(
         "exposure.complete",

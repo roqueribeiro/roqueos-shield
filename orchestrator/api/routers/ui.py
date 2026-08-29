@@ -128,6 +128,9 @@ async def scan_detail(scan_id: UUID, session: SessionDep, _token: UIToken) -> di
         }
         for a in ai_runs_q.all()
     ]
+    from orchestrator.reporting.coverage import resumo
+
+    _cob = resumo(s)
     return {
         "id": str(s.id),
         "target": {"value": target.value, "asset_type": target.asset_type} if target else None,
@@ -135,6 +138,16 @@ async def scan_detail(scan_id: UUID, session: SessionDep, _token: UIToken) -> di
         "current_phase": s.current_phase,
         "phase_progress": s.phase_progress,
         "profile": s.profile,
+        # Cobertura pela fonte ÚNICA (`reporting/coverage.py`). A tela mostrava só o
+        # que foi PEDIDO, enquanto o executivo mostrava o aviso e o bundle mostrava
+        # `scanners_failed`: três telas do mesmo produto, três respostas para a mesma
+        # pergunta. É o defeito que a docstring do `_coverage` diz ter consertado,
+        # consertado no bundle e deixado aqui.
+        "coverage_state": _cob["estado"],
+        "coverage_complete": _cob["completa"],
+        "coverage_note": _cob["nota"],
+        "scanners_ran": _cob["rodaram"],
+        "scanners_skipped": _cob["pulados"],
         "scanners_requested": list(s.requested_scanners or []),
         "started_at": s.started_at.isoformat() if s.started_at else None,
         "finished_at": s.finished_at.isoformat() if s.finished_at else None,

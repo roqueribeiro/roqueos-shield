@@ -145,8 +145,18 @@ class Finding(BaseModel):
         if self.deduped_key:
             return self
         rule_id = self.source_rule_id or self.vuln_id or self.title or ""
-        extra = self.dedup_discriminator or ""
-        material = f"{self.target.value}::{rule_id}::{extra}".encode()
+        # O sufixo é CONDICIONAL de propósito. Concatenar `::` sempre mudaria a chave
+        # de TODA finding (`alvo::regra` vira `alvo::regra::`), e a chave é a
+        # identidade que o `FindingStatusRow` usa: `risk_accepted` assinado pelo CISO,
+        # `false_positive` e `resolved` ficariam órfãos, o backlog inflaria e o
+        # `/findings/summary` contaria o mesmo problema duas vezes. Medido antes de
+        # corrigir: 075a1cb4... virava 478b5257... para uma finding sem
+        # discriminador nenhum.
+        material = (
+            f"{self.target.value}::{rule_id}::{self.dedup_discriminator}"
+            if self.dedup_discriminator
+            else f"{self.target.value}::{rule_id}"
+        ).encode()
         # set via __dict__ to avoid re-triggering validation
         object.__setattr__(self, "deduped_key", hashlib.sha256(material).hexdigest()[:32])
         return self

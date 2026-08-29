@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import shutil
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -38,7 +39,16 @@ async def cleanup_subprocess_handle(
             O diretorio PAI do path eh removido (mkdtemp gera dir/arquivo).
         adapter_name: pra logging.
     """
-    # 1. Cancela task se ainda esta rodando; aguarda morrer.
+    # 1. Mata os PROCESSOS FILHOS antes de cancelar a task.
+    # Cancelar a Task interrompe o `await communicate()`, NAO o processo. Medido:
+    # cleanup retornava em 0.00s, o workdir era removido, e o processo continuava
+    # escrevendo num diretorio que ja nao existe. Com clone completo por padrao, um
+    # repo grande que estoure os 1800s deixava um `git clone` orfao consumindo rede e
+    # disco, sem dono — a tela dizendo "estourou o timeout" e a maquina ainda
+    # clonando. O `finally` do `_run_adapter` dispara isto em TODO caminho de falha.
+    await _matar_filhos(native_id=native_id, adapter_name=adapter_name)
+
+    # 2. Cancela task se ainda esta rodando; aguarda morrer.
     task = tasks.pop(native_id, None)
     if task is not None and not task.done():
         task.cancel()
@@ -91,3 +101,43 @@ async def cleanup_subprocess_handle(
                     adapter=adapter_name,
                     path=str(target_dir),
                 )
+
+
+async def _matar_filhos(*, native_id: str, adapter_name: str) -> None:
+    """Termina os subprocessos que este processo ainda tem vivos.
+
+    O asyncio guarda os filhos no watcher do event loop; aqui pegamos os
+    `asyncio.subprocess.Process` que ainda nao sairam e mandamos SIGTERM, com SIGKILL
+    depois de um instante. Sem isto, o cancelamento da Task deixa o binario rodando.
+    """
+    import contextlib
+
+    vivos = [p for p in _PROCESSOS.pop(native_id, []) if p.returncode is None]
+    if not vivos:
+        return
+    for proc in vivos:
+        with contextlib.suppress(ProcessLookupError, OSError):
+            proc.terminate()
+    _, pendentes = await asyncio.wait([asyncio.create_task(p.wait()) for p in vivos], timeout=3.0)
+    for t in pendentes:
+        t.cancel()
+    for proc in vivos:
+        if proc.returncode is None:
+            with contextlib.suppress(ProcessLookupError, OSError):
+                proc.kill()
+    log.info(
+        "adapter.cleanup.processos_encerrados",
+        adapter=adapter_name,
+        native_id=native_id,
+        quantos=len(vivos),
+    )
+
+
+# Registro de subprocessos por handle. O adapter chama `registrar_processo` logo
+# depois de criar o processo; o cleanup usa isto para matar o que sobrou.
+_PROCESSOS: dict[str, list[Any]] = {}
+
+
+def registrar_processo(native_id: str, proc: Any) -> None:
+    """Associa um subprocesso ao handle, para o cleanup poder termina-lo."""
+    _PROCESSOS.setdefault(native_id, []).append(proc)

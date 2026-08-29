@@ -384,7 +384,10 @@ class ZAPAdapter:
         for u in urls:
             try:
                 out.append(adapter.validate_python(u))
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001  silencio-ok: URL de REFERÊNCIA malformada
+                # Não é achado nem evidência — é o link "leia mais" que o ZAP anexa
+                # ao alerta. Descartar um link quebrado não esconde vulnerabilidade
+                # nenhuma; o alerta em si continua inteiro.
                 continue
         return out
 
