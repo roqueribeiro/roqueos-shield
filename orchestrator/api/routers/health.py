@@ -91,18 +91,78 @@ async def _check_llm_local() -> dict[str, Any]:
 
 
 async def _check_llm_cloud() -> dict[str, Any]:
-    """Apenas confirma se chave Anthropic/OpenAI está configurada (não chama API)."""
+    """Chave CONFIGURADA não é chave que funciona.
+
+    Antes esta função devolvia `status: "ok"` só por existir uma variável preenchida
+    — chave revogada, expirada ou com cota estourada aparecia igualzinho a uma chave
+    boa. É o mesmo defeito do `health()` do censys ("construir cliente não faz
+    round-trip"), e aqui não vale a isenção de contrato: isto não é `health()` de
+    adapter, é o painel que o operador consulta para decidir se pode confiar.
+
+    `configured` é um estado próprio, distinto de `ok`: dizemos o que sabemos.
+    """
     keys = {
         "anthropic": bool(settings.ANTHROPIC_API_KEY),
         "openai": bool(settings.OPENAI_API_KEY),
         "openrouter": bool(settings.OPENROUTER_API_KEY),
     }
-    any_configured = any(keys.values())
+    configuradas = [k for k, v in keys.items() if v]
+    if not configuradas:
+        return {
+            "name": "llm_cloud",
+            "status": "disabled",
+            "latency_ms": 0,
+            "detail": {"keys_configured": []},
+        }
     return {
         "name": "llm_cloud",
-        "status": "ok" if any_configured else "disabled",
+        "status": "configured",
         "latency_ms": 0,
-        "detail": {"keys_configured": [k for k, v in keys.items() if v]},
+        "detail": {
+            "keys_configured": configuradas,
+            "note": "chave presente; NÃO verificada contra o provedor (uma chamada de "
+            "teste custaria token a cada consulta de saúde). Chave revogada ou com "
+            "cota estourada aparece aqui do mesmo jeito.",
+        },
+    }
+
+
+async def _check_scanners() -> dict[str, Any]:
+    """Os binários de scanner existem nesta imagem?
+
+    O painel de saúde checava Postgres, Redis, ZAP e LLM — e NENHUM scanner. Ficava
+    todo verde numa imagem sem nmap, sem trivy, sem semgrep: exatamente o estado em
+    que os scans fecham com zero achados. É a pergunta mais direta que o operador
+    tem, e não estava na tela.
+    """
+    import shutil
+
+    esperados = {
+        "nmap": "rede",
+        "semgrep": "SAST (código)",
+        "trivy": "CVE de dependência e imagem",
+        "gitleaks": "segredo",
+        "trufflehog": "segredo verificado",
+        "checkov": "IaC",
+        "nuclei": "template de CVE",
+        "dnstwist": "typosquatting",
+    }
+    presentes = {n: shutil.which(n) is not None for n in esperados}
+    faltando = sorted(n for n, ok in presentes.items() if not ok)
+    return {
+        "name": "scanners",
+        "status": "ok" if not faltando else "degraded",
+        "latency_ms": 0,
+        "detail": {
+            "presentes": sorted(n for n, ok in presentes.items() if ok),
+            "ausentes": faltando,
+            "note": (
+                "todos os scanners esperados estão instalados"
+                if not faltando
+                else "scanner ausente NÃO roda e o vetor dele fica sem verificação: "
+                + ", ".join(f"{n} ({esperados[n]})" for n in faltando)
+            ),
+        },
     }
 
 
@@ -133,8 +193,13 @@ async def health_full(_token: TokenDep) -> dict[str, Any]:
         _check_zap(),
         _check_llm_local(),
         _check_llm_cloud(),
+        _check_scanners(),
         return_exceptions=False,
     )
     statuses = [r["status"] for r in results]
-    overall = "ok" if all(s in ("ok", "disabled") for s in statuses) else "degraded"
+    # `configured` (chave de nuvem presente mas não testada) não é degradação — é o
+    # que sabemos dizer com honestidade. `degraded` de scanner ausente É, e tem que
+    # subir para o topo: é a diferença entre a ferramenta rodar e a ferramenta
+    # devolver zero achados por falta de binário.
+    overall = "ok" if all(s in ("ok", "disabled", "configured") for s in statuses) else "degraded"
     return {"overall": overall, "components": results}

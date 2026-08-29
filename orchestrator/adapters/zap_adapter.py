@@ -252,6 +252,16 @@ class ZAPAdapter:
         teto = int(state.get("max_alerts", 10000))
         alertas: list[dict[str, Any]] = []
         gaps: list[str] = []
+        if rastreadas < 0:
+            # `-1` = não deu para contar (o daemon recusou a chamada). O comentário do
+            # `_contar_urls` está certo em não AFIRMAR que rastreou — mas seguir em
+            # frente calado desliga a guarda inteira. Justo quando o daemon está sob
+            # carga e a aplicação é 100% JS, o resultado sairia como app segura.
+            gaps.append(
+                "não foi possível confirmar quantas URLs o ZAP rastreou (o daemon "
+                "recusou a consulta): não dá para afirmar que a aplicação foi de fato "
+                "percorrida antes destes alertas."
+            )
         truncou = False
         while True:
             lote = await self._get(

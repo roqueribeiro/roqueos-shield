@@ -568,3 +568,179 @@ async def test_pipeline_nao_inventa_achado_quando_nao_ha_lacuna() -> None:
 
     alvo = Target(asset_type=AssetType.URL, value="https://app.test")
     assert await _run_adapter(_Fake(), alvo, {}, poll_every=0.0) == []
+
+
+# =========================== segunda rodada: o que a auditoria adversarial achou
+
+
+def test_gitleaks_clona_o_historico_inteiro_por_padrao() -> None:
+    """`--depth 200` não lê o histórico inteiro, e o gitleaks varre o HISTÓRICO.
+
+    Medido: mesmo repo, mesmo segredo — shallow(2) devolve 0 achados, clone completo
+    devolve 2. Segredo commitado e removido há 300 commits (semanas num repo ativo)
+    simplesmente não estava no clone, e zero saía como "repositório limpo".
+    """
+    fonte = Path("orchestrator/adapters/gitleaks_adapter.py").read_text(encoding="utf-8")
+    assert 'options.get("clone_depth", 0)' in fonte, "o default voltou a ser raso"
+    assert "if profundidade > 0:" in fonte, "--depth incondicional trunca o histórico"
+
+
+@pytest.mark.asyncio
+async def test_gitleaks_clone_raso_declara_a_lacuna(tmp_path: Path) -> None:
+    from orchestrator.adapters.gitleaks_adapter import GitleaksAdapter
+
+    ad = GitleaksAdapter()
+    nid = str(uuid4())
+    p = tmp_path / "report.json"
+    p.write_text("[]", encoding="utf-8")
+    ad._depths[nid] = 200
+
+    async def _t() -> tuple[int, Path]:
+        return 0, p
+
+    ad._tasks[nid] = asyncio.get_event_loop().create_task(_t())
+    await asyncio.sleep(0)
+    raw = await ad.fetch_results(_h("gitleaks", nid))
+    assert raw.coverage_gaps and "HISTÓRICO" in raw.coverage_gaps[0]
+
+
+def test_trufflehog_nao_descarta_segredo_nao_verificado_por_padrao() -> None:
+    """`--only-verified` exige egress para validar na API do provedor.
+
+    Sem egress — o ambiente-alvo — nada é emitido, o processo sai 0 e o relatório diz
+    "repositório sem segredos". Sinal de que o default estava errado: o `normalize`
+    tem um ramo completo para `verified=False` que era INALCANÇÁVEL.
+    """
+    fonte = Path("orchestrator/adapters/trufflehog_adapter.py").read_text(encoding="utf-8")
+    assert 'options.get("only_verified", False)' in fonte
+    # e o ramo de não-verificado continua existindo, agora alcançável
+    assert "Não verificado." in fonte
+
+
+@pytest.mark.asyncio
+async def test_trufflehog_com_only_verified_declara_o_descarte(tmp_path: Path) -> None:
+    from orchestrator.adapters.trufflehog_adapter import TrufflehogAdapter
+
+    ad = TrufflehogAdapter()
+    nid = str(uuid4())
+    p = tmp_path / "out.jsonl"
+    p.write_text("", encoding="utf-8")
+    ad._outs[nid] = p
+    ad._only_verified[nid] = True
+    raw = await ad.fetch_results(_h("trufflehog", nid))
+    assert raw.coverage_gaps and "only-verified" in raw.coverage_gaps[0]
+
+
+def test_greenbone_confere_o_status_do_gmp() -> None:
+    """`EtreeTransform` só converte XML; não olha o status da resposta.
+
+    Verificado na lib instalada: `EtreeTransform.__call__` chama só
+    `_convert_response`; `EtreeCheckCommandTransform` chama `check_command_status`.
+    Uma resposta de erro do GMP é XML bem-formado — passava no parse, `iter("result")`
+    não achava nada, e um scan de horas terminava DONE com zero vulnerabilidades num
+    host varrido inteiro.
+    """
+    from gvm.transforms import EtreeCheckCommandTransform, EtreeTransform
+
+    assert "check_command_status" in __import__("inspect").getsource(
+        EtreeCheckCommandTransform.__call__
+    )
+    assert "check_command_status" not in __import__("inspect").getsource(EtreeTransform.__call__)
+    fonte = Path("orchestrator/adapters/greenbone_adapter.py").read_text(encoding="utf-8")
+    assert "EtreeCheckCommandTransform()" in fonte
+    assert "transform=EtreeTransform()" not in fonte
+
+
+@pytest.mark.asyncio
+async def test_trivy_sem_secao_de_resultado_nao_e_imagem_limpa(tmp_path: Path) -> None:
+    """Imagem scratch/distroless: o trivy emite JSON válido SEM a chave `Results`.
+
+    O `normalize` iterava sobre `[]` e devolvia zero CVEs — laudo de "imagem limpa"
+    para uma imagem que o trivy não conseguiu abrir.
+    """
+    from orchestrator.adapters.trivy_adapter import TrivyAdapter
+
+    ad = TrivyAdapter()
+    nid = str(uuid4())
+    p = tmp_path / "out.json"
+    p.write_text(
+        json.dumps({"ArtifactName": "app:latest", "ArtifactType": "container_image"}),
+        encoding="utf-8",
+    )
+    ad._outputs[nid] = p
+    raw = await ad.fetch_results(_h("trivy", nid))
+    assert raw.coverage_gaps, "zero CVEs sem seção de resultado passou como limpo"
+    assert "nada foi analisado" in raw.coverage_gaps[0]
+    assert await ad.normalize(raw) == []
+
+
+@pytest.mark.asyncio
+async def test_zap_sem_conseguir_contar_urls_declara_a_duvida() -> None:
+    """`_contar_urls` devolvendo -1 desligava a guarda inteira em silêncio."""
+    from orchestrator.adapters.zap_adapter import ZAPAdapter
+
+    ad = ZAPAdapter(base_url="http://zap:8090", api_key=_falsa())
+    nid = str(uuid4())
+    ad._scans[nid] = {"url": "https://app.test", "phase": "done", "urls_rastreadas": -1}
+
+    async def _fake(path: str, **params):
+        if path == "/JSON/core/view/alerts/":
+            return {"alerts": []}
+        return {}
+
+    ad._get = _fake  # type: ignore[assignment]
+    raw = await ad.fetch_results(_h("zap", nid))
+    assert raw.coverage_gaps and "quantas URLs" in raw.coverage_gaps[0]
+    await ad.aclose()
+
+
+@pytest.mark.asyncio
+async def test_subtake_zero_subdominios_nao_afirma_dominio_seguro(tmp_path: Path) -> None:
+    """O subfinder enumera por fontes passivas NA INTERNET.
+
+    Sem egress ele falha em todas as fontes, sai 0, e o `-silent` engole os erros:
+    "domínio sem filhos" e "nenhuma fonte respondeu" ficam idênticos.
+    """
+    from orchestrator.adapters.subdomain_takeover_adapter import SubdomainTakeoverAdapter
+
+    ad = SubdomainTakeoverAdapter()
+    nid = str(uuid4())
+    out = tmp_path / "out.jsonl"
+    out.touch()
+    ad._gaps[nid] = ["o subfinder não enumerou NENHUM subdomínio."]
+
+    async def _t() -> tuple[int, Path]:
+        return 0, out
+
+    ad._tasks[nid] = asyncio.get_event_loop().create_task(_t())
+    await asyncio.sleep(0)
+    raw = await ad.fetch_results(_h("subdomain_takeover", nid))
+    assert raw.coverage_gaps, "zero subdomínios fechou como domínio seguro"
+
+
+@pytest.mark.asyncio
+async def test_semgrep_arquivo_pulado_por_tamanho_vira_lacuna(tmp_path: Path) -> None:
+    """`--max-target-bytes` default é 1 MB. Arquivo pulado não é arquivo limpo."""
+    from orchestrator.adapters.semgrep_adapter import SemgrepAdapter
+
+    ad = SemgrepAdapter()
+    nid = str(uuid4())
+    p = tmp_path / "report.json"
+    p.write_text(
+        json.dumps(
+            {
+                "results": [],
+                "time": {"rules": [{"id": "r1"}]},
+                "paths": {"scanned": ["ok.py"], "skipped": [{"path": "bundle.min.js"}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    async def _t() -> tuple[int, Path]:
+        return 0, p
+
+    ad._tasks[nid] = asyncio.get_event_loop().create_task(_t())
+    await asyncio.sleep(0)
+    raw = await ad.fetch_results(_h("semgrep", nid))
+    assert raw.coverage_gaps and "bundle.min.js" in raw.coverage_gaps[0]

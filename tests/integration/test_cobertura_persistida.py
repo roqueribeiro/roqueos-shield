@@ -324,3 +324,40 @@ async def test_health_devolve_bool_e_nunca_levanta(fabrica: str, monkeypatch) ->
     fechar = getattr(ad, "aclose", None)
     if fechar:
         await fechar()
+
+
+# ===================================== o painel de saúde não pode mentir também
+
+
+async def test_health_full_nao_diz_ok_para_chave_de_nuvem_nao_testada() -> None:
+    """Chave CONFIGURADA não é chave que funciona.
+
+    Antes, chave revogada, expirada ou com cota estourada aparecia como `ok`,
+    idêntica a uma boa. É o defeito do `health()` do censys no painel do operador.
+    """
+    from orchestrator.api.routers.health import _check_llm_cloud
+    from orchestrator.config import settings
+
+    original = settings.ANTHROPIC_API_KEY
+    try:
+        settings.ANTHROPIC_API_KEY = "chave-que-pode-estar-revogada"
+        r = await _check_llm_cloud()
+        assert r["status"] == "configured", "'ok' afirma o que não foi verificado"
+        assert "NÃO verificada" in r["detail"]["note"]
+    finally:
+        settings.ANTHROPIC_API_KEY = original
+
+
+async def test_health_full_reporta_scanner_ausente(monkeypatch) -> None:
+    """O painel checava Postgres/Redis/ZAP/LLM e NENHUM scanner.
+
+    Ficava todo verde numa imagem sem nmap, sem trivy, sem semgrep — exatamente o
+    estado em que todo scan fecha com zero achados.
+    """
+    from orchestrator.api.routers.health import _check_scanners
+
+    monkeypatch.setenv("PATH", "/nao/existe")
+    r = await _check_scanners()
+    assert r["status"] == "degraded"
+    assert "nmap" in r["detail"]["ausentes"]
+    assert "sem verificação" in r["detail"]["note"]

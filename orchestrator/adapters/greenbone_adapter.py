@@ -16,7 +16,7 @@ from uuid import uuid4
 import structlog
 from gvm.connections import TLSConnection, UnixSocketConnection
 from gvm.protocols.gmp import Gmp
-from gvm.transforms import EtreeTransform
+from gvm.transforms import EtreeCheckCommandTransform
 
 from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
@@ -75,7 +75,17 @@ class GreenboneAdapter:
         raise RuntimeError("Greenbone: configure host (TLS) ou socket_path")
 
     def _gmp_session(self) -> Any:
-        return Gmp(connection=self._connect(), transform=EtreeTransform())
+        # EtreeCheckCommandTransform, NÃO EtreeTransform: o segundo só converte a
+        # resposta em XML e não olha o status. Uma resposta de ERRO do GMP
+        # (`<get_reports_response status="404" .../>`) é XML bem-formado — passava no
+        # parse, `root.iter("result")` não achava nada, e o scan de vulnerabilidade
+        # de infraestrutura terminava DONE com ZERO achados num host varrido inteiro.
+        # Caso concreto: o `report_format_id` fixo abaixo precisa existir E estar
+        # ativo; numa instalação Community sem ele, o GMP devolve 404 assim.
+        # O transform que confere levanta GmpError, e o pipeline registra cobertura
+        # incompleta. Verificado na lib instalada: EtreeTransform.__call__ só chama
+        # _convert_response; EtreeCheckCommandTransform chama check_command_status.
+        return Gmp(connection=self._connect(), transform=EtreeCheckCommandTransform())
 
     async def health(self) -> bool:
         def _check() -> bool:

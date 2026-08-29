@@ -54,6 +54,7 @@ class SubdomainTakeoverAdapter:
         self.nuclei = nuclei_bin or shutil.which("nuclei") or "nuclei"
         self._tasks: dict[str, asyncio.Task[tuple[int, Path]]] = {}
         self._stats: dict[str, dict[str, int]] = {}
+        self._gaps: dict[str, list[str]] = {}
         self._workdirs: dict[str, Path] = {}
 
     async def health(self) -> bool:
@@ -82,6 +83,7 @@ class SubdomainTakeoverAdapter:
         out_path = workdir / "out.jsonl"
 
         stats: dict[str, int] = {"subdominios": 0, "vivos": 0}
+        gaps: list[str] = []
 
         def _linhas(p: Path) -> int:
             if not p.exists():
@@ -109,10 +111,19 @@ class SubdomainTakeoverAdapter:
                 )
                 return sf.returncode, out_path
             stats["subdominios"] = _linhas(subs_path)
-            # Zero subdomínios enumerados é resultado LEGÍTIMO (domínio sem filhos
-            # públicos): fecha limpo, sem chamar o resto do pipeline.
+            # Zero subdomínios PODE ser legítimo (domínio sem filhos públicos) — mas
+            # o subfinder enumera por fontes passivas NA INTERNET (crt.sh,
+            # VirusTotal...). Sem egress ele falha em todas as fontes, sai com código
+            # 0, e o `-silent` engole os erros: os dois casos ficam idênticos. Fecha
+            # sem erro, mas declara a lacuna em vez de afirmar "domínio seguro".
             if stats["subdominios"] == 0:
                 out_path.touch()
+                gaps.append(
+                    "o subfinder não enumerou NENHUM subdomínio. Pode ser um domínio "
+                    "sem filhos públicos, ou as fontes passivas (crt.sh, VirusTotal, "
+                    "etc.) não terem respondido — sem egress os dois casos são "
+                    "idênticos. Nada foi testado para takeover."
+                )
                 return 0, out_path
 
             # 2. httpx — filtra os que respondem
@@ -135,6 +146,11 @@ class SubdomainTakeoverAdapter:
             stats["vivos"] = _linhas(live_path)
             if stats["vivos"] == 0:
                 out_path.touch()
+                gaps.append(
+                    f"o httpx não achou nenhum host vivo entre os {stats['subdominios']} "
+                    "subdomínios enumerados. Sem egress, o resultado é o mesmo de "
+                    "todos estarem de fato fora do ar — nenhum foi testado."
+                )
                 return 0, out_path
 
             # 3. nuclei -t takeovers/
@@ -171,6 +187,7 @@ class SubdomainTakeoverAdapter:
         self._tasks[native_id] = asyncio.create_task(_run())
         self._workdirs[native_id] = workdir
         self._stats[native_id] = stats
+        self._gaps[native_id] = gaps
         return ScanHandle(
             adapter=self.name,
             native_id=native_id,
@@ -210,7 +227,7 @@ class SubdomainTakeoverAdapter:
                 "pipeline de takeover não produziu saída: nenhuma etapa foi concluída. "
                 "Zero achados aqui NÃO significa domínio sem subdomínio sequestrável."
             )
-        gaps: list[str] = []
+        gaps = list(self._gaps.get(handle.native_id, []))
         items = read_jsonl(out_path, adapter=self.name, gaps=gaps)
         st = self._stats.get(handle.native_id, {})
         log.info("subtake.fetch_ok", achados=len(items), **st)

@@ -311,13 +311,28 @@ class SemgrepAdapter:
         # zero resultados — indistinguível de código são. Reproduzido: config com
         # `rules: []` dá exit 0 / 0 regras / 0 achados. Num banco, egress restrito é
         # o caso normal, então este silêncio seria o comportamento padrão.
+        gaps: list[str] = []
+        # Arquivo PULADO não é arquivo limpo. O `--max-target-bytes` default é 1 MB:
+        # bundle minificado, código gerado, migração SQL grande e vendored code
+        # passam batido, com exit 0 e `errors` vazio. Medido: mesma vulnerabilidade
+        # em dois arquivos, o de 1,3 MB não apareceu e nada avisou. O dado para
+        # declarar já está na mão — `paths.scanned` versus o que foi pedido.
+        caminhos = (payload.get("paths") or {}) if isinstance(payload, dict) else {}
+        pulados = list(caminhos.get("skipped") or [])
+        if pulados:
+            nomes = ", ".join(str(x.get("path", x))[:80] for x in pulados[:5])
+            gaps.append(
+                f"{len(pulados)} arquivo(s) não foram analisados pelo semgrep "
+                f"({nomes}{', ...' if len(pulados) > 5 else ''}) — tipicamente acima do "
+                "`--max-target-bytes` (1 MB) ou binários. Nenhuma regra rodou sobre eles."
+            )
         if not _rules_ran(payload):
             raise ScanIntegrityError(
                 "semgrep terminou sem carregar NENHUMA regra: o resultado seria um "
                 "'limpo' falso. Verifique o --config (registry alcançável? pack "
                 "existe? caminho local correto?)."
             )
-        return RawResults(adapter=self.name, payload=payload)
+        return RawResults(adapter=self.name, payload=payload, coverage_gaps=gaps)
 
     async def normalize(self, raw: RawResults) -> list[Finding]:
         findings: list[Finding] = []

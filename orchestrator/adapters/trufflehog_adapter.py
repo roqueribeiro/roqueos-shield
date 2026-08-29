@@ -37,6 +37,7 @@ class TrufflehogAdapter:
         self.bin = bin_path or shutil.which("trufflehog") or "trufflehog"
         self._tasks: dict[str, asyncio.Task[int]] = {}
         self._outs: dict[str, Path] = {}
+        self._only_verified: dict[str, bool] = {}
 
     async def health(self) -> bool:
         try:
@@ -56,7 +57,18 @@ class TrufflehogAdapter:
             raise ValueError(f"trufflehog espera REPO, recebi {target.asset_type}")
 
         out_path = Path(tempfile.mkdtemp(prefix="cai-trufflehog-")) / "out.jsonl"
-        only_verified = options.get("only_verified", True)
+        # `--only-verified` DEIXOU de ser o default. Ele faz o trufflehog emitir
+        # apenas credencial que ele conseguiu VALIDAR chamando a API do provedor —
+        # o que exige egress. Numa rede corporativa restrita (o ambiente-alvo deste
+        # projeto) nenhuma validação completa, nada é emitido, o processo sai 0, o
+        # JSONL fica vazio e o relatório diz "repositório sem segredos".
+        # Sinal de que o default estava errado desde sempre: o `normalize` tem um
+        # ramo completo para `verified=False` (MEDIUM/TENTATIVE, "Não verificado.")
+        # que era INALCANÇÁVEL. O autor esperava não-verificados chegarem.
+        # Segredo verificado continua CRITICAL; o resto entra como MEDIUM para a
+        # triagem decidir. Ligue `{"only_verified": true}` quando houver egress e
+        # você quiser só incidente confirmado.
+        only_verified = bool(options.get("only_verified", False))
 
         cmd = [self.bin, "git", target.value, "--json"]
         if only_verified:
@@ -78,6 +90,7 @@ class TrufflehogAdapter:
 
         native_id = str(uuid4())
         self._outs[native_id] = out_path
+        self._only_verified[native_id] = only_verified
         self._tasks[native_id] = asyncio.create_task(_run())
         return ScanHandle(
             adapter=self.name,
@@ -109,6 +122,13 @@ class TrufflehogAdapter:
         items: list[dict[str, Any]] = []
         if path:
             items = read_jsonl(path, adapter=self.name, gaps=gaps)
+        if self._only_verified.get(handle.native_id):
+            gaps.append(
+                "este scan rodou com `--only-verified`: segredo que o trufflehog não "
+                "conseguiu VALIDAR na API do provedor foi descartado. Sem egress para "
+                "os provedores, isso descarta tudo — zero achados aqui não significa "
+                "repositório sem segredo."
+            )
         return RawResults(adapter=self.name, payload=items, coverage_gaps=gaps)
 
     async def normalize(self, raw: RawResults) -> list[Finding]:

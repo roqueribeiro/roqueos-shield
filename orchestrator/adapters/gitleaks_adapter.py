@@ -38,6 +38,7 @@ class GitleaksAdapter:
         self.git_bin = git_bin or shutil.which("git") or "git"
         self._tasks: dict[str, asyncio.Task[tuple[int, Path]]] = {}
         self._workdirs: dict[str, Path] = {}
+        self._depths: dict[str, int] = {}
 
     async def health(self) -> bool:
         try:
@@ -59,16 +60,21 @@ class GitleaksAdapter:
         workdir = Path(tempfile.mkdtemp(prefix="cai-gitleaks-"))
         clone_dir = workdir / "repo"
         report_path = workdir / "report.json"
-        depth = str(options.get("clone_depth", 200))
+        # 0 = clone COMPLETO (o default agora). O gitleaks varre o HISTÓRICO; com
+        # `--depth 200`, um segredo commitado e removido há 300 commits — semanas num
+        # repo ativo — simplesmente não está no clone. Medido: mesmo repo, mesmo
+        # segredo, shallow(2) = 0 achados, completo = 2 achados. Zero saía como
+        # "repositório limpo", que é o caso "paginação é cobertura" com outra roupa.
+        profundidade = int(options.get("clone_depth", 0) or 0)
+        depth = str(profundidade)
 
         async def _run() -> tuple[int, Path]:
             # 1. clone --depth N
+            argv = [self.git_bin, "clone", "--quiet"]
+            if profundidade > 0:
+                argv += ["--depth", depth]
             clone = await asyncio.create_subprocess_exec(
-                self.git_bin,
-                "clone",
-                "--quiet",
-                "--depth",
-                depth,
+                *argv,
                 target.value,
                 str(clone_dir),
                 stdout=asyncio.subprocess.DEVNULL,
@@ -103,6 +109,7 @@ class GitleaksAdapter:
 
         native_id = str(uuid4())
         self._workdirs[native_id] = workdir
+        self._depths[native_id] = profundidade
         self._tasks[native_id] = asyncio.create_task(_run())
         return ScanHandle(
             adapter=self.name,
@@ -151,7 +158,15 @@ class GitleaksAdapter:
             ) from e
         if not isinstance(items, list):
             raise ScanIntegrityError("report do gitleaks não é uma lista: formato inesperado.")
-        return RawResults(adapter=self.name, payload=items)
+        gaps: list[str] = []
+        profundidade = self._depths.get(handle.native_id, 0)
+        if profundidade > 0:
+            gaps.append(
+                f"o clone foi raso (`--depth {profundidade}`): o gitleaks varre o "
+                "HISTÓRICO, e commit mais antigo que isso não estava no clone. "
+                "Segredo removido em commit anterior NÃO foi procurado."
+            )
+        return RawResults(adapter=self.name, payload=items, coverage_gaps=gaps)
 
     async def normalize(self, raw: RawResults) -> list[Finding]:
         findings: list[Finding] = []

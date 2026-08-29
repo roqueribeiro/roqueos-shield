@@ -139,10 +139,31 @@ class TrivyAdapter:
                 "trivy não produziu arquivo de saída: o scan não verificou a imagem. "
                 "Zero CVEs aqui seria um laudo inventado."
             )
-        return RawResults(
-            adapter=self.name,
-            payload=json.loads(path.read_text(encoding="utf-8")),
-        )
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            raise ScanIntegrityError(
+                f"saída do trivy não é JSON válido ({e}): resultado não confiável."
+            ) from e
+
+        # Sem a chave `Results`, o `normalize` itera sobre `[]` e devolve zero CVEs —
+        # mas isso NÃO é "imagem limpa": é o trivy não tendo identificado o artefato
+        # (imagem scratch/distroless, sem OS nem gerenciador de pacote reconhecido).
+        # Ele emite JSON válido com ArtifactName e Metadata, sai 0, e o laudo sai
+        # "sem CVE". Curiosidade que confirma o risco: quando o trivy emite
+        # `"Results": null` em vez de omitir a chave, o `for` estoura TypeError e o
+        # scanner cai em `scanners_skipped` — honesto. Duas saídas da MESMA
+        # ferramenta levavam a conclusões opostas.
+        gaps: list[str] = []
+        if isinstance(payload, dict) and payload.get("Results") is None:
+            gaps.append(
+                "o trivy não produziu nenhuma seção de resultado para este artefato "
+                f"({payload.get('ArtifactName', '?')}, tipo "
+                f"{payload.get('ArtifactType', '?')}): tipicamente imagem sem OS nem "
+                "gerenciador de pacote reconhecido. Zero CVEs aqui significa que nada "
+                "foi analisado, não que a imagem esteja limpa."
+            )
+        return RawResults(adapter=self.name, payload=payload, coverage_gaps=gaps)
 
     async def normalize(self, raw: RawResults) -> list[Finding]:
         findings: list[Finding] = []
@@ -152,7 +173,7 @@ class TrivyAdapter:
         artifact_type = raw.payload.get("ArtifactType", "unknown")
         target = Target(asset_type=AssetType.IMAGE, value=artifact, label=artifact_type)
 
-        for result in raw.payload.get("Results", []):
+        for result in raw.payload.get("Results") or []:
             target_in_result = result.get("Target", artifact)
             sub_target = Target(asset_type=AssetType.IMAGE, value=target_in_result)
 
