@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
@@ -25,8 +26,24 @@ _engine = create_async_engine(
 _session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
 
 
+def _ensure_sqlite_dir() -> None:
+    """Cria a pasta do arquivo SQLite antes de abrir a conexão.
+
+    Sem isto, um clone novo sem `./data/` (ela é gitignored) quebra o boot com
+    "unable to open database file" — o primeiro contato de quem chega no projeto.
+    Em Postgres é no-op.
+    """
+    url = settings.DATABASE_URL
+    if not url.startswith("sqlite"):
+        return
+    path = url.split("///", 1)[-1].split("?", 1)[0]
+    if path and path not in {":memory:"}:
+        Path(path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
+
+
 async def init_db() -> None:
     """Cria as tabelas (apenas para dev/SQLite). Em prod, usar alembic."""
+    _ensure_sqlite_dir()
     async with _engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
 
