@@ -61,6 +61,28 @@ jobs:
       - name: check docs fresh
         run: python scripts/check_docs_fresh.py
 
+  silencio:
+    name: Contrato do silencio (adapters)
+    runs-on: ubuntu-latest
+    # O defeito mais caro deste repo apareceu NOVE vezes com a mesma forma: o
+    # scanner nao roda, o erro e engolido, e zero achados vira "alvo limpo". Um
+    # scanner quebrado produz a MESMA saida de um alvo seguro.
+    # "Sempre trate o erro" e um bom proposito e um pessimo controle: ninguem
+    # percebe a volta do padrao numa revisao de diff. Este gate compara o CODIGO com
+    # a regra (AST, nao grep) e reprova o merge.
+    # Mutacao confirmada, quatro plantios: `except` devolvendo vazio, `except`
+    # devolvendo vazio EMBRULHADO num RawResults, poll decidindo so por task.done(),
+    # e dict de sucesso fabricado -- os quatro dao exit 1. Arvore limpa, exit 0. O
+    # escape `# silencio-ok: motivo` e aceito, e o motivo escrito e o que denuncia
+    # um abuso na revisao.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: check no silence
+        run: python scripts/check_no_silence.py
+
   secrets:
     name: Segredo no repo (gitleaks)
     runs-on: ubuntu-latest
@@ -99,6 +121,31 @@ jobs:
             --error --metrics off --disable-version-check \
             orchestrator/ scripts/
 
+  efetividade:
+    name: A ferramenta acha de verdade (e2e)
+    runs-on: ubuntu-latest
+    # O resto da suite prova que a ferramenta NAO MENTE quando falha. Este gate
+    # responde a outra pergunta: ela ACHA alguma coisa? Sem ele, uma ferramenta que
+    # so levantasse excecao passaria em tudo -- e "0 achados" e o estado natural de
+    # um scanner quebrado.
+    # Monta um repo com defeito conhecido (injecao de comando, SQLi por taint,
+    # pickle, MD5, debug ligado, bucket S3 publico, SG 0.0.0.0/0, disco sem cifra),
+    # roda o pipeline inteiro e exige achado real de cada camada. Mutacao
+    # confirmada: com o default antigo (`--config auto`, incompativel com
+    # `--metrics off`) o SAST nao roda e o gate reprova em ~5s.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install package + scanners
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" "semgrep>=1.100.0" "checkov>=3.2"
+      - name: e2e de efetividade
+        run: pytest tests/integration/test_efetividade_e2e.py -v
+
   typecheck:
     name: Typecheck (mypy)
     runs-on: ubuntu-latest
@@ -123,7 +170,7 @@ jobs:
     runs-on: ubuntu-latest
     # Gate bloqueante: a suíte reprova o merge (o teste do scrubber que "falhava"
     # era o SEC-02, agora consertado). O piso de cobertura é catraca que só sobe —
-    # hoje 58%; a varredura do silêncio (adapters + integridade) subiu o piso de 34.
+    # hoje 61%; a varredura do silêncio (adapters + integridade) subiu o piso de 34.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -135,7 +182,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
       - name: pytest
-        run: pytest --cov=orchestrator --cov-report=term-missing --cov-fail-under=55
+        run: pytest --cov=orchestrator --cov-report=term-missing --cov-fail-under=60
 
   build-image:
     name: Build orchestrator image

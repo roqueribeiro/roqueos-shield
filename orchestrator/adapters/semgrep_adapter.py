@@ -5,9 +5,21 @@ Diferente dos scanners de secret (gitleaks/trufflehog), IaC (checkov) e CVE de d
 crypto fraca, desserialização, uso perigoso de API. Roda sobre um checkout local
 (clona a URL do repo, ou usa um diretório já presente).
 
-Soberania: `--metrics off` — nada é enviado pro registry da Semgrep. `--config` é
-configurável (default `auto`, que puxa o ruleset público; num ambiente sem egress,
-aponte para um pack local via options `{"config": "/rules"}`).
+Soberania: `--metrics off` — nada é enviado pro registry da Semgrep.
+
+O default NÃO é `auto`. Medido nesta máquina (semgrep 1.x):
+
+    $ semgrep scan --config auto --metrics off ...
+    [ERROR]: Cannot create auto config when metrics are off.  → exit 2
+
+Ou seja: `auto` e a postura de soberania deste projeto são incompatíveis, e o
+default antigo (`auto`) fazia o ÚNICO scanner que lê o código falhar em 100% das
+execuções. O default agora são os mesmos packs que o CI usa para escanear este
+repo — `p/security-audit`, `p/secrets` e `p/owasp-top-ten` (330 regras; no alvo de
+teste acha injeção de comando, SQLi por taint, pickle, MD5 e debug ligado).
+
+Sem egress para o registry, aponte para um pack local:
+`{"config": "/rules"}` ou `{"config": ["/rules/py", "/rules/tf"]}`.
 """
 
 from __future__ import annotations
@@ -23,6 +35,7 @@ from uuid import uuid4
 
 import structlog
 
+from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -48,6 +61,33 @@ _CONFIDENCE_MAP: dict[str, Confidence] = {
     "LOW": Confidence.TENTATIVE,
 }
 _CWE_RE = re.compile(r"CWE-\d+")
+
+# Os mesmos packs do job `self-scan` do CI: o que a ferramenta roda contra o código
+# dos outros é o que ela roda contra si mesma.
+_DEFAULT_CONFIGS: tuple[str, ...] = ("p/security-audit", "p/secrets", "p/owasp-top-ten")
+
+
+def _resolver_configs(bruto: Any) -> list[str]:
+    """Normaliza `options["config"]` (str, lista ou ausente) para uma lista.
+
+    Recusa `auto` com mensagem explícita em vez de deixar o semgrep sair 2 com um
+    erro que ninguém liga ao `--metrics off` daqui.
+    """
+    if bruto is None or bruto == "":
+        configs = list(_DEFAULT_CONFIGS)
+    elif isinstance(bruto, str):
+        configs = [bruto]
+    else:
+        configs = [str(x) for x in bruto]
+    if any(c.strip().lower() == "auto" for c in configs):
+        raise ValueError(
+            "semgrep: `--config auto` exige telemetria ligada e este projeto roda com "
+            "`--metrics off` (soberania de dados) — a combinação sai com erro e NENHUMA "
+            "regra roda. Use packs explícitos (o default: "
+            + ", ".join(_DEFAULT_CONFIGS)
+            + ") ou um caminho local."
+        )
+    return configs
 
 
 class SemgrepAdapter:
@@ -80,7 +120,7 @@ class SemgrepAdapter:
 
         workdir = Path(tempfile.mkdtemp(prefix="cai-semgrep-"))
         report_path = workdir / "report.json"
-        config = str(options.get("config", "auto"))
+        configs = _resolver_configs(options.get("config"))
         depth = str(options.get("clone_depth", 1))
 
         # Diretório local já presente (path) vs. URL de repo a clonar.
@@ -106,11 +146,11 @@ class SemgrepAdapter:
                     log.error("semgrep.clone_failed", err=stderr.decode(errors="replace")[:500])
                     return clone.returncode or 1, report_path
 
+            args = [self.semgrep_bin, "scan"]
+            for c in configs:
+                args.extend(["--config", c])
             scan = await asyncio.create_subprocess_exec(
-                self.semgrep_bin,
-                "scan",
-                "--config",
-                config,
+                *args,
                 "--json",
                 "--output",
                 str(report_path),
@@ -140,7 +180,7 @@ class SemgrepAdapter:
         return ScanHandle(
             adapter=self.name,
             native_id=native_id,
-            metadata={"repo": target.value, "report": str(report_path), "config": config},
+            metadata={"repo": target.value, "report": str(report_path), "config": configs},
         )
 
     async def poll(self, handle: ScanHandle) -> ScanStatus:
@@ -154,12 +194,20 @@ class SemgrepAdapter:
 
     async def fetch_results(self, handle: ScanHandle) -> RawResults:
         _, report_path = self._tasks[handle.native_id].result()
-        payload: dict[str, Any] = {}
-        if report_path.exists():
-            try:
-                payload = json.loads(report_path.read_text(encoding="utf-8")) or {}
-            except json.JSONDecodeError:
-                payload = {}
+        if not report_path.exists():
+            raise ScanIntegrityError(
+                "semgrep não escreveu o relatório: o SAST não rodou. Zero achados aqui "
+                "NÃO significa código sem vulnerabilidade."
+            )
+        texto = report_path.read_text(encoding="utf-8").strip()
+        if not texto:
+            raise ScanIntegrityError("relatório do semgrep vazio: execução interrompida.")
+        try:
+            payload: dict[str, Any] = json.loads(texto) or {}
+        except json.JSONDecodeError as e:
+            raise ScanIntegrityError(
+                f"relatório do semgrep não é JSON válido ({e}): resultado não confiável."
+            ) from e
 
         # Zero achados só vale como "limpo" se ALGUMA regra rodou. Um `--config`
         # que não resolve (registry sem egress no cliente, pack privado sem
@@ -226,10 +274,6 @@ class SemgrepAdapter:
             output_paths=self._workdirs,
             adapter_name=self.name,
         )
-
-
-class ScanIntegrityError(RuntimeError):
-    """O scan terminou, mas o resultado não é confiável (ex.: nenhuma regra rodou)."""
 
 
 def _rules_ran(payload: dict[str, Any]) -> int:

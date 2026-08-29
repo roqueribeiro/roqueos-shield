@@ -94,6 +94,61 @@ class ScannerAdapter(Protocol):
 - `normalize()` produz `Finding` canônico — sem variantes
 - Severity é heurística do scanner; AI ajusta depois em `ai_triage.adjusted_severity`
 
+#### O contrato do silêncio (leia antes de escrever ou revisar um adapter)
+
+Este é o defeito que mais apareceu neste repositório — nove adapters, sempre com a
+mesma forma: **a ferramenta não roda, o erro vira `[]`, `{}` ou um dicionário
+fabricado, e o relatório apresenta isso como alvo limpo.** Um scanner quebrado
+produz exatamente o mesmo output que um alvo seguro. Em ambiente regulado essa é a
+única diferença que importa.
+
+A pergunta obrigatória ao mexer em qualquer adapter:
+
+> **"Zero achados aqui significa *limpo*, ou significa *não rodou*?
+> Se não houver como distinguir, falta um sinal."**
+
+Três níveis, e o adapter tem que escolher um — nunca o silêncio:
+
+| Situação | O que fazer | Onde aparece |
+| --- | --- | --- |
+| Rodou e não achou | devolver `[]` | achado nenhum, cobertura completa |
+| Não deu para verificar | `raise ScanIntegrityError` | `scanners_skipped`, `coverage_complete: false` no bundle |
+| Verificou em parte | preencher `RawResults.coverage_gaps` | achado **INFO** no relatório, gerado pelo pipeline |
+
+`ScanIntegrityError` (`adapters/base.py`) é para o que impede a verificação: arquivo
+de saída ausente ou vazio, JSON/XML que não parseia, nenhuma regra carregada, nenhum
+controle avaliado, API que recusou a credencial. O `_run_adapter` converte em
+`AdapterUnavailableError` e o scan segue com cobertura declarada como incompleta.
+
+`coverage_gaps` é o meio-termo, que antes só existia como log — e log ninguém lê.
+O pipeline (`_run_adapter`, **um lugar só**) transforma cada entrada num `Finding`
+de severidade INFO. Fica no pipeline de propósito: quinze adapters lembrarem de
+emitir o aviso é convenção; um lugar só é mecanismo.
+
+Regras concretas que caíram desta análise, e que valem para adapter novo:
+
+- **Leia o returncode.** `task.done()` só diz que o processo terminou, não que deu
+  certo. Todo adapter de subprocess devolve `(rc, path)` e o `poll` lê `rc`.
+- **Use `read_jsonl` (`adapters/base.py`)** em vez de
+  `except json.JSONDecodeError: continue`. Se toda linha é ilegível, reprova; se só
+  parte é, preserva as boas e declara a lacuna.
+- **Nunca fabrique payload de sucesso** num `except`. Um `{"matches": [], "total": 0}`
+  inventado é indistinguível de "não há nada exposto".
+- **Cascata precisa de checagem por etapa.** `if arquivo_anterior.exists()` faz a
+  primeira falha apagar em silêncio as etapas seguintes.
+- **`health()` precisa de round-trip.** Construir um cliente de SDK não prova
+  credencial: o construtor não chama a API.
+- **Paginação é cobertura.** Ler a primeira página e devolver como total é o mesmo
+  silêncio com outra roupa — compare com o total reportado e declare a diferença.
+- **Ferramenta de rede vai com o egress fechado por padrão** (`-duc`, `-ni` no
+  nuclei). Sem isso ela pendura até o timeout numa rede corporativa restrita, que é
+  o ambiente normal do alvo deste projeto.
+
+O gate que segura isso é `tests/unit/test_silencio_adapters.py`, com teste de
+mutação por adapter (reverter o conserto reprova). E o outro lado da moeda —
+provar que a ferramenta **acha** de verdade, não só que falha alto — é o job
+`efetividade` do CI (`tests/integration/test_efetividade_e2e.py`).
+
 ### Domain (`orchestrator/domain/`)
 
 - **`schemas.py`** — Pydantic v2: `Finding`, `Target`, `AITriage`, `Severity`, `Confidence`, `AssetType`, etc. **Forma canônica** que todos os adapters produzem
