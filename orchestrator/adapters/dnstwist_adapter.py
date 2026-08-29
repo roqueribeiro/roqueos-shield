@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import structlog
 
+from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -106,12 +107,20 @@ class DnstwistAdapter:
 
     async def fetch_results(self, handle: ScanHandle) -> RawResults:
         path = self._outs.get(handle.native_id)
-        items: list[dict[str, Any]] = []
-        if path and path.exists():
-            try:
-                items = json.loads(path.read_text(encoding="utf-8") or "[]")
-            except json.JSONDecodeError:
-                items = []
+        if path is None or not path.exists():
+            raise ScanIntegrityError(
+                "dnstwist não escreveu a saída: o scan não rodou. Zero domínios "
+                "parecidos aqui NÃO significa ausência de typosquatting."
+            )
+        texto = path.read_text(encoding="utf-8").strip()
+        if not texto:
+            raise ScanIntegrityError("saída do dnstwist vazia: execução interrompida.")
+        try:
+            items = json.loads(texto) or []
+        except json.JSONDecodeError as e:
+            raise ScanIntegrityError(
+                f"saída do dnstwist não é JSON válido ({e}): resultado não confiável."
+            ) from e
         return RawResults(adapter=self.name, payload=items)
 
     async def normalize(self, raw: RawResults) -> list[Finding]:

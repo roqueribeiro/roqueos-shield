@@ -2,6 +2,14 @@
 
 Não é um scanner com lifecycle típico — é mais uma "consulta + materializa findings".
 Mantém a interface ScannerAdapter pra integrar no pipeline.
+
+Silêncio corrigido: ao estourar o rate limit da busca de código (que no GitHub é
+baixo — dezenas de consultas por minuto) o loop dava `break` e as dorks restantes
+eram ABANDONADAS sem registro. Com dez dorks e o limite estourando na terceira, o
+relatório apresentava o resultado de três como se fosse o de dez. Erros por dork
+individual também eram só um log. Agora ambas as situações viram lacuna de
+cobertura declarada, que o pipeline transforma em achado visível — e, quando NADA
+foi consultado, `ScanIntegrityError`.
 """
 
 from __future__ import annotations
@@ -14,6 +22,7 @@ import structlog
 from github import Github
 from github.GithubException import GithubException, RateLimitExceededException
 
+from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -69,12 +78,18 @@ class GitHubExposureAdapter:
 
         results: list[dict[str, Any]] = []
         gh = self._gh()
-        for dork in dorks:
+        consultadas: list[str] = []
+        nao_consultadas: list[str] = []
+        falhas: list[str] = []
+        truncadas: list[str] = []
+        for i, dork in enumerate(dorks):
             try:
                 code = gh.search_code(dork)
                 count = 0
+                estourou = False
                 for item in code:
                     if count >= max_results_per_dork:
+                        estourou = True
                         break
                     results.append(
                         {
@@ -87,19 +102,63 @@ class GitHubExposureAdapter:
                         }
                     )
                     count += 1
+                consultadas.append(dork)
+                if estourou:
+                    truncadas.append(dork)
             except RateLimitExceededException:
-                log.warning("github.rate_limit", dork=dork)
+                # Rate limit para a rodada inteira: as dorks daqui pra frente NÃO
+                # foram consultadas. Antes isso era `break` + log; agora é declarado.
+                log.warning("github.rate_limit", dork=dork, restantes=len(dorks) - i)
+                nao_consultadas = list(dorks[i:])
                 break
             except GithubException as e:
                 log.error("github.search_failed", dork=dork, error=str(e))
+                falhas.append(f"{dork} ({e.__class__.__name__})")
+
+        if not consultadas:
+            raise ScanIntegrityError(
+                f"nenhuma das {len(dorks)} dork(s) foi consultada no GitHub "
+                f"(rate limit ou erro de API). Zero vazamentos aqui seria invenção."
+            )
+
+        gaps: list[str] = []
+        if nao_consultadas:
+            gaps.append(
+                f"rate limit da busca de código do GitHub: {len(nao_consultadas)} de "
+                f"{len(dorks)} dork(s) NÃO foram consultadas "
+                f"({', '.join(nao_consultadas[:5])}"
+                + (", ..." if len(nao_consultadas) > 5 else "")
+                + "). Rode de novo depois da janela de limite."
+            )
+        if falhas:
+            gaps.append(
+                f"{len(falhas)} dork(s) falharam na API e não foram consultadas: "
+                + ", ".join(falhas[:5])
+                + (", ..." if len(falhas) > 5 else "")
+            )
+        if truncadas:
+            gaps.append(
+                f"{len(truncadas)} dork(s) atingiram o teto de {max_results_per_dork} "
+                "resultados: pode haver mais exposição além do que foi lido."
+            )
 
         native_id = str(uuid4())
-        self._scans[native_id] = {"results": results, "target": target.value, "dorks": dorks}
+        self._scans[native_id] = {
+            "results": results,
+            "target": target.value,
+            "dorks": dorks,
+            "gaps": gaps,
+        }
 
         return ScanHandle(
             adapter=self.name,
             native_id=native_id,
-            metadata={"company": target.value, "dorks": dorks, "results": len(results)},
+            metadata={
+                "company": target.value,
+                "dorks": dorks,
+                "results": len(results),
+                "dorks_consultadas": len(consultadas),
+            },
         )
 
     async def poll(self, handle: ScanHandle) -> ScanStatus:
@@ -107,7 +166,14 @@ class GitHubExposureAdapter:
         return ScanStatus.DONE if handle.native_id in self._scans else ScanStatus.FAILED
 
     async def fetch_results(self, handle: ScanHandle) -> RawResults:
-        return RawResults(adapter=self.name, payload=self._scans[handle.native_id])
+        dados = self._scans.get(handle.native_id)
+        if dados is None:
+            raise ScanIntegrityError("github_exposure: handle desconhecido, nada foi consultado.")
+        return RawResults(
+            adapter=self.name,
+            payload=dados,
+            coverage_gaps=list(dados.get("gaps") or []),
+        )
 
     async def normalize(self, raw: RawResults) -> list[Finding]:
         findings: list[Finding] = []

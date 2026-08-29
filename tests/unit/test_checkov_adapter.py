@@ -126,9 +126,21 @@ async def test_parsing_error_parcial_vira_achado_visivel() -> None:
     h = _plant(ad, payload=payload)
     await asyncio.sleep(0)
     raw = await ad.fetch_results(h)
-    findings = await ad.normalize(raw)
-    assert [f.source_rule_id for f in findings] == ["checkov-parsing-errors"]
-    assert "NÃO foram avaliados" in findings[0].description
+    assert await ad.normalize(raw) == []
+    # A lacuna nao morre num log: o pipeline transforma coverage_gaps em achado INFO.
+    assert raw.coverage_gaps and "NÃO foram avaliados" in raw.coverage_gaps[0]
+
+    from orchestrator.adapters.base import coverage_gap_finding
+    from orchestrator.domain.schemas import Severity
+
+    f = coverage_gap_finding(
+        adapter="checkov",
+        gaps=raw.coverage_gaps,
+        scan_id=uuid4(),
+        target=Target(asset_type=AssetType.REPO, value="repo"),
+    )
+    assert f.severity == Severity.INFO
+    assert "sem verificação" in f.description
 
 
 # ------------------------------------------------------------------- poll

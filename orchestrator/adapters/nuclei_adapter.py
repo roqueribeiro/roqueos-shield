@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -12,6 +11,7 @@ from uuid import uuid4
 
 import structlog
 
+from orchestrator.adapters.base import read_jsonl
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -146,15 +146,11 @@ class NucleiAdapter:
 
     async def fetch_results(self, handle: ScanHandle) -> RawResults:
         path = self._output_paths.get(handle.native_id)
+        gaps: list[str] = []
         lines: list[dict[str, Any]] = []
-        if path and path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
-                if line.strip():
-                    try:
-                        lines.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
-        return RawResults(adapter=self.name, payload=lines)
+        if path:
+            lines = read_jsonl(path, adapter=self.name, gaps=gaps)
+        return RawResults(adapter=self.name, payload=lines, coverage_gaps=gaps)
 
     async def normalize(self, raw: RawResults) -> list[Finding]:
         findings: list[Finding] = []

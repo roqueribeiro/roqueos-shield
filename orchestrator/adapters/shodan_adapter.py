@@ -1,6 +1,12 @@
 """Shodan adapter — query por organização/CIDR pra ver o que está exposto pra internet.
 
 Requer SHODAN_API_KEY. Opcional na fase 2.5.
+
+Silêncio corrigido: em qualquer exceção da busca (cota estourada, chave inválida,
+timeout, API fora do ar) o adapter FABRICAVA `{"matches": [], "total": 0}` e o
+handle voltava saudável. O relatório de exposição então afirmava que a superfície
+externa foi consultada e nada apareceu — para uma consulta que nunca chegou ao
+Shodan. Agora a falha vira `ScanIntegrityError` e o vetor entra como não verificado.
 """
 
 from __future__ import annotations
@@ -12,6 +18,7 @@ from uuid import uuid4
 
 import structlog
 
+from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -57,21 +64,44 @@ class ShodanAdapter:
             data = await asyncio.to_thread(api.search, query, limit=int(options.get("limit", 100)))
         except Exception as e:  # noqa: BLE001
             log.error("shodan.search_failed", error=str(e))
-            data = {"matches": [], "total": 0}
+            raise ScanIntegrityError(
+                f"consulta ao Shodan falhou ({type(e).__name__}: {e}). Cota, chave ou "
+                "conectividade. NÃO há resultado: zero exposições aqui seria invenção."
+            ) from e
+
+        total = int(data.get("total") or 0)
+        matches = list(data.get("matches") or [])
+        # A API pagina de 100 em 100. Quando `total` supera o que veio, o resto da
+        # superfície exposta NÃO foi olhada — e um relatório que omite isso deixa o
+        # leitor concluir que viu tudo.
+        gaps: list[str] = []
+        if total > len(matches):
+            gaps.append(
+                f"o Shodan reporta {total} resultado(s) para esta consulta e só "
+                f"{len(matches)} foram lidos (limite da pagina): o restante da "
+                "superficie exposta nao foi analisado."
+            )
 
         native_id = str(uuid4())
-        self._scans[native_id] = {"query": query, "matches": data.get("matches", [])}
+        self._scans[native_id] = {"query": query, "matches": matches, "gaps": gaps}
         return ScanHandle(
             adapter=self.name,
             native_id=native_id,
-            metadata={"query": query, "total": data.get("total", 0)},
+            metadata={"query": query, "total": total, "lidos": len(matches)},
         )
 
     async def poll(self, handle: ScanHandle) -> ScanStatus:
         return ScanStatus.DONE if handle.native_id in self._scans else ScanStatus.FAILED
 
     async def fetch_results(self, handle: ScanHandle) -> RawResults:
-        return RawResults(adapter=self.name, payload=self._scans[handle.native_id])
+        dados = self._scans.get(handle.native_id)
+        if dados is None:
+            raise ScanIntegrityError("shodan: handle desconhecido, a consulta não rodou.")
+        return RawResults(
+            adapter=self.name,
+            payload=dados,
+            coverage_gaps=list(dados.get("gaps") or []),
+        )
 
     async def normalize(self, raw: RawResults) -> list[Finding]:
         findings: list[Finding] = []

@@ -118,9 +118,7 @@ async def run_exposure_scan(
     # 5. Subdomain takeover por domínio (paralelo)
     st = SubdomainTakeoverAdapter()
     if not await st.health():
-        result.errors.append(
-            "subdomain_takeover: indisponível (subfinder/httpx/nuclei ausentes)"
-        )
+        result.errors.append("subdomain_takeover: indisponível (subfinder/httpx/nuclei ausentes)")
     if await st.health() and domains:
         coros = []
         for d in domains:

@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import structlog
 
+from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -131,12 +132,25 @@ class GitleaksAdapter:
 
     async def fetch_results(self, handle: ScanHandle) -> RawResults:
         _, report_path = self._tasks[handle.native_id].result()
-        items: list[dict[str, Any]] = []
-        if report_path.exists():
-            try:
-                items = json.loads(report_path.read_text(encoding="utf-8")) or []
-            except json.JSONDecodeError:
-                items = []
+        if not report_path.exists():
+            # O gitleaks SEMPRE escreve o report quando roda (array vazio se limpo).
+            # Ausência = não rodou: clone que falhou, processo morto. Zero segredos
+            # aqui seria uma mentira sobre um repo que ninguém leu.
+            raise ScanIntegrityError(
+                "gitleaks não escreveu o report: o scan não rodou. Zero segredos aqui "
+                "NÃO significa repositório limpo."
+            )
+        texto = report_path.read_text(encoding="utf-8").strip()
+        if not texto:
+            raise ScanIntegrityError("report do gitleaks vazio: execução interrompida.")
+        try:
+            items = json.loads(texto) or []
+        except json.JSONDecodeError as e:
+            raise ScanIntegrityError(
+                f"report do gitleaks não é JSON válido ({e}): resultado não confiável."
+            ) from e
+        if not isinstance(items, list):
+            raise ScanIntegrityError("report do gitleaks não é uma lista: formato inesperado.")
         return RawResults(adapter=self.name, payload=items)
 
     async def normalize(self, raw: RawResults) -> list[Finding]:

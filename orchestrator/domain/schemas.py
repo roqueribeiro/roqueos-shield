@@ -164,3 +164,9 @@ class RawResults(BaseModel):
     adapter: str
     payload: Any  # XML string, dict JSON, lista de issues — formato livre por scanner
     fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # Lacunas de cobertura NÃO fatais: o scanner rodou, mas parte do alvo ficou sem
+    # verificação (linha de saída ilegível, arquivo que não parseou, paginação
+    # interrompida). Fatal é `ScanIntegrityError`; isto aqui é o meio-termo, que
+    # antes só existia como log — e log ninguém lê. O pipeline transforma cada
+    # entrada num achado INFO, para a lacuna aparecer no relatório e no bundle.
+    coverage_gaps: list[str] = Field(default_factory=list)

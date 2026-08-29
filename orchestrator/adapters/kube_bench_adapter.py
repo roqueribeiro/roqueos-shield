@@ -1,6 +1,12 @@
 """kube-bench adapter — CIS Kubernetes Benchmark.
 
 Subprocess + JSON output. Roda contra cluster atual (kubeconfig montado).
+
+Silêncio corrigido: sem kubeconfig (ou sem o binário conseguindo falar com o
+cluster) o kube-bench escreve saída vazia; o adapter transformava isso em `{}`, o
+normalize não achava `Controls`, e o resultado saía como ZERO controles CIS
+reprovados — indistinguível de um cluster em conformidade. Num relatório entregue a
+auditoria, essa diferença é a que importa.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ from uuid import uuid4
 
 import structlog
 
+from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -72,8 +79,11 @@ class KubeBenchAdapter:
                     stdout=f,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                await p.communicate()
-                return p.returncode or 0
+                _, err = await p.communicate()
+            rc = p.returncode or 0
+            if rc:
+                log.error("kube_bench.exec_failed", rc=rc, err=err.decode(errors="replace")[:500])
+            return rc
 
         native_id = str(uuid4())
         self._outs[native_id] = out_path
@@ -88,7 +98,11 @@ class KubeBenchAdapter:
         task = self._tasks.get(handle.native_id)
         if task is None:
             return ScanStatus.FAILED
-        return ScanStatus.DONE if task.done() else ScanStatus.RUNNING
+        if not task.done():
+            return ScanStatus.RUNNING
+        # kube-bench sai 0 mesmo com controles reprovados (o `--exit-code` é opt-in).
+        # Código != 0 é erro de execução, não achado.
+        return ScanStatus.DONE if task.result() == 0 else ScanStatus.FAILED
 
     async def cleanup(self, handle: ScanHandle) -> None:
         from orchestrator.adapters._cleanup import cleanup_subprocess_handle
@@ -102,12 +116,30 @@ class KubeBenchAdapter:
 
     async def fetch_results(self, handle: ScanHandle) -> RawResults:
         path = self._outs.get(handle.native_id)
-        data: dict[str, Any] = {}
-        if path and path.exists():
-            try:
-                data = json.loads(path.read_text(encoding="utf-8") or "{}")
-            except json.JSONDecodeError:
-                data = {}
+        if path is None or not path.exists():
+            raise ScanIntegrityError(
+                "kube-bench não escreveu saída: o benchmark não rodou. Zero controles "
+                "reprovados aqui NÃO significa cluster em conformidade."
+            )
+        texto = path.read_text(encoding="utf-8").strip()
+        if not texto:
+            raise ScanIntegrityError(
+                "saída do kube-bench vazia (tipicamente kubeconfig ausente ou cluster "
+                "inalcançável): nenhum controle CIS foi avaliado."
+            )
+        try:
+            data = json.loads(texto)
+        except json.JSONDecodeError as e:
+            raise ScanIntegrityError(
+                f"saída do kube-bench não é JSON válido ({e}): resultado não confiável."
+            ) from e
+        avaliados = _controles_avaliados(data)
+        if avaliados == 0:
+            raise ScanIntegrityError(
+                "kube-bench não avaliou NENHUM controle CIS: cobertura zero, não "
+                "conformidade. Verifique kubeconfig, --targets e permissões."
+            )
+        log.info("kube_bench.fetch_ok", controles_avaliados=avaliados)
         return RawResults(adapter=self.name, payload=data)
 
     async def normalize(self, raw: RawResults) -> list[Finding]:
@@ -121,7 +153,6 @@ class KubeBenchAdapter:
                     status = (r.get("status") or "").upper()
                     if status != "FAIL":
                         continue
-                    sev_str = (r.get("scored", True), r.get("test_number", ""))
                     # kube-bench não tem severity nativo; mapear: scored fail = MEDIUM
                     severity = Severity.MEDIUM if r.get("scored", True) else Severity.LOW
                     target = Target(
@@ -149,3 +180,21 @@ class KubeBenchAdapter:
                     )
         log.info("kube_bench.normalize_done", findings=len(findings))
         return findings
+
+
+def _controles_avaliados(data: Any) -> int:
+    """Quantos resultados de controle o kube-bench realmente produziu.
+
+    Sem este contador, "0 FAIL" tem dois significados opostos: cluster conforme, ou
+    benchmark que não rodou. Um relatório de compliance não pode confundir os dois.
+    """
+    if not isinstance(data, dict):
+        return 0
+    total = 0
+    for ctrl in data.get("Controls") or []:
+        if not isinstance(ctrl, dict):
+            continue
+        for teste in ctrl.get("tests") or []:
+            if isinstance(teste, dict):
+                total += len(teste.get("results") or [])
+    return total

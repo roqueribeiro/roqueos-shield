@@ -12,6 +12,7 @@ from uuid import uuid4
 import httpx
 import structlog
 
+from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -200,10 +201,15 @@ class ZAPAdapter:
                 return ScanStatus.RUNNING
 
             if state["phase"] == "passive_wait":
-                # passive scan roda em background; espera fila zerar
+                # passive scan roda em background; espera fila zerar.
+                # ATENÇÃO: fila vazia NÃO prova que houve varredura. Se o spider não
+                # rastreou nada (alvo fora do ar, bloqueio por robots.txt, app 100%
+                # JS sem o ajax spider), a fila já nasce zerada e o scan fecharia
+                # "limpo" sem ter visitado uma única URL. Por isso conta as URLs.
                 pscan = await self._get("/JSON/pscan/view/recordsToScan/")
                 records = int(pscan.get("recordsToScan", "0"))
                 if records == 0:
+                    state["urls_rastreadas"] = await self._contar_urls(state["url"])
                     state["phase"] = "done"
                     return ScanStatus.DONE
                 return ScanStatus.RUNNING
@@ -217,13 +223,83 @@ class ZAPAdapter:
 
         return ScanStatus.RUNNING
 
+    async def _contar_urls(self, base: str) -> int:
+        """Quantas URLs o ZAP conhece sob a base. Zero = nada foi rastreado."""
+        try:
+            dados = await self._get("/JSON/core/view/urls/", baseurl=base)
+            return len(dados.get("urls") or [])
+        except Exception as e:  # noqa: BLE001
+            log.warning("zap.urls_count_failed", error=str(e))
+            return -1  # desconhecido: nao afirma nem que rastreou nem que nao
+
     async def fetch_results(self, handle: ScanHandle) -> RawResults:
         state = self._scans[handle.native_id]
-        # alertas pra base url
-        alerts = await self._get(
-            "/JSON/core/view/alerts/", baseurl=state["url"], start="0", count="500"
+
+        rastreadas = state.get("urls_rastreadas")
+        if rastreadas is None:
+            rastreadas = await self._contar_urls(state["url"])
+        if rastreadas == 0:
+            raise ScanIntegrityError(
+                "o ZAP não rastreou NENHUMA URL sob o alvo: nada foi verificado. "
+                "Causas típicas: alvo fora do ar, bloqueio por robots.txt, WAF, ou "
+                "aplicação 100% JavaScript (precisa do ajax spider). Zero alertas "
+                "aqui NÃO significa aplicação segura."
+            )
+
+        # Paginação. Antes era UMA página de 500 alertas, sem `start` seguinte: numa
+        # aplicação grande o excedente sumia do relatório sem aviso.
+        pagina = 500
+        teto = int(state.get("max_alerts", 10000))
+        alertas: list[dict[str, Any]] = []
+        gaps: list[str] = []
+        truncou = False
+        while True:
+            lote = await self._get(
+                "/JSON/core/view/alerts/",
+                baseurl=state["url"],
+                start=str(len(alertas)),
+                count=str(pagina),
+            )
+            itens = lote.get("alerts") or []
+            alertas.extend(itens)
+            if len(itens) < pagina:
+                break
+            if len(alertas) >= teto:
+                truncou = True
+                break
+        if truncou:
+            gaps.append(
+                f"o ZAP devolveu o teto de {teto} alertas e a leitura foi interrompida: "
+                "pode haver mais achados não listados."
+            )
+
+        # `baseurl` filtra por PREFIXO. Se a aplicação redireciona para outro host ou
+        # esquema (http -> https, apex -> www), os alertas do destino ficam de fora do
+        # filtro e o relatório some com eles. Comparar com o total sem filtro não
+        # custa nada e denuncia a diferença.
+        try:
+            resumo = await self._get("/JSON/alert/view/alertCountsByRisk/")
+            total_geral = sum(int(v) for v in (resumo or {}).values() if str(v).isdigit())
+            if total_geral > len(alertas) and not truncou:
+                gaps.append(
+                    f"o ZAP tem {total_geral} alerta(s) na sessão mas só {len(alertas)} "
+                    f"casam com o prefixo {state['url']} — tipicamente redirecionamento "
+                    "para outro host/esquema. Os demais não entraram neste relatório."
+                )
+        except Exception as e:  # noqa: BLE001
+            log.warning("zap.alert_counts_failed", error=str(e))
+
+        log.info(
+            "zap.fetch_ok",
+            alertas=len(alertas),
+            urls_rastreadas=rastreadas,
+            truncou=truncou,
         )
-        return RawResults(adapter=self.name, payload=alerts)
+        return RawResults(
+            adapter=self.name,
+            payload={"alerts": alertas},
+            coverage_gaps=gaps,
+        )
 
     async def normalize(self, raw: RawResults) -> list[Finding]:
         findings: list[Finding] = []

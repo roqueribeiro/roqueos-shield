@@ -243,12 +243,18 @@ class CheckovAdapter:
                 f"{_parsing_errors(data)} arquivo(s) IaC: cobertura zero, não alvo limpo."
             )
 
-        log.info(
-            "checkov.fetch_ok",
-            avaliados=_evaluated(data),
-            parsing_errors=_parsing_errors(data),
-        )
-        return RawResults(adapter=self.name, payload=data)
+        # Parse error = arquivo IaC que o checkov NÃO avaliou. Não é fatal (o resto
+        # foi avaliado), mas some do relatório se ficar só no log. Vira achado INFO
+        # pelo mecanismo compartilhado do pipeline.
+        gaps: list[str] = []
+        erros = _parsing_errors(data)
+        if erros:
+            gaps.append(
+                f"{erros} arquivo(s) de IaC não parsearam e NÃO foram avaliados "
+                "(sintaxe HCL/YAML/JSON inválida ou variável não resolvida)."
+            )
+        log.info("checkov.fetch_ok", avaliados=_evaluated(data), parsing_errors=erros)
+        return RawResults(adapter=self.name, payload=data, coverage_gaps=gaps)
 
     async def normalize(self, raw: RawResults) -> list[Finding]:
         findings: list[Finding] = []
@@ -291,30 +297,5 @@ class CheckovAdapter:
                     )
                 )
 
-        # Parse error = arquivo NÃO avaliado. Um relatório que some com isso deixa o
-        # leitor concluir que a IaC inteira foi verificada. Vira achado INFO para
-        # aparecer no relatório e no bundle, não só num log que ninguém lê.
-        erros = _parsing_errors(raw.payload)
-        if erros:
-            findings.append(
-                Finding(
-                    scan_id=placeholder,
-                    target=Target(asset_type=AssetType.REPO, value="(cobertura)"),
-                    source_tool=self.name,
-                    source_rule_id="checkov-parsing-errors",
-                    title=f"Cobertura IaC incompleta: {erros} arquivo(s) não parsearam",
-                    description=(
-                        f"O checkov falhou ao interpretar {erros} arquivo(s) de IaC. "
-                        "Esses arquivos NÃO foram avaliados — nenhum controle rodou sobre "
-                        "eles, então a ausência de achados neles não indica conformidade. "
-                        "Verifique sintaxe (HCL/YAML/JSON) e variáveis não resolvidas."
-                    ),
-                    severity=Severity.INFO,
-                    confidence=Confidence.CERTAIN,
-                    evidence=[Evidence(description=f"summary.parsing_errors={erros}")],
-                    remediation="Corrija os arquivos e rode de novo para obter cobertura completa.",
-                )
-            )
-
-        log.info("checkov.normalize_done", findings=len(findings), parsing_errors=erros)
+        log.info("checkov.normalize_done", findings=len(findings))
         return findings

@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 
 import structlog
 
-from orchestrator.adapters.base import ScannerAdapter
+from orchestrator.adapters.base import ScannerAdapter, coverage_gap_finding
 from orchestrator.adapters.nmap_adapter import NmapAdapter
 from orchestrator.adapters.zap_adapter import ZAPAdapter
 from orchestrator.ai.analyzer import triage_batch
@@ -245,7 +245,22 @@ async def _run_adapter(
             )
 
         raw = await adapter.fetch_results(handle)
-        return await adapter.normalize(raw)
+        findings = await adapter.normalize(raw)
+        # Lacuna de cobertura não fatal declarada pelo adapter vira achado INFO. Fica
+        # AQUI, e não em cada normalize(), porque quinze adapters lembrarem de fazer
+        # isso é convenção; um lugar só é mecanismo.
+        gaps = list(getattr(raw, "coverage_gaps", None) or [])
+        if gaps:
+            log.warning("adapter.coverage_gap", adapter=adapter.name, gaps=gaps)
+            findings.append(
+                coverage_gap_finding(
+                    adapter=adapter.name,
+                    gaps=gaps,
+                    scan_id=UUID(scan_id_str) if scan_id_str else uuid4(),
+                    target=target,
+                )
+            )
+        return findings
     finally:
         cleanup = getattr(adapter, "cleanup", None)
         if cleanup is not None:
