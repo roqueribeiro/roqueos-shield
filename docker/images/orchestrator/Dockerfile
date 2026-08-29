@@ -15,6 +15,7 @@ FROM debian:bookworm-slim AS tools
 ARG NUCLEI_VERSION=3.3.7
 ARG GITLEAKS_VERSION=8.21.2
 ARG TRUFFLEHOG_VERSION=3.82.13
+ARG TRIVY_VERSION=0.58.1
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /tools
@@ -23,7 +24,8 @@ RUN set -eux; \
     && unzip -o nuclei.zip nuclei -d /usr/local/bin && rm nuclei.zip; \
     curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz -C /usr/local/bin gitleaks; \
     curl -fsSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz" | tar -xz -C /usr/local/bin trufflehog; \
-    chmod +x /usr/local/bin/nuclei /usr/local/bin/gitleaks /usr/local/bin/trufflehog
+    curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar -xz -C /usr/local/bin trivy; \
+    chmod +x /usr/local/bin/nuclei /usr/local/bin/gitleaks /usr/local/bin/trufflehog /usr/local/bin/trivy
 
 # ---- orchestrator -----------------------------------------------------------
 FROM python:3.13-slim AS base
@@ -36,8 +38,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
     && rm -rf /var/lib/apt/lists/*
 
-# Scanner CLIs bundled (nuclei / gitleaks / trufflehog).
-COPY --from=tools /usr/local/bin/nuclei /usr/local/bin/gitleaks /usr/local/bin/trufflehog /usr/local/bin/
+# Scanner CLIs bundled (nuclei / gitleaks / trufflehog / trivy).
+# O trivy FALTAVA: o adapter chama o binário local (com --server apontando pro
+# container), então sem ele o health() falhava e o scan era pulado EM SILÊNCIO — um
+# scan de IMAGE não rodava nada e o relatório continuava listando "trivy".
+COPY --from=tools /usr/local/bin/nuclei /usr/local/bin/gitleaks /usr/local/bin/trufflehog /usr/local/bin/trivy /usr/local/bin/
 
 # uv para instalação rápida
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -59,11 +64,13 @@ RUN uv pip install --system --no-cache-dir \
         jinja2 pyyaml \
         dnstwist \
         semgrep \
+        checkov \
         typer rich
-# NOTE: checkov (IaC scanner) is intentionally NOT bundled — its dep chain
-# (cyclonedx-python-lib `sha1sum`) is broken on Python 3.13. The checkov adapter
-# degrades gracefully (health check fails → its scans skip). Re-add with a pinned,
-# compatible cyclonedx once upstream resolves it.
+# checkov (IaC) VOLTOU: a nota anterior dizia que a cadeia de dependência estava
+# quebrada no Python 3.13, e isso venceu — checkov 3.3.15 instala e roda (verificado:
+# 8 misconfigs num Terraform de teste). "Degrada graciosamente" era o problema, não a
+# solução: o health() falhava, o scanner era pulado em silêncio, e o relatório
+# continuava anunciando checkov num scan de REPO.
 
 COPY orchestrator /app/orchestrator
 COPY alembic.ini /app/

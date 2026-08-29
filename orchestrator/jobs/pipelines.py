@@ -31,6 +31,10 @@ from orchestrator.reporting.renderer import render_html
 log = structlog.get_logger(__name__)
 
 
+class AdapterUnavailableError(RuntimeError):
+    """O scanner não pôde rodar. Zero achados dele não significa alvo limpo."""
+
+
 # Scanner selection. Before this, run_scan() hardcoded [Nmap, ZAP] and the API's
 # `scanners` field was silently dropped — so IMAGE/REPO scans never ran their real
 # tools (trivy/gitleaks/checkov) and the field was effectively dead. Now the
@@ -171,6 +175,15 @@ class ScanResult:
     findings: list[Finding] = field(default_factory=list)
     report_path: Path | None = None
     errors: list[str] = field(default_factory=list)
+    # Quem REALMENTE rodou, e quem não rodou (com o motivo). Sem isto, o relatório
+    # lista o que foi PEDIDO e o leitor conclui que tudo foi verificado.
+    scanners_ran: list[str] = field(default_factory=list)
+    scanners_skipped: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def coverage_is_complete(self) -> bool:
+        """True quando todo scanner pedido de fato rodou."""
+        return not self.scanners_skipped
 
 
 async def _run_adapter(
@@ -189,8 +202,15 @@ async def _run_adapter(
     """
 
     if not await adapter.health():
-        log.warning("adapter.unhealthy", adapter=adapter.name)
-        return []
+        # NÃO é "zero findings": é "não verifiquei". A diferença precisa chegar ao
+        # resultado, não morrer num log — senão o relatório anuncia um scanner que
+        # nunca rodou. Aconteceu em produção: sem o binário do trivy, um scan de
+        # IMAGE não rodava NADA e a tela continuava listando "trivy".
+        raise AdapterUnavailableError(
+            f"{adapter.name} indisponível (health check falhou): binário ausente, "
+            "serviço fora do ar, ou credencial faltando. O scan NÃO verificou este "
+            "vetor — não confunda com 'nada encontrado'."
+        )
 
     handle = await adapter.start_scan(target, options)
     if not handle or not handle.native_id:
@@ -292,8 +312,15 @@ async def run_scan(
             for f in findings:
                 f.scan_id = scan_id  # sobrescreve placeholder dos adapters
             result.findings.extend(findings)
+            result.scanners_ran.append(adapter.name)
+        except AdapterUnavailableError as e:
+            # Cobertura incompleta: o vetor não foi verificado.
+            log.error("adapter.unavailable", adapter=adapter.name, reason=str(e))
+            result.scanners_skipped[adapter.name] = str(e)
+            result.errors.append(f"{adapter.name}: {e}")
         except Exception as e:  # noqa: BLE001
             log.exception("adapter.crashed", adapter=adapter.name, error=str(e))
+            result.scanners_skipped[adapter.name] = f"falhou: {e}"
             result.errors.append(f"{adapter.name}: {e}")
 
     # Dedupe heurístico (rápido, determinístico)
@@ -336,10 +363,21 @@ async def run_scan(
     await _update_phase(scan_id, final_phase)
     emit_phase(sid, final_phase)
 
+    if result.scanners_skipped:
+        log.error(
+            "scan.incomplete_coverage",
+            scan_id=str(scan_id),
+            skipped=list(result.scanners_skipped),
+            detail="estes vetores NÃO foram verificados; zero achados deles não é "
+            "sinal de alvo limpo",
+        )
     log.info(
         "scan.complete",
         scan_id=str(scan_id),
         findings=len(result.findings),
+        scanners_ran=result.scanners_ran,
+        scanners_skipped=list(result.scanners_skipped),
+        coverage_complete=result.coverage_is_complete,
         report=str(report_path),
         errors=result.errors,
     )

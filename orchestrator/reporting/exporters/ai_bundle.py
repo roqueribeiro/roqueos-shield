@@ -98,8 +98,7 @@ async def build_bundle(scan_id: UUID) -> dict[str, Any]:
             "id": str(scan_id),
             "started_at": scan.started_at.isoformat() if scan.started_at else None,
             "finished_at": scan.finished_at.isoformat() if scan.finished_at else None,
-            "scanners_executed": list(scan.requested_scanners or []),
-            "scanners_failed": [e.split(":")[0] for e in (scan.errors or []) if ":" in e],
+            **_coverage(scan),
         },
         "target": _target_section(target, rows),
         "summary": _summary(vulnerabilities),
@@ -165,6 +164,36 @@ def _detect_model_used(rows: list[FindingRow]) -> str | None:
         if isinstance(triage, dict) and triage.get("model_used"):
             return triage["model_used"]
     return None
+
+
+def _coverage(scan: ScanRow) -> dict[str, Any]:
+    """O que REALMENTE rodou, o que não rodou, e se a cobertura ficou completa.
+
+    `scanners_executed` vinha de `requested_scanners` — ou seja, anunciava como
+    executado o que tinha sido apenas PEDIDO. Um scanner sem binário, com serviço
+    fora do ar ou sem credencial contribui zero e some do relatório, e quem lê
+    conclui que o vetor foi verificado. Era o caso do trivy em produção: sem o
+    binário na imagem, um scan de IMAGE não rodava nada e o relatório dizia "trivy".
+
+    A IA de patch precisa desta distinção: "zero achados de SAST" só vale alguma
+    coisa se o SAST rodou.
+    """
+    pedidos = list(scan.requested_scanners or [])
+    falhos = sorted({e.split(":", 1)[0].strip() for e in (scan.errors or []) if ":" in e})
+    executados = [s for s in pedidos if s not in falhos]
+    return {
+        "scanners_requested": pedidos,
+        "scanners_executed": executados,
+        "scanners_failed": falhos,
+        "coverage_complete": not falhos,
+        "coverage_note": (
+            "Todos os scanners pedidos rodaram."
+            if not falhos
+            else "COBERTURA INCOMPLETA: "
+            + ", ".join(falhos)
+            + " não rodaram. Zero achados destes vetores NÃO significa alvo limpo."
+        ),
+    }
 
 
 def _target_section(
