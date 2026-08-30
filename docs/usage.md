@@ -222,7 +222,7 @@ FROM ai_runs ORDER BY created_at DESC LIMIT 20;"
 curl -sf "http://127.0.0.1:8080/ui/api/ai-runs/stats" -H "X-API-Token: $TOKEN" | jq
 ```
 
-Causas comuns (no [skill cai-llm-debug](.claude/skills/cai-llm-debug/SKILL.md)):
+Causas comuns (no [skill cai-llm-debug](../.claude/skills/cai-llm-debug/SKILL.md)):
 - `--skip-ai` foi usado
 - `LLM_API_BASE` vazio mas usuário esperava LM Studio
 - LM Studio carregou modelo diferente de `LLM_MODEL`

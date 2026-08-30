@@ -145,6 +145,13 @@ ignore = [
     "S314",     # xml.etree em adapters de scanners confiáveis
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# c4lib e uma DSL de desenho, e o import estrela da aos nove diagramas as ~30
+# primitivas (node, edge, boundary, row, step, table, chip...) sem repetir uma lista
+# de import de 30 nomes em cada arquivo. O ganho de listar nao paga o ruido, e o
+# modulo nao exporta nada com efeito colateral.
+"scripts/diagrams/d0*.py" = ["F403", "F405"]
+
 [tool.mypy]
 python_version = "3.13"
 # TODO(v0.2): re-habilitar strict mode após cleanup do backlog de tipos.

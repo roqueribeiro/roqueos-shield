@@ -1,8 +1,18 @@
-# Arquitetura — CAI Orchestrator
+# Arquitetura — RoqueShield
+
+> **Este documento é o mergulho em texto.** Para a mesma arquitetura em figura, do
+> contexto ao código, veja **[c4-model.pt-BR.md](c4-model.pt-BR.md)** — nove
+> diagramas gerados a partir de código, regeráveis por `python scripts/gen_diagrams.py`.
+>
+> Nomenclatura: **RoqueShield** é o nome do produto. `CAI` sobrevive no nome do
+> pacote (`cai-orchestrator`), no comando (`cai`) e no prefixo dos containers, por
+> compatibilidade com a imagem publicada e com as instalações existentes do RoqueOS.
+> Ver "Sobre o nome" no README.
 
 ## Visão geral
 
-CAI é uma plataforma de **pentest comercial** com triagem AI e dashboard em tempo real. 4 camadas:
+O RoqueShield é uma plataforma de **teste de segurança contínuo** com triagem por IA
+e acompanhamento em tempo real. 4 camadas:
 
 1. **Scanners** — containers especializados (ZAP, Trivy, Greenbone, kali-toolbox) + binários no orchestrator (Nmap)
 2. **Orchestrator** — FastAPI app que dispara scans, normaliza findings, chama AI, gera relatórios + AI Fix Bundle
@@ -490,7 +500,7 @@ Stream SSE de todo log do orchestrator. Filtrável por `event`/`level`/qualquer 
 
 ## Integração RoqueOS (RoqueShield)
 
-O roqueos-shield (engine "CAI") é embarcado no **RoqueOS** como a feature **admin-only RoqueShield** — mesmo padrão dos módulos Agent/Android/Windows: opt-in, container-backed, proxy admin-gated. Arquitetura da integração:
+O RoqueShield é embarcado no **RoqueOS** como a feature **admin-only RoqueShield** — mesmo padrão dos módulos Agent/Android/Windows: opt-in, container-backed, proxy admin-gated. Arquitetura da integração:
 
 ```
 RoqueOS Frontend (Vue) — app "RoqueShield" (ROSPentest.vue, admin-only)
@@ -510,7 +520,16 @@ stack roqueos-shield: orchestrator + worker + postgres + redis + zap + trivy  (+
 - **Modelo de auth:** o RoqueOS gera/guarda o `APP_TOKEN` do roqueos-shield criptografado em repouso e injeta `X-API-Token` em cada request proxiado. O gate real é `ApiKeyGuard` + `@RequirePermission(ADMIN)` + o app `adminOnly` no front; o browser autentica por **session-token** curto (nunca apiKey na URL).
 - **Config de IA guiada:** a aba **IA** lista os modelos reais por chave (`POST /pentest/ai/models` — bate no `/models` de cada provider server-side; as chaves nunca vão pro browser) e os campos de modelo viram **select**.
 - **Relatórios abrem nas ferramentas nativas do RoqueOS:** md/json/csv no Editor de Texto, HTML no Navegador — nunca `window.open`/download (não escapam o OS).
-- **UX nativa:** dashboard (postura de segurança + cards de scan), novo scan (com confirmação de autorização + `authorization_ref`), **stepper de fases ao vivo via SSE**, findings por severidade, e os 4 formatos de relatório (PDF/MD/JSON-AI-Bundle/CSV).
+- **UX nativa:** dashboard (postura de segurança + cards de scan), novo scan (com confirmação de autorização + `authorization_ref`), **stepper de fases ao vivo via SSE**, findings por severidade, e quatro formatos de relatório na tela: PDF, MD, JSON e CSV.
+
+> **Onde cada formato é gerado, porque a distinção importa.** Deste repositório saem
+> o **HTML técnico** (gravado em disco), o **HTML executivo** (montado sob demanda),
+> o **AI Fix Bundle** (JSON, schema 1.0.0) e o **compliance** (JSON). Os quatro
+> botões da tela do RoqueShield — PDF, MD, JSON, CSV — são montados **no navegador**,
+> pelo front, a partir do AI Fix Bundle (`roqueos-front/src/utils/pentest/`). Não
+> existe geração de Markdown nem de CSV no orchestrator, e `render_pdf()` existe
+> aqui mas **não tem chamador**. Uma versão anterior deste parágrafo dizia que os
+> quatro saíam daqui.
 - Detalhe normativo no RoqueOS: `roqueos-front/.claude/rules/` (módulo `pentest`) + memória `roqueshield-pentest-platform`.
 
 ---

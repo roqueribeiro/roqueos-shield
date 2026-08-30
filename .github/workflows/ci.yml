@@ -28,9 +28,11 @@ jobs:
         # a cada release que muda formatação (main já estava vermelha por isso).
         run: python -m pip install --upgrade pip 'ruff==0.16.5'
       - name: ruff check
-        run: ruff check orchestrator tests
+        # scripts/ entrou aqui junto com o gerador de diagramas: codigo que o CI nao
+        # olha vira a excecao que come o padrao inteiro.
+        run: ruff check orchestrator tests scripts
       - name: ruff format --check
-        run: ruff format --check orchestrator tests
+        run: ruff format --check orchestrator tests scripts
 
   lockfile:
     name: Lockfile em dia (uv)
@@ -60,6 +62,22 @@ jobs:
           python-version: "3.13"
       - name: check docs fresh
         run: python scripts/check_docs_fresh.py
+
+  diagramas:
+    name: Diagramas em dia
+    runs-on: ubuntu-latest
+    # Diagrama versionado que ninguem consegue refazer vira uma foto antiga da
+    # arquitetura pendurada no README. As 18 figuras sao GERADAS por
+    # scripts/diagrams/; este gate confere que o SVG em disco e o que o codigo
+    # produz agora. Mutacao confirmada, tres plantios: SVG editado a mao, SVG
+    # apagado e SVG orfao na pasta — os tres dao exit 1; arvore limpa da exit 0.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: check diagrams fresh
+        run: python scripts/gen_diagrams.py --check
 
   silencio:
     name: Contrato do silencio (adapters)
