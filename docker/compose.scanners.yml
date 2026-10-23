@@ -7,6 +7,10 @@ services:
   zap:
     image: zaproxy/zap-stable:latest
     container_name: cai-zap
+    # A imagem traz ZAP_PORT=8080 e o HEALTHCHECK faz curl nessa porta. O daemon sobe na
+    # 8090, então sem isto o container fica "unhealthy" para sempre.
+    environment:
+      - ZAP_PORT=8090
     command:
       - zap.sh
       - -daemon

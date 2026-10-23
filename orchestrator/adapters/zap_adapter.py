@@ -114,7 +114,7 @@ class ZAPAdapter:
                 log.warning("zap.openapi_import_failed", error=str(e))
 
         # 1. acessa a URL pra registrar no site tree
-        await self._get("/JSON/core/action/accessUrl/", url=url, followRedirects="true")
+        await self._acessar_alvo(url)
 
         # 2. spider — com retry se ZAP retornar scan_id inválido (bug pós newSession)
         spider_id = await self._start_spider_with_retry(url, max_children)
@@ -133,6 +133,35 @@ class ZAPAdapter:
             adapter=self.name,
             native_id=native_id,
             metadata={"url": url, "active": active, "spider_id": spider_id},
+        )
+
+    async def _acessar_alvo(self, url: str) -> None:
+        """Registra a URL na árvore do ZAP, com uma segunda tentativa.
+
+        O ZAP responde 500 no `accessUrl` quando ELE não alcança o alvo (DNS, TLS,
+        conexão recusada, alvo lento). Em produção isso subia como traceback de
+        `adapter.crashed`. Uma falha passageira ganha mais uma chance; duas seguidas
+        viram ScanIntegrityError com o motivo, e o pipeline declara a cobertura
+        incompleta em vez de um crash.
+        """
+        ultimo_erro: Exception | None = None
+        for tentativa in (1, 2):
+            try:
+                await self._get("/JSON/core/action/accessUrl/", url=url, followRedirects="true")
+                return
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code < 500:
+                    raise
+                ultimo_erro = e
+            except httpx.TransportError as e:
+                ultimo_erro = e
+            log.warning(
+                "zap.access_url_failed", url=url, tentativa=tentativa, error=str(ultimo_erro)
+            )
+        raise ScanIntegrityError(
+            f"zap não alcançou {url} (accessUrl falhou duas vezes: {ultimo_erro}). "
+            "O alvo pode estar fora do ar ou bloqueado para o container do ZAP; "
+            "o scan NÃO verificou este vetor."
         )
 
     async def _start_spider_with_retry(self, url: str, max_children: Any) -> str:
@@ -159,7 +188,7 @@ class ZAPAdapter:
             )
             if attempt == 1:
                 # re-acessa URL pra resetar estado interno do ZAP e tenta de novo
-                await self._get("/JSON/core/action/accessUrl/", url=url, followRedirects="true")
+                await self._acessar_alvo(url)
         raise RuntimeError(
             f"ZAP returned invalid spider scan_id after retry (got {spider_id!r}); "
             "verifique se o daemon não foi reiniciado / sessão corrompida"
