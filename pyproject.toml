@@ -1,6 +1,6 @@
 [project]
 name = "cai-orchestrator"
-version = "0.4.0"
+version = "0.4.1"
 description = "Continuous AI Security — vulnerability scanning + AI triage + AI Fix Bundle for AI patchers"
 readme = "README.md"
 requires-python = ">=3.13"

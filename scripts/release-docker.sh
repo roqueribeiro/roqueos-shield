@@ -84,14 +84,18 @@ fi
 
 # 5. Trivy, hard fail
 echo "==> Trivy (CRITICAL/HIGH com correção) em ${IMAGE}:${TAG}"
+# As regras do semgrep e os templates do nuclei TÊM chave de exemplo (é assim que eles
+# detectam segredo): o scanner de segredo fica fora só desses dois diretórios.
+# .trivyignore.yaml: aceites com prazo, só para binário de scanner de terceiro.
+TRIVY_ARGS=(--scanners vuln,secret --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1
+  --skip-dirs /opt/nuclei-templates --skip-dirs /opt/semgrep-rules)
 TRIVY_RC=0
 if command -v trivy >/dev/null 2>&1; then
-  trivy image --scanners vuln,secret --severity CRITICAL,HIGH --ignore-unfixed \
-    --exit-code 1 "${IMAGE}:${TAG}" || TRIVY_RC=$?
+  trivy image "${TRIVY_ARGS[@]}" --ignorefile .trivyignore.yaml "${IMAGE}:${TAG}" || TRIVY_RC=$?
 else
   docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-    -v "${HOME}/.cache/trivy:/root/.cache/trivy" aquasec/trivy:0.74.0 image \
-    --scanners vuln,secret --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 \
+    -v "${HOME}/.cache/trivy:/root/.cache/trivy" -v "$PWD/.trivyignore.yaml:/.trivyignore.yaml:ro" \
+    aquasec/trivy:0.74.0 image "${TRIVY_ARGS[@]}" --ignorefile /.trivyignore.yaml \
     "${IMAGE}:${TAG}" || TRIVY_RC=$?
 fi
 if [ "${TRIVY_RC}" != "0" ]; then

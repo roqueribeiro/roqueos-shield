@@ -122,7 +122,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="CAI Orchestrator",
     description="Continuous AI Security testing platform",
-    version="0.4.0",
+    version="0.4.1",
     lifespan=lifespan,
 )
 

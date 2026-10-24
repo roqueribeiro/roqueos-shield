@@ -20,15 +20,15 @@ FROM debian:bookworm-slim AS tools
 # Cada projeto nomeia o asset de um jeito, e por isso os tres mapas: o gitleaks
 # chama o amd64 de `x64`, e o trivy usa `Linux-64bit`/`Linux-ARM64`.
 ARG TARGETARCH
-ARG NUCLEI_VERSION=3.3.7
-ARG GITLEAKS_VERSION=8.21.2
-ARG TRUFFLEHOG_VERSION=3.82.13
+ARG NUCLEI_VERSION=3.11.1
+ARG GITLEAKS_VERSION=8.30.1
+ARG TRUFFLEHOG_VERSION=3.99.2
 # 0.58.1 nao baixa mais: o asset trivy_0.58.1_Linux-64bit.tar.gz devolve 404, e o
 # mesmo vale para 0.58.2, 0.59.1 e 0.60.0 -- a aquasecurity podou os binarios das
 # releases antigas. Medido em 2026-08-29: das cinco versoes testadas so a atual
 # responde 200. Um pin de release do GitHub nao e imutavel como um digest de
 # imagem; se este 404 voltar, e subir a versao de novo, nao vendorizar o binario.
-ARG TRIVY_VERSION=0.74.0
+ARG TRIVY_VERSION=0.76.0
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /tools
@@ -101,7 +101,7 @@ RUN set -eux; \
 # templates e reprova se vierem menos que o piso.
 FROM debian:bookworm-slim AS nuclei-templates
 ARG TARGETARCH
-ARG NUCLEI_VERSION=3.3.7
+ARG NUCLEI_VERSION=3.11.1
 ARG NUCLEI_TEMPLATES_MIN=2000
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip \
     && rm -rf /var/lib/apt/lists/*
@@ -211,6 +211,9 @@ ENV PYTHONUNBUFFERED=1 \
 # /app/data nascem dele, e volume nomeado novo herda esse dono no primeiro mount.
 # Volume antigo, com arquivo de root, o roqueos-server corrige uma vez antes do
 # redeploy. O nmap sem root faz connect scan (-sT), que dispensa raw socket.
+# O pip sai da imagem final: o app instala com uv no build e não usa pip em execução, e
+# o pip 26.2.2 vendoriza msgpack 1.1.2 e setuptools 70.3.0 (HIGH no Trivy).
+RUN python -m pip uninstall -y pip && /opt/checkov-venv/bin/python -m pip uninstall -y pip
 RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin roqueos \
     && mkdir -p /app/reports /app/data \
     && chown -R 1000:1000 /app

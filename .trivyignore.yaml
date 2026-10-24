@@ -1,0 +1,274 @@
+# Aceites com prazo do Trivy na imagem do RoqueShield (scripts/release-docker.sh).
+#
+# Só binários oficiais de scanner de TERCEIROS, e só no caminho de cada um. Em 23/10/2026
+# as últimas releases (nuclei 3.11.1, gitleaks 8.30.1, trivy 0.76.0) saem compiladas com
+# Go e dependências que já têm CVE corrigido em versão posterior; não há release delas que
+# zere isso, e recompilar scanner de terceiro a partir do fonte é outro projeto. O risco é
+# de DoS/parsing num processo não-root e sem capability. Ao subir a versão de um destes
+# binários, apagar as entradas dele e rodar o release de novo: o que sobrar é real.
+# O app (Python, uv.lock) e o pip não têm aceite aqui.
+vulnerabilities:
+  - id: CVE-2025-47913
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2025-61726
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2025-68121
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-100349
+    paths:
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-100351
+    paths:
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-100352
+    paths:
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-100353
+    paths:
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-100354
+    paths:
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-111943
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+      - "usr/local/bin/trivy"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-25679
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-27145
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-32280
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-32281
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-32283
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-33811
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-33814
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-33818
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-39820
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-39821
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-39822
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-39828
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-39829
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-39830
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-39831
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-39832
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-39835
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-39836
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-42499
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-42504
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-42508
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-46595
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-46597
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-46600
+    paths:
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-56851
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-56852
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-56853
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-56854
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-56858
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-56859
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-56860
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-56862
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-56864
+    paths:
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-56865
+    paths:
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-63209
+    paths:
+      - "usr/local/bin/gitleaks"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-71556
+    paths:
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-78667
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-78669
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-84304
+    paths:
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-84445
+    paths:
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+  - id: CVE-2026-97031
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+    expired_at: 2026-12-23
+    statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"

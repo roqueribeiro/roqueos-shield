@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-23
+
+### Security
+
+- **Image passes Trivy.** 0.4.0 was published and failed the release Trivy gate (never deployed): scanner CLIs bumped to nuclei 3.11.1, gitleaks 8.30.1, trufflehog 3.99.2 and trivy 0.76.0; `pip` removed from the final image (pip 26.2.2 vendors msgpack 1.1.2 and setuptools 70.3.0). What upstream has not fixed in its own latest binaries (Go stdlib/deps in gitleaks, nuclei, trivy) is accepted in `.trivyignore.yaml`, per binary path, until 2026-12-23. The secret scanner skips the semgrep rules and nuclei templates, whose example keys are detection fixtures.
+
 ## [0.4.0] - 2026-10-23
 
 ### Security
