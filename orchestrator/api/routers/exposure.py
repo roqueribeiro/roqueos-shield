@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from arq import create_pool
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 
 from orchestrator.api.deps import Principal, RequireScansRun
+from orchestrator.api.ratelimit import rate_limit
 from orchestrator.jobs.queue import _redis_settings
 
 router = APIRouter(prefix="/exposure", tags=["exposure"])
@@ -24,7 +25,12 @@ class ExposureOut(BaseModel):
     queued: bool
 
 
-@router.post("/scan", response_model=ExposureOut, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/scan",
+    response_model=ExposureOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(rate_limit("exposure"))],
+)
 async def scan_exposure(body: ExposureIn, _principal: Principal = RequireScansRun) -> ExposureOut:
     pool = await create_pool(_redis_settings())
     job = await pool.enqueue_job(

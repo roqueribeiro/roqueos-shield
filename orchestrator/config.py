@@ -58,6 +58,9 @@ class Settings(BaseSettings):
 
     # Redis (Fase 2+)
     REDIS_URL: str = "redis://redis:6379/0"
+    # Teto por principal e por rota nas que disparam trabalho caro (POST /scans,
+    # /exposure/scan, /investigate). 0 desliga.
+    RATE_LIMIT_PER_MINUTE: int = 20
 
     # Scanners
     # Ruleset do Semgrep embarcado na imagem (semgrep-rules, LGPL-2.1, pinado no

@@ -21,14 +21,16 @@ def test_orchestrator_and_worker_drop_all_caps() -> None:
     for name in ("orchestrator", "worker"):
         svc = _svc("compose.yml", name)
         assert svc["cap_drop"] == ["ALL"], name
-        assert svc["cap_add"] == ["NET_RAW"], name  # nmap precisa; NET_ADMIN não
+        # Issue #12: não-root e sem capability; sem root NET_RAW nem chegaria ao nmap,
+        # que faz connect scan.
+        assert "cap_add" not in svc, name
         assert "no-new-privileges:true" in svc["security_opt"], name
 
 
 def test_kali_toolbox_drops_all_caps() -> None:
     svc = _svc("compose.scanners.yml", "kali-toolbox")
     assert svc["cap_drop"] == ["ALL"]
-    assert svc["cap_add"] == ["NET_RAW"]
+    assert "cap_add" not in svc  # a imagem roda como UID 1000
 
 
 # --- SEC-07: trilha mutável é detectada e pode ser proibida ---

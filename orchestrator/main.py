@@ -50,6 +50,7 @@ from orchestrator.api.routers import (
     users as users_router,
 )
 from orchestrator.config import settings
+from orchestrator.domain.redaction import redaction_processor
 
 
 def _setup_logging() -> None:
@@ -59,6 +60,7 @@ def _setup_logging() -> None:
         processors=[
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso"),
+            redaction_processor,  # credencial nunca chega ao stdout nem ao SSE
             log_processor,  # ring buffer pra UI live logs
             (
                 structlog.processors.JSONRenderer()

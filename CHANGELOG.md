@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-23
+
+### Security
+
+- **Non-root images (Issue #12).** The orchestrator/worker image runs as `roqueos` (UID 1000); `kali-toolbox` and `cai-expert` too. Orchestrator and worker have no capabilities left (`cap_drop: ALL`, no `cap_add`); without root, `NET_RAW` would not reach nmap anyway, which now does a connect scan (`-sT`). Splitting a raw-socket worker only for nmap stays open in #12.
+- **Rate limit (Issue #11a).** `POST /scans`, `POST /exposure/scan` and `POST /investigate/{id}` allow `RATE_LIMIT_PER_MINUTE` (default 20, `0` disables) per principal and route, over the existing Redis, with an in-process fallback when Redis is down; over the limit returns 429 with `Retry-After`.
+- **Credential redaction in logs and SSE (Issue #11c).** A structlog processor before the SSE ring buffer redacts argv values after secret flags (`-H`, `--cookie`, `--token`…), URL userinfo, `Bearer` tokens, `key=value` secrets and secret dict keys.
+- **Dependency CVEs (Issue #13).** `python-libnmap` replaced by a `defusedxml` parser (CVE-2022-30284, XXE); `python-jose` by PyJWT 2.15 (CVE-2024-33663/33664); litellm, pillow, urllib3, aiohttp, weasyprint, strawberry-graphql bumped; the unused `agentic` extra (`cai-framework`, GHSA-4996-996j-2m9r) removed. The image now installs exactly what `uv.lock` pins.
+
+### Fixed
+
+- **ZAP** reported `unhealthy` forever: `ZAP_PORT=8090` now matches the daemon port; a 500 on `accessUrl` (ZAP cannot reach the target) gets one retry and then becomes declared incomplete coverage instead of an adapter crash.
+- **AI triage** that silently triaged nothing: raw model names on a custom `api_base` are routed as `openai/<name>`; findings the LLM did not return get a deterministic triage that says so; one `ai.triage_incomplete` with the reason replaces a warning per finding. LiteLLM uses its bundled cost map; Phoenix tracing needs `PHOENIX_ENABLED=true`.
+
+### Changed
+
+- Version unified at 0.4.0 (`pyproject.toml` said 0.1.0). `scripts/release-docker.sh` is the official image release path (multi-arch, Trivy hard fail).
+
 ### Added
 
 - **Scanner selection by asset type (IMAGE / REPO scans now actually run their

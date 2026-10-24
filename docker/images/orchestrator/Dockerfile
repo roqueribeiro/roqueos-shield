@@ -207,6 +207,15 @@ COPY alembic.ini /app/
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# Não-root (Issue #12). API e worker rodam como `roqueos` (UID 1000); /app/reports e
+# /app/data nascem dele, e volume nomeado novo herda esse dono no primeiro mount.
+# Volume antigo, com arquivo de root, o roqueos-server corrige uma vez antes do
+# redeploy. O nmap sem root faz connect scan (-sT), que dispensa raw socket.
+RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin roqueos \
+    && mkdir -p /app/reports /app/data \
+    && chown -R 1000:1000 /app
+USER 1000
+
 EXPOSE 8080
 
 ENTRYPOINT ["python", "-m", "orchestrator.cli"]

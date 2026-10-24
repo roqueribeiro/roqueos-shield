@@ -23,13 +23,10 @@ services:
       dockerfile: docker/images/orchestrator/Dockerfile
     image: cai-orchestrator:dev
     container_name: cai-orchestrator
-    # SEC-06: dropa todas as capabilities e devolve só NET_RAW (nmap -sS precisa
-    # de raw socket). NET_ADMIN mexe em interface/rota e não é usado por scan
-    # nenhum. no-new-privileges impede escalada por binário setuid.
+    # SEC-06 / Issue #12: sem capability nenhuma e não-root (a imagem roda como UID
+    # 1000). A API não executa scanner. no-new-privileges impede escalada por setuid.
     cap_drop:
       - ALL
-    cap_add:
-      - NET_RAW
     security_opt:
       - no-new-privileges:true
     env_file:
@@ -49,6 +46,11 @@ services:
       - redis
     entrypoint: ["uvicorn"]
     command: ["orchestrator.main:app", "--host", "0.0.0.0", "--port", "8080"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     profiles:
       - default
       - scanners
@@ -59,13 +61,11 @@ services:
       dockerfile: docker/images/orchestrator/Dockerfile
     image: cai-orchestrator:dev
     container_name: cai-worker
-    # SEC-06: dropa todas as capabilities e devolve só NET_RAW (nmap -sS precisa
-    # de raw socket). NET_ADMIN mexe em interface/rota e não é usado por scan
-    # nenhum. no-new-privileges impede escalada por binário setuid.
+    # SEC-06 / Issue #12: não-root (UID 1000) e sem capability. Sem root, NET_RAW
+    # não chegaria ao processo de qualquer jeito: o nmap faz connect scan (-sT).
+    # Separar um worker só de nmap com raw socket continua em aberto na #12.
     cap_drop:
       - ALL
-    cap_add:
-      - NET_RAW
     security_opt:
       - no-new-privileges:true
     env_file:
@@ -96,6 +96,11 @@ services:
       POSTGRES_DB: cai
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cai -d cai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - cai-net
     profiles:
@@ -105,6 +110,11 @@ services:
   redis:
     image: redis:7-alpine
     container_name: cai-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     networks:
       - cai-net
     profiles:

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from orchestrator.api.deps import Principal, SessionDep, require_permission
+from orchestrator.api.ratelimit import rate_limit
 from orchestrator.audit import log_audit_event
 from orchestrator.domain.roles import Permission
 from orchestrator.persistence.models import FindingRow
@@ -39,7 +40,11 @@ class InvestigationOut(BaseModel):
     trace_url: str | None = None
 
 
-@router.post("/{finding_id}", response_model=InvestigationOut)
+@router.post(
+    "/{finding_id}",
+    response_model=InvestigationOut,
+    dependencies=[Depends(rate_limit("investigate"))],
+)
 async def investigate(
     finding_id: UUID,
     body: InvestigationIn,

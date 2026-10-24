@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import delete, select
 
 from orchestrator.api.deps import Principal, SessionDep, require_permission
+from orchestrator.api.ratelimit import rate_limit
 from orchestrator.audit import log_audit_event
 from orchestrator.config import settings
 from orchestrator.domain.roles import Permission
@@ -142,7 +143,12 @@ def redact_audit_auth(audit_body: dict) -> dict:
     return audit_body
 
 
-@router.post("", response_model=ScanOut, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "",
+    response_model=ScanOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(rate_limit("scans"))],
+)
 async def create_scan(
     body: ScanIn,
     session: SessionDep,

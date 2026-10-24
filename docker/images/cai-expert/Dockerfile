@@ -14,6 +14,10 @@ RUN pip install --no-cache-dir \
 
 WORKDIR /app
 
+# Stub declarado (README): mesmo assim, não-root.
+RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin cai
+USER 1000
+
 ENV PYTHONUNBUFFERED=1
 
 CMD ["python", "-c", "print('cai-expert idle. Use docker exec for ad-hoc agentic sessions.')"]

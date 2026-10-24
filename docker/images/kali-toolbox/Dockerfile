@@ -63,6 +63,10 @@ RUN pip install --break-system-packages --no-cache-dir gvm-tools python-gvm || p
 
 WORKDIR /workspace
 
+# O agente ofensivo executa comando aqui: nunca como root (Issue #12). Ferramenta que
+# exige raw socket (masscan, nmap -sS) falha alto em vez de rodar privilegiada.
+RUN useradd --uid 1000 --create-home --shell /bin/bash agente && chown 1000:1000 /workspace
+
 # Pequena verificação de bins instalados (diagnóstico)
 RUN echo "Installed:" \
     && (nmap --version | head -1) \
@@ -71,3 +75,5 @@ RUN echo "Installed:" \
     && (trufflehog --version 2>&1 | head -1 || true) \
     && (dnstwist --version 2>&1 | head -1 || true) \
     && (trivy --version 2>&1 | head -1 || true)
+
+USER 1000
