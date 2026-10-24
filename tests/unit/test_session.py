@@ -41,9 +41,14 @@ def test_garbage_and_empty_are_rejected():
 
 def test_non_session_typ_is_rejected():
     # um JWT válido assinado com a MESMA chave mas typ != session não passa
-    from jose import jwt
+    import time
+
+    import jwt
 
     from orchestrator.auth.session import _key
 
-    bad = jwt.encode({"sub": "x", "typ": "id_token"}, _key(), algorithm="HS256")
+    # com exp válido: o que reprova é só o typ
+    bad = jwt.encode(
+        {"sub": "x", "typ": "id_token", "exp": int(time.time()) + 60}, _key(), algorithm="HS256"
+    )
     assert verify_session(bad) is None

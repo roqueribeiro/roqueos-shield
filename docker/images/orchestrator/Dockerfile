@@ -155,26 +155,24 @@ COPY --from=nuclei-templates /opt/nuclei-templates /opt/nuclei-templates
 ENV NUCLEI_TEMPLATES_DIR=/opt/nuclei-templates
 
 # uv para instalação rápida
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.7 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# instala dependências primeiro (camada cacheável) — inclui scanners Python
-# (dnstwist, checkov) que rodam como subprocesso.
-COPY pyproject.toml /app/
-RUN uv pip install --system --no-cache-dir \
-        fastapi "uvicorn[standard]" pydantic pydantic-settings \
-        sqlmodel aiosqlite asyncpg "sqlalchemy[asyncio]" alembic \
-        httpx structlog litellm \
-        python-libnmap zaproxy \
-        arq redis \
-        PyGithub shodan \
-        python-gvm \
-        authlib "python-jose[cryptography]" "passlib[bcrypt]" itsdangerous \
-        jinja2 pyyaml \
-        dnstwist \
-        semgrep \
-        typer rich
+# instala dependências primeiro (camada cacheável) — EXATAMENTE as do uv.lock.
+#
+# Até 23/10/2026 esta linha instalava pacotes por NOME, sem versão nem lock: a imagem
+# levava o que o PyPI tivesse no dia do build (inclusive python-jose e python-libnmap,
+# já fora do projeto), e a varredura do uv.lock não descrevia a imagem publicada.
+# Agora o lock decide, com hash; só os scanners que rodam como subprocesso e não são
+# dependência do app (dnstwist, semgrep) vêm à parte, com pin e com o lock como
+# constraint, para não mexerem no que ele fixou.
+COPY pyproject.toml uv.lock /app/
+RUN uv export --frozen --no-dev --no-emit-project -o /tmp/requirements.txt \
+    && uv pip install --system --no-cache-dir -r /tmp/requirements.txt \
+    && uv pip install --system --no-cache-dir -c /tmp/requirements.txt \
+        dnstwist==20250130 semgrep==1.182.1 \
+    && rm /tmp/requirements.txt
 # checkov (IaC) sai do ambiente do app e vai para um venv proprio.
 #
 # POR QUE, medido em 2026-08-29 na imagem publicada: `checkov` sem pin resolvia

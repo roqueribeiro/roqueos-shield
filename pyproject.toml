@@ -52,12 +52,12 @@ dependencies = [
 
     # AI gateway. Bump >=1.70 cobre CVE de prompt injection / rate-limit
     # (issue #7 do backlog).
-    "litellm>=1.70.0",
+    "litellm>=1.84.0",
 
     # scanners — clientes
-    "python-libnmap>=0.7.3",
     "zaproxy>=0.3.2",
-    # XML hardening (XXE / billion-laughs) para parsers de Greenbone/etc.
+    # XML hardening (XXE / billion-laughs) para os parsers de nmap e Greenbone. O
+    # python-libnmap saiu (CVE-2022-30284, XXE): o nmap tem parser próprio.
     "defusedxml>=0.7.1",
 
     # fila assíncrona
@@ -73,7 +73,9 @@ dependencies = [
 
     # auth (Fase 6). authlib >=1.7 cobre CVE-2024-37568 (OIDC implicit grant).
     "authlib>=1.7.0",
-    "python-jose[cryptography]>=3.3.0",
+    # python-jose saiu (CVE-2024-33663/33664, projeto parado): PyJWT >=2.14 corrige os
+    # CVE-2026-1022xx da 2.13.
+    "pyjwt[crypto]>=2.14.0",
     "passlib[bcrypt]>=1.7.4",
     # SessionMiddleware (starlette) assina o cookie de state/nonce do fluxo OIDC.
     "itsdangerous>=2.1.0",
@@ -89,9 +91,11 @@ dependencies = [
 
 [project.optional-dependencies]
 # instalação opcional — algumas têm peso nativo grande no Windows
-pdf = ["weasyprint>=63.0"]            # PDF rendering (Fase 5)
-agentic = ["cai-framework>=0.1.0"]    # CAI agentic (Fase 4)
-tracing = ["arize-phoenix>=6.0.0", "openinference-instrumentation-litellm>=0.1.0"]
+pdf = ["weasyprint>=70.0"]            # PDF rendering (Fase 5); >=70 corrige CVE-2026-106443
+# `agentic` (cai-framework) saiu em 23/10/2026: o loop agêntico é nosso (litellm +
+# executor com coleira) e nada importa o pacote; a última versão (0.5.10) é a do
+# GHSA-4996-996j-2m9r e fixa openai==1.75, o que prendia o lock em litellm vulnerável.
+tracing = ["arize-phoenix>=20.26.0", "openinference-instrumentation-litellm>=0.1.0"]
 censys = ["censys>=2.2.0"]
 sast = ["semgrep>=1.100.0"]           # SAST de código-fonte (adapter semgrep)
 dev = [
@@ -118,6 +122,20 @@ cai = "orchestrator.cli:app"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+# O semgrep (dev e sast) fixa opentelemetry-api <1.38 e o arize-phoenix >=20.26 (tracing)
+# exige >=1.44: os dois extras não cabem no mesmo ambiente. Cada um resolve no seu
+# ramo do lock; o tracing fica com o phoenix que traz strawberry-graphql 0.335
+# (CVE-2026-107728 corrigido).
+# O ramo `tracing` fica com o litellm 1.107.0rc2, de propósito: o arize-phoenix que
+# corrige o strawberry-graphql (CVE-2026-107728) exige openai>=3, e só o litellm 1.107
+# (ainda rc em 23/10/2026) aceita openai 3. Extra opt-in, fora da imagem; o ambiente
+# base e o de dev usam o litellm estável. Revisar quando sair o 1.107 final.
+conflicts = [
+    [{ extra = "dev" }, { extra = "tracing" }],
+    [{ extra = "sast" }, { extra = "tracing" }],
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["orchestrator"]
