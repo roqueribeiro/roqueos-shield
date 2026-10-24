@@ -158,9 +158,16 @@ jobs:
           python-version: "3.13"
           cache: pip
       - name: Install package + scanners
+        # checkov num venv próprio, como na imagem: no mesmo ambiente do app o
+        # resolvedor do pip entrava em backtracking sem fim (30 min parado em
+        # 23/10/2026, depois das dependências da #13). semgrep já vem no extra dev.
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]" "semgrep>=1.100.0" "checkov>=3.2"
+          pip install -e ".[dev]"
+          python -m venv /tmp/checkov-venv
+          /tmp/checkov-venv/bin/pip install --quiet "checkov==3.3.15"
+          mkdir -p /tmp/scanners-bin && ln -sf /tmp/checkov-venv/bin/checkov /tmp/scanners-bin/checkov
+          echo "/tmp/scanners-bin" >> "$GITHUB_PATH"
       - name: e2e de efetividade
         run: pytest tests/integration/test_efetividade_e2e.py -v
 
