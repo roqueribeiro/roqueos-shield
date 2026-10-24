@@ -105,12 +105,12 @@ async def lifespan(app: FastAPI):
         log.info("db.sqlite_init_done")
 
     # phoenix tracing opt-in
-    if settings.PHOENIX_COLLECTOR_ENDPOINT:
+    if settings.PHOENIX_ENABLED and settings.PHOENIX_COLLECTOR_ENDPOINT:
         try:
             from orchestrator.ai.agentic.tracing import setup_phoenix
 
-            setup_phoenix(settings.PHOENIX_COLLECTOR_ENDPOINT)
-            log.info("phoenix.tracing_enabled")
+            if setup_phoenix(settings.PHOENIX_COLLECTOR_ENDPOINT):
+                log.info("phoenix.tracing_enabled")
         except Exception as e:  # noqa: BLE001
             log.warning("phoenix.setup_failed", error=str(e))
 

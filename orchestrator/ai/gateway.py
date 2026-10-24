@@ -12,17 +12,28 @@ OpenRouter, Azure. Trocar provider é só mudar `model=`.
 from __future__ import annotations
 
 import json
+import os
 import time
 from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
 
-import litellm
-import structlog
-from litellm import acompletion
-from litellm.exceptions import APIConnectionError, APIError, ServiceUnavailableError
+# Cost map do litellm local, ANTES do import: sem isto cada processo tenta baixar o
+# JSON do GitHub no boot e, sem DNS de saída (acemagic, 21/10/2026), espera o timeout
+# a cada job. O mapa embarcado no pacote basta para a telemetria de custo.
+os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
-from orchestrator.config import settings
+import litellm  # noqa: E402
+import structlog  # noqa: E402
+from litellm import acompletion  # noqa: E402
+from litellm.exceptions import (  # noqa: E402
+    APIConnectionError,
+    APIError,
+    BadRequestError,
+    ServiceUnavailableError,
+)
+
+from orchestrator.config import settings  # noqa: E402
 
 # Reasoning models (claude-opus-4-*, OpenAI o-series) reject params like
 # `temperature` ≠ 1. Let litellm silently DROP any param the selected model
@@ -82,6 +93,7 @@ async def complete(
 
     extra = _build_extra(response_format, api_base, primary)
     primary_api_base = extra.get("api_base")
+    primary = _routable_model(primary, primary_api_base)
 
     # tentativa primária
     t0 = time.perf_counter()
@@ -180,6 +192,24 @@ async def complete(
         raise
 
 
+def _routable_model(model: str, api_base: str | None) -> str:
+    """O id que o litellm sabe rotear.
+
+    Endpoint OpenAI-compat próprio (LM Studio, vLLM, DGX) costuma servir o modelo
+    pelo nome cru, ex. `qwen3.6-35b-200k`. Sem prefixo de provedor o litellm recusa
+    a chamada ("LLM Provider NOT provided") e a triagem inteira caía: medido no
+    acemagic em 16/10/2026, 9 lotes e 0 achados triados. Com `api_base`, nome sem
+    provedor reconhecido vira `openai/<nome>`, que é como esses servidores falam.
+    """
+    if not api_base:
+        return model
+    try:
+        litellm.get_llm_provider(model)
+        return model
+    except (BadRequestError, ValueError):
+        return f"openai/{model}"
+
+
 def _build_extra(
     response_format: dict[str, Any] | None,
     api_base: str | None,
@@ -231,6 +261,7 @@ async def complete_with_tools(
     """
     primary = model or settings.LLM_MODEL
     extra = _build_extra(None, None, primary)
+    primary = _routable_model(primary, extra.get("api_base"))
     t0 = time.perf_counter()
     r = await acompletion(
         model=primary,

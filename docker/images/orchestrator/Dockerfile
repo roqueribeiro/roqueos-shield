@@ -159,6 +159,10 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.7 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
+# Cost map do litellm embarcado: sem DNS de saída o download do GitHub travava
+# cada job no timeout. O gateway também define isto antes do import.
+ENV LITELLM_LOCAL_MODEL_COST_MAP=True
+
 # instala dependências primeiro (camada cacheável) — EXATAMENTE as do uv.lock.
 #
 # Até 23/10/2026 esta linha instalava pacotes por NOME, sem versão nem lock: a imagem

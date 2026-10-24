@@ -87,6 +87,9 @@ class Settings(BaseSettings):
     DEFECTDOJO_API_KEY: str = ""
 
     # Phoenix tracing (Fase 4, opt-in)
+    # Tracing Phoenix é opt-in de verdade: o endpoint tem default, então era ele que
+    # "ligava" o tracing em todo boot e logava phoenix.imports_missing sem o extra.
+    PHOENIX_ENABLED: bool = False
     PHOENIX_COLLECTOR_ENDPOINT: str = "http://phoenix:6006/v1/traces"
 
     # API auth (token simples; pentester comercial num engagement)

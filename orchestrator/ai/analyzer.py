@@ -130,6 +130,7 @@ async def triage_batch(
 
     system = _load_system_prompt()
     triages_by_id: dict[str, dict[str, Any]] = {}
+    falhas: list[str] = []
 
     for i in range(0, len(eligible), batch_size):
         batch = eligible[i : i + batch_size]
@@ -154,18 +155,19 @@ async def triage_batch(
             )
         except Exception as e:  # noqa: BLE001
             log.error("ai.triage_batch_failed", batch=i // batch_size + 1, error=str(e))
+            falhas.append(str(e).splitlines()[0][:200])
             continue
 
-        for t in response.get("triages", []):
-            fid = t.get("finding_id")
-            if fid:
-                triages_by_id[fid] = t
+        triages_by_id.update(_reconciliar(batch, response.get("triages") or []))
 
+    por_ia = 0
+    sem_ia: list[Finding] = []
     for f in eligible:
         t = triages_by_id.get(str(f.id))
         if t is None:
-            log.warning("ai.triage_missing", finding_id=str(f.id))
+            sem_ia.append(f)
             continue
+        por_ia += 1
         try:
             f.ai_triage = AITriage(
                 adjusted_severity=Severity(t.get("adjusted_severity", f.severity)),
@@ -179,10 +181,62 @@ async def triage_batch(
             )
         except (ValueError, KeyError) as e:
             log.error("ai.triage_parse_failed", finding_id=str(f.id), error=str(e))
+            por_ia -= 1
+            sem_ia.append(f)
 
-    log.info(
-        "ai.triage_done",
-        triaged=sum(1 for f in findings if f.ai_triage is not None),
-        skipped=skipped,
-    )
+    motivo = falhas[0] if falhas else "a IA não devolveu triagem para estes achados"
+    for f in sem_ia:
+        f.ai_triage = _triagem_deterministica(f, motivo)
+    if sem_ia:
+        # Um aviso por scan, com o motivo, no lugar de um `ai.triage_missing` por
+        # achado (559 linhas no acemagic) que não dizia por quê.
+        log.warning(
+            "ai.triage_incomplete",
+            eligible=len(eligible),
+            by_ai=por_ia,
+            deterministic=len(sem_ia),
+            reason=motivo,
+        )
+
+    log.info("ai.triage_done", triaged=por_ia, deterministic=len(sem_ia), skipped=skipped)
     return findings
+
+
+TRIAGEM_DETERMINISTICA = "deterministico (IA indisponível)"
+
+
+def _reconciliar(batch: list[Finding], triages: list[Any]) -> dict[str, dict[str, Any]]:
+    """Casa cada item devolvido pela LLM com um achado do lote.
+
+    Pelo `finding_id` exato; senão, sem diferenciar maiúsculas e aceitando o UUID
+    truncado que modelo local às vezes devolve (prefixo de 8+ caracteres que só
+    um achado do lote tem). Se nada casar mas a LLM devolveu um item por achado,
+    vale a ordem: o prompt pede "na mesma ordem".
+    """
+    ids = [str(f.id) for f in batch]
+    itens = [t for t in triages if isinstance(t, dict)]
+    casados: dict[str, dict[str, Any]] = {}
+    for t in itens:
+        fid = str(t.get("finding_id") or "").strip().lower()
+        if fid in ids:
+            casados[fid] = t
+            continue
+        candidatos = [i for i in ids if len(fid) >= 8 and i.startswith(fid)]
+        if len(candidatos) == 1:
+            casados[candidatos[0]] = t
+    if not casados and len(itens) == len(batch):
+        casados = dict(zip(ids, itens, strict=True))
+    return casados
+
+
+def _triagem_deterministica(f: Finding, motivo: str) -> AITriage:
+    """Triagem sem IA, e dizendo isso: severidade e remediação do próprio scanner."""
+    return AITriage(
+        adjusted_severity=f.severity,
+        rationale=(
+            f"Triagem por IA indisponível ({motivo}). Severidade e remediação vêm do "
+            f"scanner {f.source_tool}, sem análise contextual."
+        ),
+        suggested_remediation=f.remediation,
+        model_used=TRIAGEM_DETERMINISTICA,
+    )

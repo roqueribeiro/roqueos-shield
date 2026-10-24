@@ -10,8 +10,12 @@ import structlog
 log = structlog.get_logger(__name__)
 
 
-def setup_phoenix(endpoint: str) -> None:
-    """Configura Phoenix + OpenInference para capturar spans LLM/tool use."""
+def setup_phoenix(endpoint: str) -> bool:
+    """Configura Phoenix + OpenInference. Devolve se o tracing ficou ligado de fato.
+
+    Só roda com `PHOENIX_ENABLED=true`. Sem o extra `tracing` instalado, avisa
+    e devolve False: quem chamou não pode anunciar tracing que não existe.
+    """
 
     try:
         from openinference.instrumentation.litellm import LiteLLMInstrumentor
@@ -22,7 +26,7 @@ def setup_phoenix(endpoint: str) -> None:
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
     except ImportError as e:
         log.warning("phoenix.imports_missing", error=str(e))
-        return
+        return False
 
     resource = Resource.create({"service.name": "cai-orchestrator"})
     provider = TracerProvider(resource=resource)
@@ -32,3 +36,4 @@ def setup_phoenix(endpoint: str) -> None:
 
     LiteLLMInstrumentor().instrument()
     log.info("phoenix.instrumented", endpoint=endpoint)
+    return True
