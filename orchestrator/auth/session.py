@@ -5,6 +5,9 @@ Curta duração (`SESSION_TTL_HOURS`). A chave é `SESSION_SECRET` (ou o `APP_TO
 como fallback). NÃO confiar no `role` do claim pra autorização — o
 `get_principal` re-busca o usuário no DB pra pegar papel/ativo correntes (revoga
 na hora ao desativar). O claim serve pra identificar a sessão, não pra autorizar.
+
+PyJWT desde 23/10/2026 (GOAL-SHIELD-02): o `python-jose` estava parado e carregava
+CVE-2024-33663 (confusão de algoritmo) e CVE-2024-33664 (JWE que estoura memória).
 """
 
 from __future__ import annotations
@@ -12,7 +15,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 
 from orchestrator.config import settings
 
@@ -47,8 +51,8 @@ def verify_session(token: str | None) -> dict | None:
     if not token:
         return None
     try:
-        claims = jwt.decode(token, _key(), algorithms=[_ALG])
-    except JWTError:
+        claims = jwt.decode(token, _key(), algorithms=[_ALG], options={"require": ["exp", "sub"]})
+    except InvalidTokenError:
         return None
     if claims.get("typ") != _TYP or not claims.get("sub"):
         return None

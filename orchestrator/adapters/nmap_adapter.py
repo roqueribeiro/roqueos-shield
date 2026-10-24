@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from libnmap.parser import NmapParser, NmapParserException
 
+from orchestrator.adapters._nmap_xml import NmapXmlError, parse_nmap_xml
 from orchestrator.adapters.base import ScanIntegrityError
 from orchestrator.domain.schemas import (
     AssetType,
@@ -119,8 +119,8 @@ class NmapAdapter:
 
         findings: list[Finding] = []
         try:
-            report = NmapParser.parse(raw.payload)
-        except NmapParserException as e:
+            hosts = parse_nmap_xml(raw.payload)
+        except NmapXmlError as e:
             # "Nenhuma porta aberta" é das afirmações mais fortes de um relatório de
             # segurança. Ela não pode nascer de um parser que engasgou com XML
             # truncado (nmap morto por OOM/sinal).
@@ -132,7 +132,7 @@ class NmapAdapter:
         # scan_id é injetado fora — aqui usamos placeholder; o pipeline reescreve.
         placeholder_scan_id = uuid4()
 
-        for host in report.hosts:
+        for host in hosts:
             host_addr = host.address
             host_target = Target(
                 asset_type=AssetType.HOST,
@@ -173,7 +173,7 @@ class NmapAdapter:
                     )
                 )
 
-        log.info("nmap.normalize_done", findings=len(findings), host_count=len(report.hosts))
+        log.info("nmap.normalize_done", findings=len(findings), host_count=len(hosts))
         return findings
 
     @staticmethod
