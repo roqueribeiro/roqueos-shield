@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python '/Users/roqueribeiro/workspaces/roqueos-shield/.codex/hooks/format-python.py'",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
