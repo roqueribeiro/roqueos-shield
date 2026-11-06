@@ -217,6 +217,24 @@ class ZAPAdapter:
         if not state["active"]:
             state["phase"] = "passive_wait"
             return ScanStatus.RUNNING
+        # Teto de recurso do active scan. Ao chegar aqui a sessão do ZAP já carrega tudo o
+        # que o spider + ajax descobriram (dezenas de URLs da SPA, com request/response em
+        # memória). O active scan injeta payloads por regra, por parâmetro, por URL, e o
+        # volume de mensagens cresce rápido: numa VM de 8g ele estourava o teto do container
+        # em ~1min, por cima da base que o ajax já deixou. Menos threads concorrentes e um
+        # teto de tempo (por scan e por regra) seguram o pico sem desligar vetor nenhum: as
+        # regras continuam todas ligadas, só não rodam em paralelo sem limite. Best-effort,
+        # igual ao ajax: opção que o add-on não conhece vira aviso, nunca falha o scan.
+        for opcao, valor in (
+            ("setOptionThreadPerHost", str(state.get("ascan_threads", 2))),
+            ("setOptionHostPerScan", str(state.get("ascan_hosts", 1))),
+            ("setOptionMaxScanDurationInMins", str(state.get("ascan_max_min", 8))),
+            ("setOptionMaxRuleDurationInMins", str(state.get("ascan_rule_max_min", 3))),
+        ):
+            try:
+                await self._get(f"/JSON/ascan/action/{opcao}/", Integer=valor)
+            except Exception as e:  # noqa: BLE001  (teto de recurso é best-effort)
+                log.warning("zap.ascan_option_failed", opcao=opcao, valor=valor, error=str(e))
         ascan_id = ""
         for attempt in (1, 2):
             ascan = await self._get(
@@ -248,7 +266,7 @@ class ZAPAdapter:
         QUALQUER caixa de memória fixa; o teto de profundidade, de estados e de tempo é o
         que segura o pico, não o número de browsers sozinho (o Firefox acumula memória por
         estado renderizado, ~20 MB/s numa SPA grande, e um crawl longo rasteja até o teto
-        da VM). Os limites default (profundidade 4, 25 estados, 3 min) alcançam as rotas do
+        da VM). Os limites default (profundidade 4, 15 estados, 3 min) alcançam as rotas do
         Juice Shop e cia. sem varrer a SPA inteira, e cabem numa VM de 8 GB. Ambiente com
         mais RAM afrouxa via options. O ajuste é best-effort: add-on antigo que não conhece
         a opção vira aviso, nunca falha o scan (o crawl ainda roda, só sem aquele teto).
@@ -260,7 +278,7 @@ class ZAPAdapter:
         for opcao, valor in (
             ("setOptionNumberOfBrowsers", str(state.get("ajax_browsers", 1))),
             ("setOptionMaxCrawlDepth", str(state.get("ajax_max_depth", 4))),
-            ("setOptionMaxCrawlStates", str(state.get("ajax_max_states", 25))),
+            ("setOptionMaxCrawlStates", str(state.get("ajax_max_states", 15))),
             ("setOptionMaxDuration", str(state.get("ajax_max_duration_min", 3))),
         ):
             try:

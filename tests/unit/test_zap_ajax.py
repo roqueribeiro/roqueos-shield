@@ -344,3 +344,44 @@ async def test_solucos_esparsos_nao_derrubam_um_scan_sadio() -> None:
     assert estados[-1] == ScanStatus.DONE, (
         f"soluços intercalados com respostas não podem somar até o teto; estados={estados}"
     )
+
+
+# --- Teto de recurso do active scan (pra caber numa VM pequena sem desligar vetor) ---
+#
+# Ao entrar no active scan a sessão do ZAP já carrega o que o ajax descobriu; o ascan
+# injeta por regra/parâmetro/URL e o volume estourava a memória do container em ~1min.
+# A escolha do founder foi "limitar pra caber": menos threads concorrentes + teto de
+# tempo, com TODAS as regras ligadas. Estes limites são setados ANTES de iniciar o ascan.
+
+
+async def test_ascan_limita_recursos_antes_de_iniciar() -> None:
+    zap = _ZapComAjax()
+    adapter = _adapter_com(zap)
+    _, estados = await _rodar(adapter, {"active": True, "ajax": True})
+
+    assert estados[-1] == ScanStatus.DONE
+    assert "/JSON/ascan/action/setOptionThreadPerHost/" in zap.chamadas, (
+        "a concorrência do active scan tem que ser limitada, senão estoura a memória"
+    )
+    assert zap.chamadas.index(
+        "/JSON/ascan/action/setOptionThreadPerHost/"
+    ) < zap.chamadas.index("/JSON/ascan/action/scan/"), (
+        "o teto tem que ser aplicado ANTES de iniciar o active scan"
+    )
+
+
+async def test_opcao_do_ascan_que_falha_nao_derruba_o_scan() -> None:
+    """Add-on antigo que não conhece a opção de ascan vira aviso; o scan roda mesmo assim."""
+
+    class _ZapSemOpcaoAscan(_ZapComAjax):
+        def __call__(self, request: httpx.Request) -> httpx.Response:
+            if request.url.path.startswith("/JSON/ascan/action/setOption"):
+                self.chamadas.append(request.url.path)
+                return httpx.Response(400, json={})
+            return super().__call__(request)
+
+    zap = _ZapSemOpcaoAscan()
+    adapter = _adapter_com(zap)
+    _, estados = await _rodar(adapter, {"active": True, "ajax": True})
+    assert estados[-1] == ScanStatus.DONE, "opção de ascan recusada não pode derrubar o scan"
+    assert "/JSON/ascan/action/scan/" in zap.chamadas, "o active scan tinha que rodar"
