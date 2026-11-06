@@ -56,7 +56,9 @@ leva meia hora.
 
 Repare no que o diagrama marca em vermelho: `cai-expert` é um **stub declarado**. O
 compose diz isso no próprio cabeçalho, e o Dockerfile termina a instalação com
-`|| true`, então a imagem sobe mesmo quando a instalação falha.
+`|| true`, então a imagem sobe mesmo quando a instalação falha. É legado da fase em
+que o agente rodava no `cai-framework`: nada chama o container, e o laço do agente
+roda dentro do orchestrator, na rota de investigação.
 
 ---
 

@@ -93,12 +93,16 @@ decision, including every refusal, goes to the audit trail through
   <img alt="Kali toolbox and the agent leash" src="docs/assets/diagrams/kali-cai-agente-light.svg">
 </picture>
 
-**What is not there yet, said here so nobody finds out in production:** the
-`cai-expert` container is a declared stub — its Dockerfile ends the install with
-`|| true` and its compose file says so in the header — and
-`_cai_framework_available()` currently returns only `bool(settings.AGENT_ENABLED)`
-without checking that the framework is actually installed. The executor and the
-leash are real and tested; the packaged agent container is not.
+**Where the agent came from, said here so nobody has to dig through the history:**
+the agents started on top of [CAI, the Cybersecurity AI framework](https://github.com/aliasrobotics/cai).
+Today the ReAct loop is this project's own: `litellm` plus the executor above, on by
+default and in `dry_run` until someone says otherwise. The `agentic` extra that
+installed `cai-framework` was removed on 2026-10-23, because its latest release
+(0.5.10) carries GHSA-4996-996j-2m9r and pinned `openai==1.75`, which held `litellm`
+on a vulnerable version; nothing imports the package anymore. The loop, the executor
+and the leash are real and tested. The `cai-expert` container is what is left of that
+period: its Dockerfile still ends the install with `|| true`, and nothing in the
+pipeline calls it.
 
 ---
 
@@ -281,6 +285,7 @@ Known inconsistencies, listed rather than hidden:
 | --- | --- | --- |
 | Three different version numbers | `pyproject.toml` says `0.1.0`, `main.py` says `0.4.0`, the AI Fix Bundle emits `"version": "0.3.0"` | a consumer of the bundle cannot tell which build produced it |
 | `render_pdf()` has no caller | `orchestrator/reporting/renderer.py` | the `[pdf]` extra installs WeasyPrint and nothing invokes it |
+| `cai-expert` container is legacy | `docker/images/cai-expert/`, `docker/compose.agent.yml` | left from the `cai-framework` period; nothing in the pipeline calls it, the agent loop runs in the orchestrator itself, behind the investigate route |
 | Markdown and CSV reports | not in this repository | the RoqueOS front builds those four formats client-side from the AI Fix Bundle |
 
 ---

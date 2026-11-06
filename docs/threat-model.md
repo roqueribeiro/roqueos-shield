@@ -41,8 +41,9 @@ recusar é o default.
   metacaractere para escapar), recusa de flag que escreve em disco, timeout duro,
   `lab_only` ligado por padrão e `dry_run` que planeja sem executar.
 - Toda decisão, **inclusive toda recusa**, vai para a trilha por `ExecDecision.to_audit()`.
-- Estado real: o executor e a coleira são código testado; o container `cai-expert` é
-  stub declarado. Ver o README.
+- Estado real: o laço do agente, o executor e a coleira são código testado, e o laço
+  é do próprio projeto (`litellm`), sem o `cai-framework` desde 23/10/2026. O
+  container `cai-expert` é legado e nada chama ele. Ver o README.
 
 ### REST API
 - Token compartilhado (Fase 5). Vulnerável a leak de token. Mitigação: rotacionar; OIDC na Fase 6.
