@@ -166,7 +166,7 @@ async def run_exposure_scan(
         try:
             results_list = await asyncio.gather(*coros, return_exceptions=True)
             for r in results_list:
-                if isinstance(r, Exception):
+                if isinstance(r, BaseException):
                     pulou("subdomain_takeover", str(r))
                     continue
                 for f in r:

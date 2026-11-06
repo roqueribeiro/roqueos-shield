@@ -416,7 +416,7 @@ async def run_scan(
     # cleanup HTTP clients
     for adapter in adapters:
         if hasattr(adapter, "aclose"):
-            await adapter.aclose()  # type: ignore[attr-defined]
+            await adapter.aclose()
 
     return result
 

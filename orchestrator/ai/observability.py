@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections import deque
+from collections.abc import MutableMapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -30,7 +31,9 @@ def _signal() -> asyncio.Event:
     return _EVENT_SIGNAL
 
 
-def log_processor(_logger: Any, _method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def log_processor(
+    _logger: Any, _method_name: str, event_dict: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
     """structlog processor — appenda no ring buffer e propaga.
 
     Não modifica `event_dict` (devolve igual). Só escuta.

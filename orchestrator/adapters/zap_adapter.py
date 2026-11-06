@@ -237,9 +237,7 @@ class ZAPAdapter:
                 log.warning("zap.ascan_option_failed", opcao=opcao, valor=valor, error=str(e))
         ascan_id = ""
         for attempt in (1, 2):
-            ascan = await self._get(
-                "/JSON/ascan/action/scan/", url=state["url"], recurse="true"
-            )
+            ascan = await self._get("/JSON/ascan/action/scan/", url=state["url"], recurse="true")
             ascan_id = str(ascan.get("scan", ""))
             if ascan_id.isdigit() and int(ascan_id) >= 1:
                 state["ascan_id"] = ascan_id

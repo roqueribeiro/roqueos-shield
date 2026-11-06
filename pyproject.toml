@@ -172,9 +172,10 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.13"
-# TODO(v0.2): re-habilitar strict mode após cleanup do backlog de tipos.
-# O codebase v0.1 tem ~50 erros mypy (import-not-found em deps opcionais,
-# call-overload em SQLModel, no-any-return em parsers de scanner).
+# Backlog de tipos zerado em 2026-11-06 (`mypy orchestrator` = 0 erros): as queries
+# SQLModel passaram a usar `col()` nas expressões de coluna, os enums de Target são
+# construídos explicitamente, e os `type: ignore` órfãos saíram. strict ainda OFF: ligar
+# é um passo à parte (traz uma leva nova de regras), não parte deste cleanup.
 strict = false
 warn_return_any = false
 ignore_missing_imports = true

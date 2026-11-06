@@ -91,8 +91,10 @@ async def executive_report(
     compliance (OWASP Top 10 2021 → PCI DSS 4.0 + LGPD) + CWE Top 25 + top risks.
     Gerado on-demand a partir dos achados persistidos (sempre fresco)."""
     from dataclasses import dataclass, field
+    from typing import cast
 
-    from orchestrator.domain.schemas import Finding, Target
+    from orchestrator.domain.schemas import AssetType, Finding, Severity, Target
+    from orchestrator.jobs.pipelines import ScanResult
     from orchestrator.reporting.renderer import render_executive
 
     scan = await session.get(ScanRow, scan_id)
@@ -102,14 +104,14 @@ async def executive_report(
     target_row = await session.get(TargetRow, scan.target_id) if scan.target_id else None
     if target_row is not None:
         target = Target(
-            asset_type=target_row.asset_type,
+            asset_type=AssetType(target_row.asset_type),
             value=target_row.value,
             label=target_row.label,
-            criticality=target_row.criticality,
+            criticality=Severity(target_row.criticality),
             contains_pii=target_row.contains_pii,
         )
     else:
-        target = Target(asset_type="host", value="(desconhecido)")
+        target = Target(asset_type=AssetType.HOST, value="(desconhecido)")
 
     findings: list[Finding] = await _load_findings(session, scan_id)
 
@@ -137,7 +139,9 @@ async def executive_report(
     )
 
     with tempfile.TemporaryDirectory() as tmp:
-        out = render_executive(result, Path(tmp) / "executive.html", actor=principal.email)
+        out = render_executive(
+            cast(ScanResult, result), Path(tmp) / "executive.html", actor=principal.email
+        )
         html = out.read_text(encoding="utf-8")
     return HTMLResponse(content=html)
 

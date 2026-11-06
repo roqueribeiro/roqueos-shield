@@ -14,7 +14,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
-from sqlmodel import select
+from sqlmodel import col, select
 
 from orchestrator.api.deps import (
     Principal,
@@ -114,7 +114,7 @@ async def create_user(
 
 @router.get("", response_model=list[UserOut])
 async def list_users(session: SessionDep, _admin: Principal = _ADMIN) -> list[UserOut]:
-    rows = (await session.exec(select(UserRow).order_by(UserRow.created_at))).all()
+    rows = (await session.exec(select(UserRow).order_by(col(UserRow.created_at)))).all()
     return [_to_out(u) for u in rows]
 
 

@@ -14,7 +14,7 @@ from uuid import UUID
 from arq import create_pool
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlmodel import delete, select
+from sqlmodel import col, delete, select
 
 from orchestrator.api.deps import Principal, SessionDep, require_permission
 from orchestrator.api.ratelimit import rate_limit
@@ -272,8 +272,8 @@ async def delete_scan(scan_id: UUID, session: SessionDep, principal: Principal =
         metadata={"target_id": str(scan.target_id), "state": scan.state},
     )
     # Remove dependentes primeiro (FK scan_id) e depois o scan.
-    await session.exec(delete(FindingRow).where(FindingRow.scan_id == scan_id))
-    await session.exec(delete(AIRun).where(AIRun.scan_id == scan_id))
+    await session.exec(delete(FindingRow).where(col(FindingRow.scan_id) == scan_id))
+    await session.exec(delete(AIRun).where(col(AIRun.scan_id) == scan_id))
     await session.delete(scan)
     await session.commit()
 
@@ -284,7 +284,7 @@ async def list_scans(
     state: str | None = None,
     _principal: Principal = _READ,
 ) -> list[ScanOut]:
-    stmt = select(ScanRow).order_by(ScanRow.created_at.desc()).limit(100)
+    stmt = select(ScanRow).order_by(col(ScanRow.created_at).desc()).limit(100)
     if state:
         stmt = stmt.where(ScanRow.state == state)
     rows = (await session.exec(stmt)).all()

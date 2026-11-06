@@ -30,7 +30,9 @@ async def _check_postgres() -> dict[str, Any]:
         from orchestrator.persistence.db import session
 
         async with session() as s:
-            await s.exec(text("SELECT 1"))
+            # SQLModel.exec() não tipa TextClause (só Select de modelos); pro health
+            # check de texto cru o runtime é ok, o ignore é o gap conhecido do SQLModel.
+            await s.exec(text("SELECT 1"))  # type: ignore[call-overload]
         return _ok("postgres", t0)
     except Exception as e:  # noqa: BLE001
         return _down("postgres", t0, str(e))

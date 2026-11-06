@@ -22,7 +22,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, func
-from sqlmodel import select
+from sqlmodel import col, select
 
 from orchestrator.ai.observability import sse_stream
 from orchestrator.api.deps import SessionDep
@@ -68,13 +68,13 @@ async def list_scans(
     session: SessionDep, _token: UIToken, limit: int = Query(default=50, le=200)
 ) -> list[dict[str, Any]]:
     rows = (
-        await session.exec(select(ScanRow).order_by(desc(ScanRow.created_at)).limit(limit))
+        await session.exec(select(ScanRow).order_by(desc(col(ScanRow.created_at))).limit(limit))
     ).all()
     out = []
     for s in rows:
         # counts de findings + severity dist
         findings_q = await session.exec(
-            select(FindingRow.severity, func.count(FindingRow.id))
+            select(FindingRow.severity, func.count(col(FindingRow.id)))
             .where(FindingRow.scan_id == s.id)
             .group_by(FindingRow.severity)
         )
@@ -105,13 +105,16 @@ async def scan_detail(scan_id: UUID, session: SessionDep, _token: UIToken) -> di
         raise HTTPException(404, "scan não encontrado")
     target = await session.get(TargetRow, s.target_id)
     findings_q = await session.exec(
-        select(FindingRow.severity, func.count(FindingRow.id))
+        select(FindingRow.severity, func.count(col(FindingRow.id)))
         .where(FindingRow.scan_id == scan_id)
         .group_by(FindingRow.severity)
     )
     sev_counts: dict[str, int] = {r[0]: int(r[1]) for r in findings_q.all()}
     ai_runs_q = await session.exec(
-        select(AIRun).where(AIRun.scan_id == scan_id).order_by(desc(AIRun.created_at)).limit(20)
+        select(AIRun)
+        .where(AIRun.scan_id == scan_id)
+        .order_by(desc(col(AIRun.created_at)))
+        .limit(20)
     )
     ai_runs = [
         {
@@ -167,7 +170,7 @@ async def list_findings(
     source_tool: str | None = None,
     limit: int = Query(default=100, le=500),
 ) -> list[dict[str, Any]]:
-    stmt = select(FindingRow).order_by(desc(FindingRow.discovered_at)).limit(limit)
+    stmt = select(FindingRow).order_by(desc(col(FindingRow.discovered_at))).limit(limit)
     if scan_id:
         stmt = stmt.where(FindingRow.scan_id == scan_id)
     if severity:
@@ -197,7 +200,9 @@ async def list_ai_runs(
     _token: UIToken,
     limit: int = Query(default=100, le=500),
 ) -> list[dict[str, Any]]:
-    rows = (await session.exec(select(AIRun).order_by(desc(AIRun.created_at)).limit(limit))).all()
+    rows = (
+        await session.exec(select(AIRun).order_by(desc(col(AIRun.created_at))).limit(limit))
+    ).all()
     return [
         {
             "id": str(r.id),
@@ -221,7 +226,9 @@ async def list_ai_runs(
 @router.get("/ai-runs/stats")
 async def ai_run_stats(session: SessionDep, _token: UIToken) -> dict[str, Any]:
     """Agregações leves sobre últimas 1000 calls."""
-    rows = (await session.exec(select(AIRun).order_by(desc(AIRun.created_at)).limit(1000))).all()
+    rows = (
+        await session.exec(select(AIRun).order_by(desc(col(AIRun.created_at))).limit(1000))
+    ).all()
     if not rows:
         return {
             "total": 0,

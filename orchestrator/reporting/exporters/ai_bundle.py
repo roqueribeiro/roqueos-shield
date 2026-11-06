@@ -9,6 +9,7 @@ Determinístico: mesmo scan_id → mesmo bundle (modulo timestamps).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
@@ -133,7 +134,7 @@ async def build_bundle(scan_id: UUID) -> dict[str, Any]:
     return bundle
 
 
-def _compliance_section(rows: list[FindingRow]) -> dict[str, Any]:
+def _compliance_section(rows: Sequence[FindingRow]) -> dict[str, Any]:
     """Agrega compliance (OWASP/PCI/LGPD/CWE-Top25 + nota de postura A–F)
     reconstruindo as findings a partir do payload persistido. O AI patcher (e o
     GRC do cliente) recebe os frameworks junto do bundle."""
@@ -179,7 +180,7 @@ def _compliance_section(rows: list[FindingRow]) -> dict[str, Any]:
     }
 
 
-def _detect_model_used(rows: list[FindingRow]) -> str | None:
+def _detect_model_used(rows: Sequence[FindingRow]) -> str | None:
     for r in rows:
         triage = (r.payload or {}).get("ai_triage")
         if isinstance(triage, dict) and triage.get("model_used"):
@@ -214,7 +215,7 @@ def _coverage(scan: ScanRow) -> dict[str, Any]:
 
 
 def _target_section(
-    target: TargetRow | None, rows: list[FindingRow] | None = None
+    target: TargetRow | None, rows: Sequence[FindingRow] | None = None
 ) -> dict[str, Any]:
     rows = rows or []
     if target is None:
@@ -288,7 +289,9 @@ _SERVER_HINTS: tuple[str, ...] = (
 )
 
 
-def derive_tech_stack(rows: list[FindingRow], target: TargetRow | None = None) -> dict[str, Any]:
+def derive_tech_stack(
+    rows: Sequence[FindingRow], target: TargetRow | None = None
+) -> dict[str, Any]:
     """Deriva pistas de stack das evidências que os scanners já produziram.
 
     Fontes: caminho de arquivo (semgrep/gitleaks/checkov/trivy) para linguagem e
@@ -486,7 +489,7 @@ def _patch_priority(sev_rank: int, confidence: str, triage: dict[str, Any] | Non
 
 
 def _build_location(kind: str, target_value: str, payload: dict[str, Any]) -> dict[str, Any]:
-    base = {"kind": kind}
+    base: dict[str, Any] = {"kind": kind}
     if kind == "http_endpoint":
         parsed = urlparse(target_value) if "://" in target_value else None
         base.update(

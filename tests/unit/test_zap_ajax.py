@@ -363,11 +363,9 @@ async def test_ascan_limita_recursos_antes_de_iniciar() -> None:
     assert "/JSON/ascan/action/setOptionThreadPerHost/" in zap.chamadas, (
         "a concorrência do active scan tem que ser limitada, senão estoura a memória"
     )
-    assert zap.chamadas.index(
-        "/JSON/ascan/action/setOptionThreadPerHost/"
-    ) < zap.chamadas.index("/JSON/ascan/action/scan/"), (
-        "o teto tem que ser aplicado ANTES de iniciar o active scan"
-    )
+    assert zap.chamadas.index("/JSON/ascan/action/setOptionThreadPerHost/") < zap.chamadas.index(
+        "/JSON/ascan/action/scan/"
+    ), "o teto tem que ser aplicado ANTES de iniciar o active scan"
 
 
 async def test_opcao_do_ascan_que_falha_nao_derruba_o_scan() -> None:

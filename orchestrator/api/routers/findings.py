@@ -26,7 +26,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import case, func
-from sqlmodel import select
+from sqlmodel import col, select
 
 from orchestrator.api.deps import (
     Principal,
@@ -150,7 +150,9 @@ async def findings_queue(
             latest,
             (FindingRow.deduped_key == latest.c.dk) & (FindingRow.discovered_at == latest.c.max_at),
         )
-        .outerjoin(FindingStatusRow, FindingRow.deduped_key == FindingStatusRow.deduped_key)
+        .outerjoin(
+            FindingStatusRow, col(FindingRow.deduped_key) == col(FindingStatusRow.deduped_key)
+        )
     )
     if status and status != "all":
         base = base.where(eff_status == status)
@@ -161,7 +163,9 @@ async def findings_queue(
 
     total = (await session.exec(select(func.count()).select_from(base.subquery()))).one()
 
-    page = base.order_by(_sev_case(), FindingRow.discovered_at.desc()).offset(offset).limit(limit)
+    page = (
+        base.order_by(_sev_case(), col(FindingRow.discovered_at).desc()).offset(offset).limit(limit)
+    )
     rows = (await session.exec(page)).all()
 
     items: list[QueueItem] = []
@@ -224,7 +228,9 @@ async def findings_summary(
             latest,
             (FindingRow.deduped_key == latest.c.dk) & (FindingRow.discovered_at == latest.c.max_at),
         )
-        .outerjoin(FindingStatusRow, FindingRow.deduped_key == FindingStatusRow.deduped_key)
+        .outerjoin(
+            FindingStatusRow, col(FindingRow.deduped_key) == col(FindingStatusRow.deduped_key)
+        )
         .group_by(FindingRow.severity, eff_status)
     )
     rows = (await session.exec(stmt)).all()
@@ -285,7 +291,7 @@ async def resolve_finding(
         await session.exec(
             select(FindingRow)
             .where(FindingRow.deduped_key == body.deduped_key)
-            .order_by(FindingRow.discovered_at.desc())
+            .order_by(col(FindingRow.discovered_at).desc())
             .limit(1)
         )
     ).first()
@@ -363,8 +369,10 @@ async def list_findings(
 ) -> list[FindingOut]:
     stmt = (
         select(FindingRow, FindingStatusRow)
-        .outerjoin(FindingStatusRow, FindingRow.deduped_key == FindingStatusRow.deduped_key)
-        .order_by(FindingRow.discovered_at.desc())
+        .outerjoin(
+            FindingStatusRow, col(FindingRow.deduped_key) == col(FindingStatusRow.deduped_key)
+        )
+        .order_by(col(FindingRow.discovered_at).desc())
         .offset(offset)
         .limit(limit)
     )

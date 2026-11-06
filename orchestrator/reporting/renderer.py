@@ -148,7 +148,7 @@ def render_pdf(html_path: Path, pdf_path: Path) -> Path:
     (cairo, pango) não estiverem instaladas — recomendamos rodar em Docker.
     """
     try:
-        from weasyprint import HTML  # type: ignore[import-not-found]
+        from weasyprint import HTML
     except ImportError as e:
         raise RuntimeError(
             "WeasyPrint não instalado. Use `pip install 'cai-orchestrator[pdf]'`."

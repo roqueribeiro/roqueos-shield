@@ -64,7 +64,7 @@ async def log_audit_event(
     scrubbed_meta: dict[str, Any] = {}
     if metadata:
         # scrub_dict aceita dict[str, object]; nossa metadata é dict[str, Any].
-        scrubbed_meta = scrub_dict(metadata)  # type: ignore[arg-type]
+        scrubbed_meta = scrub_dict(metadata)
 
     row = AuditLogRow(
         actor=actor,

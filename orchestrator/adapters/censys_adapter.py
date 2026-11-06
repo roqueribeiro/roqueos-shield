@@ -56,7 +56,7 @@ class CensysAdapter:
         if not (self.api_id and self.api_secret):
             return False
         try:
-            from censys.search import CensysHosts  # type: ignore[import-not-found]
+            from censys.search import CensysHosts
 
             cliente = CensysHosts(api_id=self.api_id, api_secret=self.api_secret)
             conta = getattr(cliente, "account", None)
@@ -71,7 +71,7 @@ class CensysAdapter:
             return False
 
     async def start_scan(self, target: Target, options: dict[str, Any]) -> ScanHandle:
-        from censys.search import CensysHosts  # type: ignore[import-not-found]
+        from censys.search import CensysHosts
 
         query = options.get("query") or target.value
         hosts = CensysHosts(api_id=self.api_id, api_secret=self.api_secret)

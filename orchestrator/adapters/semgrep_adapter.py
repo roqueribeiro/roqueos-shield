@@ -123,9 +123,9 @@ def _linguagens_do_checkout(raiz: Path, teto: int = 20000) -> set[str]:
     regra de linguagem ausente não acharia nada mesmo.
     """
     por_ext: dict[str, str] = {}
-    for ling, exts in _LINGUAGENS.items():
+    for lang, exts in _LINGUAGENS.items():
         for e in exts:
-            por_ext[e] = ling
+            por_ext[e] = lang
     achadas: set[str] = set(_SEMPRE)
     vistos = 0
     for caminho in raiz.rglob("*"):
