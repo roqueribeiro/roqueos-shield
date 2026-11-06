@@ -54,6 +54,13 @@ def scan(
     ] = False,
     skip_ai: Annotated[bool, typer.Option(help="pula triagem AI")] = False,
     active_zap: Annotated[bool, typer.Option(help="ZAP active scan (mais agressivo)")] = False,
+    ajax: Annotated[
+        bool | None,
+        typer.Option(
+            help="AJAX spider pra SPA (JavaScript). Default: acompanha --active-zap, "
+            "porque active scan sem ajax nao acha nada numa SPA.",
+        ),
+    ] = None,
 ) -> None:
     """Roda Nmap + ZAP contra o alvo, triagem AI e gera relatorio HTML."""
     _setup_logging()
@@ -69,7 +76,10 @@ def scan(
     console.print(f"  asset_type={t.asset_type} criticality={t.criticality} pii={t.contains_pii}")
     console.print()
 
-    options = {"zap": {"active": active_zap}}
+    # ajax acompanha o active por default: numa SPA (Juice Shop e cia.) o active scan
+    # sem o ajax spider nao enxerga rota nenhuma e o relatorio sai vazio.
+    ajax_on = active_zap if ajax is None else ajax
+    options = {"zap": {"active": active_zap, "ajax": ajax_on}}
     result = asyncio.run(run_scan(t, skip_ai=skip_ai, options=options))
 
     table = Table(title="Findings — resumo")

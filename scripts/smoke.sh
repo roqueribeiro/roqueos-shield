@@ -36,7 +36,10 @@ for i in {1..60}; do
 done
 
 echo "==> [5/5] Disparando scan via CLI (síncrono, gera HTML)"
-$COMPOSE run --rm orchestrator scan "http://juice-shop:3000" --asset-type url --criticality medium "$@"
+# Juice Shop é uma SPA Angular: sem --active-zap (que agora liga o AJAX spider junto) o
+# scan fecha com ZERO achados mesmo o alvo sendo cheio de vulnerabilidade. O smoke roda
+# ativo de propósito, porque o ponto dele é PROVAR que a ferramenta acha de verdade.
+$COMPOSE run --rm orchestrator scan "http://juice-shop:3000" --asset-type url --criticality medium --active-zap "$@"
 
 echo ""
 echo "==> DONE. Veja o relatório em reports/scan-*.html"
