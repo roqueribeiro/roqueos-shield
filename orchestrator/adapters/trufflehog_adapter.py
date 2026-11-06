@@ -30,6 +30,23 @@ from orchestrator.domain.schemas import (
 log = structlog.get_logger(__name__)
 
 
+def _to_git_uri(value: str) -> str:
+    """trufflehog `git` exige um URI; caminho de sistema de arquivos cru morre.
+
+    `trufflehog git /repo` sai com `unsupported Git URI` (rc=1), o scan falha e o
+    vetor de secret verificado some sem ninguém ver. Alvo remoto (http(s)://,
+    git@host:owner/repo, ssh://, git://, file://) passa intacto; caminho local
+    vira `file://<abspath>` pra o trufflehog ler a história git do working copy.
+    """
+    v = value.strip()
+    lowered = v.lower()
+    if lowered.startswith(("http://", "https://", "ssh://", "git://", "file://")) or v.startswith(
+        "git@"
+    ):
+        return v
+    return Path(v).resolve().as_uri()
+
+
 class TrufflehogAdapter:
     name = "trufflehog"
 
@@ -70,7 +87,12 @@ class TrufflehogAdapter:
         # você quiser só incidente confirmado.
         only_verified = bool(options.get("only_verified", False))
 
-        cmd = [self.bin, "git", target.value, "--json"]
+        # `--no-update`: egress fechado por padrão (regra 60). Sem isso o updater do
+        # trufflehog tenta trocar o binário na partida, bate na rede/permissão
+        # restrita do ambiente-alvo, sai 1 e o scan inteiro falha calado. Medido:
+        # `trufflehog git file://... --json` -> rc=1 "trufflehog updater: cannot move
+        # binary"; com `--no-update` -> rc=0.
+        cmd = [self.bin, "git", _to_git_uri(target.value), "--json", "--no-update"]
         if only_verified:
             cmd.append("--only-verified")
         if since := options.get("since_commit"):
