@@ -58,7 +58,9 @@ class ZAPAdapter:
     def __init__(self, base_url: str, api_key: str = "") -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
-        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=30.0)
+        # 60s (e não 30): sob o AJAX spider crawleando uma SPA grande, o thread da API
+        # do daemon satura e as chamadas de status demoram. O poll ainda tolera timeout.
+        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=60.0)
         # mapa: native_id -> {"spider_id": ..., "ascan_id": ..., "url": ..., "active": bool}
         self._scans: dict[str, dict[str, Any]] = {}
 
@@ -204,29 +206,67 @@ class ZAPAdapter:
 
     async def _iniciar_ativo_ou_passivo(self, state: dict[str, Any]) -> ScanStatus:
         """Depois da descoberta (spider + ajax): dispara o active scan, ou vai esperar a
-        fila passiva. Um lugar só decide, chamado pelo fim do spider e pelo fim do ajax."""
-        if state["active"]:
+        fila passiva. Um lugar só decide, chamado pelo fim do spider e pelo fim do ajax.
+
+        O active scan tem o MESMO retry do spider pro quirk do `scan="0"`: logo depois do
+        AJAX spider, com o browser headless ainda liberando memória, o ZAP devolve "0" pra
+        ação de ascan uma vez e aceita na segunda. Sem o retry, o scan morria aqui com
+        `ascan_id_invalid` num alvo que ia ser varrido sem problema 5s depois (um FAILED
+        que não era do alvo, era do timing). Duas recusas seguidas aí sim é FAILED de
+        verdade (contrato do silêncio: vetor NÃO verificado, nunca "limpo" calado)."""
+        if not state["active"]:
+            state["phase"] = "passive_wait"
+            return ScanStatus.RUNNING
+        ascan_id = ""
+        for attempt in (1, 2):
             ascan = await self._get(
                 "/JSON/ascan/action/scan/", url=state["url"], recurse="true"
             )
             ascan_id = str(ascan.get("scan", ""))
-            if not ascan_id.isdigit() or int(ascan_id) < 1:
-                log.error("zap.ascan_id_invalid", got=ascan_id)
-                return ScanStatus.FAILED
-            state["ascan_id"] = ascan_id
-            state["phase"] = "ascan"
-            log.info("zap.ascan_started", scan_id=state["ascan_id"])
-            return ScanStatus.RUNNING
-        state["phase"] = "passive_wait"
-        return ScanStatus.RUNNING
+            if ascan_id.isdigit() and int(ascan_id) >= 1:
+                state["ascan_id"] = ascan_id
+                state["phase"] = "ascan"
+                log.info("zap.ascan_started", scan_id=state["ascan_id"])
+                return ScanStatus.RUNNING
+            log.warning("zap.ascan_id_invalid", got=ascan_id, attempt=attempt)
+            if attempt == 1:
+                await self._acessar_alvo(state["url"])  # reseta o estado interno do ZAP
+        log.error("zap.ascan_failed", got=ascan_id)
+        return ScanStatus.FAILED
 
     async def _start_ajax(self, state: dict[str, Any]) -> ScanStatus:
         """Dispara o AJAX spider (browser headless) pra percorrer uma SPA.
+
+        Antes de iniciar, limita o footprint do crawl: quantos browsers headless sobem, a
+        profundidade, quantos estados da SPA visitar e por quanto tempo. O motivo é
+        memória. O default do AJAX spider é UM browser por core (8+ Firefox num Mac) e
+        espaço de estados ILIMITADO: o Crawljax renderiza estado após estado e a árvore de
+        processos do Firefox cresce sem teto até estourar a RAM da VM do Docker, e o
+        container do ZAP morre por OOM (exit 137) no meio do crawl. Do lado do poll isso
+        chegava como timeout persistente e derrubava o scan (o alvo parecia "não
+        verificado" sem que a causa fosse óbvia). Um crawler de SPA sem teto estoura
+        QUALQUER caixa de memória fixa; o teto de profundidade, de estados e de tempo é o
+        que segura o pico, não o número de browsers sozinho (o Firefox acumula memória por
+        estado renderizado, ~20 MB/s numa SPA grande, e um crawl longo rasteja até o teto
+        da VM). Os limites default (profundidade 4, 25 estados, 3 min) alcançam as rotas do
+        Juice Shop e cia. sem varrer a SPA inteira, e cabem numa VM de 8 GB. Ambiente com
+        mais RAM afrouxa via options. O ajuste é best-effort: add-on antigo que não conhece
+        a opção vira aviso, nunca falha o scan (o crawl ainda roda, só sem aquele teto).
 
         Se o add-on `spiderAjax` não estiver na imagem do ZAP, iniciar falha. Isso NÃO
         pode virar scan "limpo" calado numa SPA: a recusa vira lacuna de cobertura
         declarada e o scan segue pro active/passive com o aviso preservado no relatório.
         """
+        for opcao, valor in (
+            ("setOptionNumberOfBrowsers", str(state.get("ajax_browsers", 1))),
+            ("setOptionMaxCrawlDepth", str(state.get("ajax_max_depth", 4))),
+            ("setOptionMaxCrawlStates", str(state.get("ajax_max_states", 25))),
+            ("setOptionMaxDuration", str(state.get("ajax_max_duration_min", 3))),
+        ):
+            try:
+                await self._get(f"/JSON/ajaxSpider/action/{opcao}/", Integer=valor)
+            except Exception as e:  # noqa: BLE001  (teto de recurso é best-effort)
+                log.warning("zap.ajax_option_failed", opcao=opcao, valor=valor, error=str(e))
         try:
             await self._get(
                 "/JSON/ajaxSpider/action/scan/",
@@ -256,6 +296,7 @@ class ZAPAdapter:
         try:
             if state["phase"] == "spider":
                 s = await self._get("/JSON/spider/view/status/", scanId=str(state["spider_id"]))
+                state["poll_errors"] = 0  # o daemon respondeu: zera a sequência de soluços
                 progress = int(s.get("status", "0"))
                 if progress >= 100:
                     # SPA (Angular/React/Vue): o spider tradicional mal enxerga rotas, então
@@ -270,12 +311,14 @@ class ZAPAdapter:
             if state["phase"] == "ajax":
                 # o AJAX spider reporta "running"/"stopped", não porcentagem.
                 s = await self._get("/JSON/ajaxSpider/view/status/")
+                state["poll_errors"] = 0  # respondeu: zera a sequência de soluços
                 if str(s.get("status", "running")).lower() == "stopped":
                     return await self._iniciar_ativo_ou_passivo(state)
                 return ScanStatus.RUNNING
 
             if state["phase"] == "ascan":
                 s = await self._get("/JSON/ascan/view/status/", scanId=str(state["ascan_id"]))
+                state["poll_errors"] = 0  # respondeu: zera a sequência de soluços
                 progress = int(s.get("status", "0"))
                 if progress >= 100:
                     state["phase"] = "passive_wait"
@@ -289,6 +332,7 @@ class ZAPAdapter:
                 # JS sem o ajax spider), a fila já nasce zerada e o scan fecharia
                 # "limpo" sem ter visitado uma única URL. Por isso conta as URLs.
                 pscan = await self._get("/JSON/pscan/view/recordsToScan/")
+                state["poll_errors"] = 0  # respondeu: zera a sequência de soluços
                 records = int(pscan.get("recordsToScan", "0"))
                 if records == 0:
                     state["urls_rastreadas"] = await self._contar_urls(state["url"])
@@ -299,6 +343,28 @@ class ZAPAdapter:
             if state["phase"] == "done":
                 return ScanStatus.DONE
 
+        except (httpx.TimeoutException, httpx.TransportError) as e:
+            # ZAP fica instável sob carga: o AJAX spider numa SPA satura o thread da API do
+            # daemon (timeout) e a pressão de memória faz o DNS do Docker oscilar (name
+            # resolution). Um soluço isolado NÃO é "scan falhou": conta os CONSECUTIVOS e
+            # tolera alguns; qualquer poll que volta a responder zera o contador (nas fases
+            # acima), então isto é streak de verdade, não soma do scan inteiro. Só reprova
+            # se o daemon ficar mudo de fato. É espera contada, não silêncio.
+            state["poll_errors"] = state.get("poll_errors", 0) + 1
+            log.warning(
+                "zap.poll_transiente",
+                error=str(e) or type(e).__name__,
+                phase=state.get("phase"),
+                consecutivos=state["poll_errors"],
+            )
+            if state["poll_errors"] >= 12:
+                log.error(
+                    "zap.poll_failed",
+                    error="ZAP parou de responder (timeouts persistentes)",
+                    phase=state.get("phase"),
+                )
+                return ScanStatus.FAILED
+            return ScanStatus.RUNNING
         except Exception as e:  # noqa: BLE001
             log.error("zap.poll_failed", error=str(e), phase=state.get("phase"))
             return ScanStatus.FAILED

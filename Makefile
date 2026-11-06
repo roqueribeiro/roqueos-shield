@@ -16,7 +16,7 @@ SHELL := /usr/bin/env bash
 
 # --env-file e --project-directory garantem que .env do CWD seja lido,
 # mesmo com -f apontando pra docker/.
-COMPOSE_FLAGS := --env-file .env --project-directory .
+COMPOSE_FLAGS := --env-file .env --project-directory docker
 COMPOSE_BASE := docker compose $(COMPOSE_FLAGS) -f docker/compose.yml
 COMPOSE_FULL := $(COMPOSE_BASE) -f docker/compose.scanners.yml -f docker/compose.lab.yml
 COMPOSE_GREENBONE := $(COMPOSE_BASE) -f docker/compose.greenbone.yml

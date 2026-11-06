@@ -6,7 +6,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-COMPOSE="docker compose --env-file .env --project-directory . -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml"
+# project-directory é `docker` (não `.`): os compose usam caminhos `../` relativos
+# à pasta docker/, e o Compose v5 resolve relativo ao project-directory. Com `.`
+# (raiz) o `context: ..` virava workspaces/ e o build quebrava.
+COMPOSE="docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml"
 PROFILES="--profile default --profile scanners --profile lab"
 
 echo "==> [1/5] Verificando .env"
