@@ -1,7 +1,12 @@
 """OWASP ZAP adapter — drives ZAP daemon via HTTP API.
 
-Baseline (fase 1): spider + passive scan only.
-Active scan é opt-in via options['active']=True (mais lento, blast radius maior).
+Fases: traditional spider, AJAX spider (opt-in), active scan (opt-in), passive scan.
+
+- `options['active']=True` liga o active scan (injeta payloads reais; blast radius maior).
+- `options['ajax']=True` liga o AJAX spider, que sobe um browser headless pra descobrir
+  rotas que o spider tradicional não enxerga numa aplicação 100% JavaScript (Juice Shop,
+  e a maioria dos apps Angular/React/Vue). Sem ele, o active scan não tem o que atacar
+  numa SPA e o relatório sai vazio SEM a aplicação ter sido de fato percorrida.
 """
 
 from __future__ import annotations
@@ -77,6 +82,7 @@ class ZAPAdapter:
 
         url = self._ensure_url(target.value)
         active = bool(options.get("active", False))
+        ajax = bool(options.get("ajax", False))
         max_children = options.get("max_children", "10")
         headers = options.get("headers") or {}
         openapi_url = options.get("openapi_url")
@@ -126,13 +132,15 @@ class ZAPAdapter:
             "ascan_id": None,
             "url": url,
             "active": active,
+            "ajax": ajax,
             "phase": "spider",
+            "gaps": [],
         }
 
         return ScanHandle(
             adapter=self.name,
             native_id=native_id,
-            metadata={"url": url, "active": active, "spider_id": spider_id},
+            metadata={"url": url, "active": active, "ajax": ajax, "spider_id": spider_id},
         )
 
     async def _acessar_alvo(self, url: str) -> None:
@@ -194,6 +202,52 @@ class ZAPAdapter:
             "verifique se o daemon não foi reiniciado / sessão corrompida"
         )
 
+    async def _iniciar_ativo_ou_passivo(self, state: dict[str, Any]) -> ScanStatus:
+        """Depois da descoberta (spider + ajax): dispara o active scan, ou vai esperar a
+        fila passiva. Um lugar só decide, chamado pelo fim do spider e pelo fim do ajax."""
+        if state["active"]:
+            ascan = await self._get(
+                "/JSON/ascan/action/scan/", url=state["url"], recurse="true"
+            )
+            ascan_id = str(ascan.get("scan", ""))
+            if not ascan_id.isdigit() or int(ascan_id) < 1:
+                log.error("zap.ascan_id_invalid", got=ascan_id)
+                return ScanStatus.FAILED
+            state["ascan_id"] = ascan_id
+            state["phase"] = "ascan"
+            log.info("zap.ascan_started", scan_id=state["ascan_id"])
+            return ScanStatus.RUNNING
+        state["phase"] = "passive_wait"
+        return ScanStatus.RUNNING
+
+    async def _start_ajax(self, state: dict[str, Any]) -> ScanStatus:
+        """Dispara o AJAX spider (browser headless) pra percorrer uma SPA.
+
+        Se o add-on `spiderAjax` não estiver na imagem do ZAP, iniciar falha. Isso NÃO
+        pode virar scan "limpo" calado numa SPA: a recusa vira lacuna de cobertura
+        declarada e o scan segue pro active/passive com o aviso preservado no relatório.
+        """
+        try:
+            await self._get(
+                "/JSON/ajaxSpider/action/scan/",
+                url=state["url"],
+                inScope="false",
+                subtreeOnly="false",
+            )
+        except Exception as e:  # noqa: BLE001
+            gaps = state.setdefault("gaps", [])
+            gaps.append(
+                "o AJAX spider foi solicitado mas o ZAP recusou iniciá-lo "
+                f"({e}); numa aplicação 100% JavaScript (SPA) as rotas podem não ter sido "
+                "percorridas e os alertas abaixo podem estar incompletos. Verifique se o "
+                "add-on 'spiderAjax' está presente na imagem do ZAP."
+            )
+            log.warning("zap.ajax_unavailable", error=str(e))
+            return await self._iniciar_ativo_ou_passivo(state)
+        state["phase"] = "ajax"
+        log.info("zap.ajax_started", url=state["url"])
+        return ScanStatus.RUNNING
+
     async def poll(self, handle: ScanHandle) -> ScanStatus:
         state = self._scans.get(handle.native_id)
         if state is None:
@@ -204,21 +258,20 @@ class ZAPAdapter:
                 s = await self._get("/JSON/spider/view/status/", scanId=str(state["spider_id"]))
                 progress = int(s.get("status", "0"))
                 if progress >= 100:
-                    if state["active"]:
-                        # dispara active scan
-                        ascan = await self._get(
-                            "/JSON/ascan/action/scan/", url=state["url"], recurse="true"
-                        )
-                        ascan_id = str(ascan.get("scan", ""))
-                        if not ascan_id.isdigit() or int(ascan_id) < 1:
-                            log.error("zap.ascan_id_invalid", got=ascan_id)
-                            return ScanStatus.FAILED
-                        state["ascan_id"] = ascan_id
-                        state["phase"] = "ascan"
-                        log.info("zap.ascan_started", scan_id=state["ascan_id"])
-                        return ScanStatus.RUNNING
-                    state["phase"] = "passive_wait"
-                    return ScanStatus.RUNNING
+                    # SPA (Angular/React/Vue): o spider tradicional mal enxerga rotas, então
+                    # o AJAX spider roda ANTES do active scan pra povoar a árvore com as URLs
+                    # que só aparecem via JS. Sem isto o active não tem o que atacar e o
+                    # relatório sai "limpo" numa app vulnerável.
+                    if state.get("ajax"):
+                        return await self._start_ajax(state)
+                    return await self._iniciar_ativo_ou_passivo(state)
+                return ScanStatus.RUNNING
+
+            if state["phase"] == "ajax":
+                # o AJAX spider reporta "running"/"stopped", não porcentagem.
+                s = await self._get("/JSON/ajaxSpider/view/status/")
+                if str(s.get("status", "running")).lower() == "stopped":
+                    return await self._iniciar_ativo_ou_passivo(state)
                 return ScanStatus.RUNNING
 
             if state["phase"] == "ascan":
@@ -280,7 +333,9 @@ class ZAPAdapter:
         pagina = 500
         teto = int(state.get("max_alerts", 10000))
         alertas: list[dict[str, Any]] = []
-        gaps: list[str] = []
+        # lacunas acumuladas durante o scan (ex.: AJAX spider indisponível) entram antes
+        # das detectadas aqui, pra não sumirem do relatório.
+        gaps: list[str] = list(state.get("gaps", []))
         if rastreadas < 0:
             # `-1` = não deu para contar (o daemon recusou a chamada). O comentário do
             # `_contar_urls` está certo em não AFIRMAR que rastreou — mas seguir em
