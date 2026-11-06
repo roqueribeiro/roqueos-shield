@@ -93,12 +93,15 @@ inclusive toda recusa, vai para a trilha por `ExecDecision.to_audit()`.
   <img alt="Kali toolbox e a coleira do agente" src="docs/assets/diagrams/kali-cai-agente-light.svg">
 </picture>
 
-**O que ainda não é, dito aqui para ninguém descobrir em produção:** o container
-`cai-expert` é um stub declarado — o Dockerfile termina a instalação com `|| true` e
-o compose diz isso no próprio cabeçalho — e `_cai_framework_available()` hoje devolve
-apenas `bool(settings.AGENT_ENABLED)`, sem conferir se o framework está mesmo
-instalado. O executor e a coleira são reais e testados; o container empacotado do
-agente, não.
+**De onde o agente veio, dito aqui para ninguém precisar cavar o histórico:** os
+agentes nasceram em cima do [CAI, o framework Cybersecurity AI](https://github.com/aliasrobotics/cai).
+Hoje o laço ReAct é do próprio projeto: `litellm` mais o executor acima, ligado por
+padrão e em `dry_run` até alguém dizer o contrário. O extra `agentic`, que instalava o
+`cai-framework`, saiu em 23/10/2026, porque a última versão dele (0.5.10) tem o
+GHSA-4996-996j-2m9r e fixava `openai==1.75`, o que prendia o `litellm` numa versão
+vulnerável; nada importa o pacote. O laço, o executor e a coleira são reais e
+testados. O container `cai-expert` é o que sobrou daquela fase: o Dockerfile ainda
+termina a instalação com `|| true`, e nada no pipeline chama ele.
 
 ---
 
@@ -332,8 +335,9 @@ problema que o `check_docs_fresh.py` existe para pegar.)*
   não consegue dizer qual build o produziu.
 - **`render_pdf()` não tem chamador** — o extra `[pdf]` instala o WeasyPrint e nada
   o invoca. PDF e CSV que aparecem na tela do RoqueShield são montados no front.
-- **`cai-expert` é stub** — o fallback funciona; a integração completa com o
-  `cai-framework`, não.
+- **`cai-expert` é legado** — sobrou da fase do `cai-framework`; nada no pipeline
+  chama o container, e o laço do agente roda no próprio orchestrator, na rota de
+  investigação.
 - **Dashboard sem auth visual** — token por `?token=...` na URL ou localStorage.
   OIDC segue como TODO.
 - **Log ao vivo reinicia com o processo** — ring buffer em memória; o histórico fica

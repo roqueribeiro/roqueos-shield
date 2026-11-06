@@ -56,7 +56,9 @@ scan takes half an hour.
 
 Note what the diagram marks in red: `cai-expert` is a **declared stub**. Its compose
 file says so in its own header, and its Dockerfile ends the install with `|| true`,
-so the image builds even when the install fails.
+so the image builds even when the install fails. It is legacy from the period when
+the agent ran on `cai-framework`: nothing calls it, and the agent loop runs inside the
+orchestrator, behind the investigate route.
 
 ---
 
