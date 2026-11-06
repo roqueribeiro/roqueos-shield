@@ -354,6 +354,7 @@ problema que o `check_docs_fresh.py` existe para pegar.)*
 | [docs/runbook.md](docs/runbook.md) | pt-BR | operação, troubleshooting, armadilhas |
 | [docs/threat-model.md](docs/threat-model.md) | pt-BR | atores, cenários, mitigações |
 | [docs/ai-fix-bundle-spec.md](docs/ai-fix-bundle-spec.md) | pt-BR | o contrato do bundle, schema 1.0.0 |
+| [docs/criterios-de-teste.md](docs/criterios-de-teste.md) | pt-BR | os critérios de teste que todo relatório tem que passar, camada por camada |
 
 ### Regerando os diagramas
 

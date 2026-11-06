@@ -296,6 +296,7 @@ Known inconsistencies, listed rather than hidden:
 | [docs/runbook.md](docs/runbook.md) | pt-BR | operations, troubleshooting, common pitfalls |
 | [docs/threat-model.md](docs/threat-model.md) | pt-BR | actors, scenarios, mitigations |
 | [docs/ai-fix-bundle-spec.md](docs/ai-fix-bundle-spec.md) | pt-BR | the bundle contract, schema 1.0.0 |
+| [docs/criterios-de-teste.md](docs/criterios-de-teste.md) | pt-BR | the test criteria every report must pass, layer by layer |
 
 ### Regenerating the diagrams
 
