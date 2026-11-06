@@ -7,6 +7,23 @@ services:
   zap:
     image: zaproxy/zap-stable:latest
     container_name: cai-zap
+    # Teto de memória do container + restart. O AJAX spider (browser headless) pode
+    # estourar a RAM sob um alvo pesado; sem teto, o estouro derrubava a VM INTEIRA do
+    # Docker e levava junto postgres/redis/alvo (OOM da VM, não do container). Com o teto,
+    # um estouro é contido no cgroup do ZAP e só o ZAP reinicia, o resto da stack fica de
+    # pé. 6g cabe numa VM de 8g deixando folga pros outros containers (postgres/redis/
+    # alvo/orchestrator somam ~1,3g). O ajax é limitado no zap_adapter (1 browser,
+    # profundidade e estados) e fica ~4g; o active scan guarda a sessão inteira (as URLs
+    # que o ajax achou) em memória e precisa de mais, por isso 6g e não 5g. Box menor:
+    # suba a RAM da VM do Docker ou afrouxe por aqui. O teto é a rede de proteção.
+    mem_limit: 6g
+    restart: unless-stopped
+    # O AJAX spider sobe um browser headless (Firefox). O renderer do browser usa
+    # /dev/shm, que no Docker tem só 64 MB por padrão (pouco pra uma SPA grande), e o
+    # renderer quebra no meio do crawl. 1 GB é o padrão recomendado pra browser em
+    # container. (O número de browsers em paralelo é limitado no zap_adapter, pra não
+    # estourar a RAM da VM; ver _start_ajax.)
+    shm_size: "1gb"
     # A imagem traz ZAP_PORT=8080 e o HEALTHCHECK faz curl nessa porta. O daemon sobe na
     # 8090, então sem isto o container fica "unhealthy" para sempre.
     environment:

@@ -130,6 +130,10 @@ def apply_profile(options: dict, profile: str) -> dict:
     if (profile or "").strip().lower() in _ACTIVE_PROFILES:
         zap = dict(out.get("zap") or {})
         zap.setdefault("active", True)
+        # Active scan sem AJAX spider não acha nada numa SPA (Juice Shop e a maioria dos
+        # apps web modernos): o spider tradicional não enxerga rotas em JS, então o active
+        # não tem o que atacar. Profile ativo liga os dois juntos.
+        zap.setdefault("ajax", True)
         out["zap"] = zap
     return out
 
