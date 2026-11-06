@@ -121,6 +121,10 @@ make migrate     # alembic upgrade head
 make smoke       # ponta a ponta: varre o Juice Shop e produz um relatório HTML
 ```
 
+Quem não quer buildar na mão, a esteira publica a imagem do orchestrator a cada push na
+`main`: `docker pull ghcr.io/roqueribeiro/cai-orchestrator:latest` (ou a tag do commit).
+O `make build` segue valendo para quem vai mexer no código.
+
 Depois, `http://127.0.0.1:8080/ui/` para o dashboard, ou `/docs` para o OpenAPI.
 
 **Soberania de dado é um interruptor, não uma esperança.** Com modelo local (Ollama
