@@ -11,7 +11,10 @@ Fases: traditional spider, AJAX spider (opt-in), active scan (opt-in), passive s
 
 from __future__ import annotations
 
+import re
+import time
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx
@@ -48,6 +51,20 @@ _ZAP_CONFIDENCE: dict[str, Confidence] = {
     "High": Confidence.FIRM,
     "Confirmed": Confidence.CERTAIN,
 }
+
+
+# O daemon ZAP é um só e é compartilhado pelos scans que o worker roda em paralelo
+# (`max_jobs` do arq). Regra de replacer e contexto vivem no daemon, não no scan:
+# tudo o que este adapter cria leva o nome do scan e a hora, é removido pelo próprio
+# scan no `cleanup`, e o que sobra de um scan que morreu no meio é reconhecido pela
+# idade embutida no nome.
+_REGRA_AUTH = "cai-auth-"
+_CONTEXTO = "cai-ctx-"
+_VELHO_S = 2 * 3600  # acima do job_timeout do arq (3600s): nenhum scan vivo usa mais
+# O spider segue o link de "sair", o servidor destrói a sessão, e o resto do scan roda
+# sem login com cara de cobertura completa. Num scan autenticado, logout fica de fora.
+_LOGOUT = r"(?i).*(log-?out|log-?off|sign-?out|sign-?off|/sair\b|encerrar-?sess).*"
+_PORTA_PADRAO = {"http": 80, "https": 443}
 
 
 class ZAPAdapter:
@@ -88,47 +105,110 @@ class ZAPAdapter:
         max_children = options.get("max_children", "10")
         headers = options.get("headers") or {}
         openapi_url = options.get("openapi_url")
-
-        # Authenticated scanning: inject the auth headers into EVERY request via
-        # ZAP's replacer so the spider + active scan reach behind-login surfaces.
-        # Best-effort: the value goes only to ZAP (never logged/persisted), and a
-        # missing replacer add-on must NOT fail the scan.
-        for name, value in headers.items():
-            try:
-                await self._get(
-                    "/JSON/replacer/action/addRule/",
-                    description=f"cai-auth-{name}",
-                    enabled="true",
-                    matchType="REQ_HEADER",
-                    matchString=name,
-                    matchRegex="false",
-                    replacement=value,
-                )
-            except Exception as e:  # noqa: BLE001 — degrade gracefully (no add-on)
-                log.warning("zap.replacer_failed", header=name, error=str(e))
-        if headers:
-            # log the header NAMES only — never the secret values.
-            log.info("zap.auth_headers_applied", headers=sorted(headers.keys()))
-
-        # OpenAPI/Swagger import: enumerate the real API surface (not just crawled
-        # links) so the scan tests the documented endpoints.
-        if openapi_url:
-            try:
-                await self._get(
-                    "/JSON/openapi/action/importUrl/", url=openapi_url, hostOverride=url
-                )
-                log.info("zap.openapi_imported", spec=openapi_url)
-            except Exception as e:  # noqa: BLE001
-                log.warning("zap.openapi_import_failed", error=str(e))
-
-        # 1. acessa a URL pra registrar no site tree
-        await self._acessar_alvo(url)
-
-        # 2. spider — com retry se ZAP retornar scan_id inválido (bug pós newSession)
-        spider_id = await self._start_spider_with_retry(url, max_children)
-        log.info("zap.spider_started", scan_id=spider_id, url=url)
+        exclude = [str(x) for x in (options.get("exclude") or [])]
+        if headers and _LOGOUT not in exclude:
+            exclude.append(_LOGOUT)
 
         native_id = str(uuid4())
+        escopo = self._escopo(url)
+        # Antes de criar qualquer coisa: o que sobrou no daemon de um scan que morreu
+        # no meio (worker reiniciado, OOM) não pode emprestar credencial a este alvo.
+        await self._purgar_restos(escopo)
+
+        regras: list[str] = []
+        contexto: str | None = None
+        contexto_id: str | None = None
+        lacunas: list[str] = []
+        try:
+            # Authenticated scanning: o cabeçalho entra em todo request via replacer, pro
+            # spider e o active scan alcançarem o que fica atrás do login. A regra tem o
+            # nome deste scan e ESCOPO DE URL: só request para a origem deste alvo a
+            # recebe, nunca o de um scan vizinho no mesmo daemon. O valor vai só pro ZAP,
+            # nunca pra log nem pra banco.
+            for name, value in headers.items():
+                descricao = f"{_REGRA_AUTH}{int(time.time())}-{native_id[:8]}-{name}"
+                try:
+                    await self._get(
+                        "/JSON/replacer/action/addRule/",
+                        description=descricao,
+                        enabled="true",
+                        matchType="REQ_HEADER",
+                        matchString=name,
+                        matchRegex="false",
+                        replacement=value,
+                        url=escopo,
+                    )
+                except Exception as e:  # noqa: BLE001 — sem o add-on o scan segue, DECLARADO
+                    log.warning("zap.replacer_failed", header=name, error=str(e))
+                    lacunas.append(
+                        f"o scan pediu autenticação, mas o ZAP recusou o cabeçalho {name} "
+                        "(add-on replacer ausente?): a varredura rodou SEM login, e o que "
+                        "fica atrás da autenticação NÃO foi verificado."
+                    )
+                else:
+                    regras.append(descricao)
+            if headers:
+                # só os NOMES dos cabeçalhos, nunca o valor.
+                log.info("zap.auth_headers_applied", headers=sorted(headers.keys()))
+
+            # Exclusões num contexto só deste scan, que o spider, o ajax e o ascan usam.
+            # A lista global do ZAP (`excludeFromScan`) esconderia o caminho também dos
+            # scans vizinhos, e ninguém a limpava.
+            if exclude:
+                contexto = f"{_CONTEXTO}{int(time.time())}-{native_id[:8]}"
+                try:
+                    criado = await self._get(
+                        "/JSON/context/action/newContext/", contextName=contexto
+                    )
+                    contexto_id = str(criado.get("contextId", ""))
+                    if not contexto_id.isdigit():
+                        raise ValueError(f"newContext devolveu {criado!r}")
+                    await self._get(
+                        "/JSON/context/action/includeInContext/",
+                        contextName=contexto,
+                        regex=escopo,
+                    )
+                    for rx in exclude:
+                        await self._get(
+                            "/JSON/context/action/excludeFromContext/",
+                            contextName=contexto,
+                            regex=rx,
+                        )
+                except Exception as e:
+                    # Falha fechado: exclusão que não pegou varre justamente o que alguém
+                    # pediu pra não tocar (o logout de um scan autenticado, um endpoint
+                    # que apaga dado).
+                    raise ScanIntegrityError(
+                        f"o ZAP recusou montar as exclusões deste scan ({e}); sem elas o "
+                        "spider percorreria o que foi pedido para não tocar. O scan não "
+                        "roda."
+                    ) from e
+
+            # OpenAPI/Swagger import: enumera a superfície real da API (não só links).
+            if openapi_url:
+                try:
+                    await self._get(
+                        "/JSON/openapi/action/importUrl/", url=openapi_url, hostOverride=url
+                    )
+                    log.info("zap.openapi_imported", spec=openapi_url)
+                except Exception as e:  # noqa: BLE001 — segue, DECLARADO
+                    log.warning("zap.openapi_import_failed", error=str(e))
+                    lacunas.append(
+                        f"a especificação OpenAPI ({openapi_url}) não foi importada ({e}): "
+                        "endpoint documentado que nenhum link alcança NÃO foi testado."
+                    )
+
+            # 1. acessa a URL pra registrar no site tree
+            await self._acessar_alvo(url)
+
+            # 2. spider — com retry se ZAP retornar scan_id inválido (bug pós newSession)
+            spider_id = await self._start_spider_with_retry(url, max_children, contexto)
+        except BaseException:
+            # Sem handle o pipeline não chama `cleanup`: quem criou, desfaz.
+            await self._desfazer(regras, contexto)
+            raise
+        log.info("zap.spider_started", scan_id=spider_id, url=url)
+
         self._scans[native_id] = {
             "spider_id": spider_id,
             "ascan_id": None,
@@ -136,14 +216,105 @@ class ZAPAdapter:
             "active": active,
             "ajax": ajax,
             "phase": "spider",
-            "gaps": [],
+            "gaps": lacunas,
+            "regras": regras,
+            "contexto": contexto,
+            "contexto_id": contexto_id,
         }
 
         return ScanHandle(
             adapter=self.name,
             native_id=native_id,
-            metadata={"url": url, "active": active, "ajax": ajax, "spider_id": spider_id},
+            metadata={
+                "url": url,
+                "active": active,
+                "ajax": ajax,
+                "spider_id": spider_id,
+                "autenticado": bool(regras),
+            },
         )
+
+    async def cleanup(self, handle: ScanHandle) -> None:
+        """Tira do daemon o que este scan criou: a regra de auth e o contexto."""
+        state = self._scans.pop(handle.native_id, None) or {}
+        await self._desfazer(list(state.get("regras") or []), state.get("contexto"))
+
+    @staticmethod
+    def _escopo(url: str) -> str:
+        """Regex (Java, do ZAP) que casa só a origem do alvo: esquema, host e porta.
+
+        A porta padrão é opcional porque o ZAP às vezes guarda `http://host/` e às vezes
+        `http://host:80/` para o mesmo alvo: o escopo errado fazia a regra de auth não
+        casar e o scan "autenticado" rodar sem login.
+        """
+        p = urlsplit(url)
+        esquema = (p.scheme or "http").lower()
+        host = re.escape((p.hostname or "").lower())
+        padrao = _PORTA_PADRAO.get(esquema)
+        porta = f"(?::{padrao})?" if p.port in (None, padrao) else f":{p.port}"
+        return f"(?i)^{re.escape(esquema)}://{host}{porta}(?:[/?#].*)?$"
+
+    @staticmethod
+    def _velho(nome: str, prefixo: str, agora: float) -> bool:
+        """Nome sem idade (formato antigo) ou mais velho que o job mais longo: resto."""
+        cabeca = nome[len(prefixo) :].split("-", 1)[0]
+        return not cabeca.isdigit() or agora - int(cabeca) > _VELHO_S
+
+    async def _purgar_restos(self, escopo: str) -> None:
+        """Remove do daemon a regra de auth deixada por scan morto ou do mesmo alvo.
+
+        Falha fechado: se a lista de regras não pode ser lida, ou uma regra velha não
+        sai, este scan não começa, porque enviaria a credencial de outro scan.
+        """
+        agora = time.time()
+        try:
+            dados = await self._get("/JSON/replacer/view/rules/")
+        except httpx.HTTPStatusError as e:  # silencio-ok: sem o add-on replacer não há regra
+            if e.response.status_code not in (400, 404):
+                raise ScanIntegrityError(
+                    f"não deu para ler as regras de autenticação do ZAP ({e}): sem saber "
+                    "se sobrou credencial de outro scan, este não começa."
+                ) from e
+            dados = {}
+        except httpx.HTTPError as e:
+            raise ScanIntegrityError(
+                f"não deu para ler as regras de autenticação do ZAP ({e}): sem saber se "
+                "sobrou credencial de outro scan, este não começa."
+            ) from e
+        for regra in dados.get("rules") or []:
+            descricao = str((regra or {}).get("description", ""))
+            if not descricao.startswith(_REGRA_AUTH):
+                continue
+            mesmo_alvo = str((regra or {}).get("url", "")) == escopo
+            if mesmo_alvo or self._velho(descricao, _REGRA_AUTH, agora):
+                try:
+                    await self._get("/JSON/replacer/action/removeRule/", description=descricao)
+                except Exception as e:
+                    raise ScanIntegrityError(
+                        f"a regra de autenticação {descricao} de um scan anterior não saiu "
+                        f"do ZAP ({e}): seguir enviaria a credencial dela. Scan não iniciado."
+                    ) from e
+        # Contexto velho é só memória do daemon, não credencial: falhar aqui é aviso.
+        try:
+            lista = str((await self._get("/JSON/context/view/contextList/")).get("contextList", ""))
+            for nome in re.findall(rf"{_CONTEXTO}\d+-[0-9a-f]{{8}}", lista):
+                if self._velho(nome, _CONTEXTO, agora):
+                    await self._get("/JSON/context/action/removeContext/", contextName=nome)
+        except Exception as e:  # noqa: BLE001
+            log.warning("zap.contexto_velho_ficou", error=str(e))
+
+    async def _desfazer(self, regras: list[str], contexto: str | None) -> None:
+        """Remove a regra de auth e o contexto de um scan. Nunca levanta: é limpeza."""
+        for descricao in regras:
+            try:
+                await self._get("/JSON/replacer/action/removeRule/", description=descricao)
+            except Exception as e:  # noqa: BLE001 — escopada ao próprio alvo; a idade a remove
+                log.error("zap.regra_auth_ficou", regra=descricao, error=str(e))
+        if contexto:
+            try:
+                await self._get("/JSON/context/action/removeContext/", contextName=contexto)
+            except Exception as e:  # noqa: BLE001
+                log.warning("zap.contexto_ficou", contexto=contexto, error=str(e))
 
     async def _acessar_alvo(self, url: str) -> None:
         """Registra a URL na árvore do ZAP, com uma segunda tentativa.
@@ -174,7 +345,9 @@ class ZAPAdapter:
             "o scan NÃO verificou este vetor."
         )
 
-    async def _start_spider_with_retry(self, url: str, max_children: Any) -> str:
+    async def _start_spider_with_retry(
+        self, url: str, max_children: Any, contexto: str | None = None
+    ) -> str:
         """Inicia spider e valida que ZAP devolveu scan_id válido (>0).
 
         Quirk conhecido: após `newSession`, primeiro spider call pode retornar
@@ -186,6 +359,7 @@ class ZAPAdapter:
                 url=url,
                 maxChildren=str(max_children),
                 recurse="true",
+                **({"contextName": contexto} if contexto else {}),
             )
             spider_id = str(spider.get("scan", ""))
             if spider_id.isdigit() and int(spider_id) > 0:
@@ -237,7 +411,12 @@ class ZAPAdapter:
                 log.warning("zap.ascan_option_failed", opcao=opcao, valor=valor, error=str(e))
         ascan_id = ""
         for attempt in (1, 2):
-            ascan = await self._get("/JSON/ascan/action/scan/", url=state["url"], recurse="true")
+            ascan = await self._get(
+                "/JSON/ascan/action/scan/",
+                url=state["url"],
+                recurse="true",
+                **({"contextId": state["contexto_id"]} if state.get("contexto_id") else {}),
+            )
             ascan_id = str(ascan.get("scan", ""))
             if ascan_id.isdigit() and int(ascan_id) >= 1:
                 state["ascan_id"] = ascan_id
@@ -289,6 +468,7 @@ class ZAPAdapter:
                 url=state["url"],
                 inScope="false",
                 subtreeOnly="false",
+                **({"contextName": state["contexto"]} if state.get("contexto") else {}),
             )
         except Exception as e:  # noqa: BLE001
             gaps = state.setdefault("gaps", [])
