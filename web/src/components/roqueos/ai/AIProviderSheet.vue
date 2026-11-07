@@ -28,7 +28,7 @@
         <ROSButton variant="secondary" icon="refresh" :loading="buscando" @click="buscar">
           {{ t('shield.ia.listar') }}
         </ROSButton>
-        <span v-if="aviso" class="ai-sheet__aviso">{{ aviso }}</span>
+        <span v-if="aviso" class="ai-sheet__aviso" role="status">{{ aviso }}</span>
       </div>
 
       <ROSSelectField
@@ -146,7 +146,7 @@ async function buscar() {
     if ((r?.errors || []).includes(provedor.value)) aviso.value = t('shield.ia.listaCurada')
     else if (!opcoesDeModelo.value.length) aviso.value = t('shield.ia.semModelos')
   } catch {
-    aviso.value = t('shield.ia.semModelos')
+    aviso.value = t('shield.entrada.erroGenerico')
   } finally {
     buscando.value = false
   }
@@ -161,6 +161,7 @@ function salvar() {
     apiBase: provedor.value === 'local' ? apiBase.value : '',
     apiKey: chave.value,
   })
+  chave.value = ''
   emit('update:modelValue', false)
 }
 </script>

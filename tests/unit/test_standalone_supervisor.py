@@ -78,10 +78,61 @@ def test_shield_services_restringe(tmp_path: Path) -> None:
     assert [s.nome for s in sup.servicos(env, tmp_path)] == ["worker"]
 
 
-def test_so_quem_sobe_a_api_migra_e_so_em_postgres(tmp_path: Path) -> None:
+def test_so_quem_sobe_a_api_migra(tmp_path: Path) -> None:
     pg = {"REDIS_URL": "redis://r/0", "DATABASE_URL": "postgresql+asyncpg://u@db/x"}
     assert sup.precisa_migrar(pg, sup.servicos(pg, tmp_path)) is True
     so_worker = {**pg, "SHIELD_SERVICES": "worker"}
     assert sup.precisa_migrar(so_worker, sup.servicos(so_worker, tmp_path)) is False
     lite = {"REDIS_URL": "redis://r/0", "DATABASE_URL": "sqlite+aiosqlite:///x.db"}
-    assert sup.precisa_migrar(lite, sup.servicos(lite, tmp_path)) is False
+    assert sup.precisa_migrar(lite, sup.servicos(lite, tmp_path)) is True
+    lite_worker = {**lite, "SHIELD_SERVICES": "worker"}
+    assert sup.precisa_migrar(lite_worker, sup.servicos(lite_worker, tmp_path)) is False
+
+
+def test_sqlite_do_create_all_e_carimbado_antes_do_upgrade(tmp_path: Path) -> None:
+    import sqlite3
+
+    url = f"sqlite+aiosqlite:///{tmp_path / 'shield.db'}"
+    assert sup.sqlite_sem_versao(url) is False  # não existe: upgrade cria tudo
+    con = sqlite3.connect(tmp_path / "shield.db")
+    con.execute("create table scans (id text)")
+    con.commit()
+    assert sup.sqlite_sem_versao(url) is True  # create_all sem alembic: carimba
+    con.execute("create table alembic_version (version_num text)")
+    con.commit()
+    con.close()
+    assert sup.sqlite_sem_versao(url) is False  # já versionado: só upgrade
+    assert sup.sqlite_sem_versao("postgresql+asyncpg://u@db/x") is False
+
+
+def test_scanner_nao_herda_segredo_da_api() -> None:
+    env = {
+        "APP_TOKEN": "a",
+        "SESSION_SECRET": "s",
+        "SETUP_CODE": "c",
+        "SECRETS_KEY": "k",
+        "REDIS_PASSWORD": "r",
+        "REDIS_URL": "redis://:r@127.0.0.1:6379/0",
+        "ZAP_API_KEY": "z",
+        "DATABASE_URL": "postgresql://u:p@db/x",
+        "PATH": "/bin",
+    }
+    worker = sup.ambiente_de("worker", env)
+    assert not {"APP_TOKEN", "SESSION_SECRET", "SETUP_CODE", "REDIS_PASSWORD"} & set(worker)
+    assert worker["SECRETS_KEY"] == "k" and worker["ZAP_API_KEY"] == "z"
+    assert worker["REDIS_URL"] and worker["DATABASE_URL"]
+    for nome in ("redis", "zap"):
+        sobra = set(sup.ambiente_de(nome, env))
+        assert sobra == {"PATH"}, (nome, sobra)
+    assert sup.ambiente_de("orchestrator", env) == env
+
+
+def test_redis_embutido_com_senha_por_arquivo(tmp_path: Path) -> None:
+    env = sup.ambiente_base({"REDIS_PASSWORD": "segredo-redis", "PATH": ""}, tmp_path)
+    assert env["REDIS_URL"] == "redis://:segredo-redis@127.0.0.1:6379/0"
+    redis = next(s for s in sup.servicos(env, tmp_path) if s.nome == "redis")
+    assert "segredo-redis" not in " ".join(redis.argv)
+    conf = tmp_path / "secrets" / "redis.conf"
+    assert conf.read_text() == "requirepass segredo-redis\n"
+    assert oct(conf.stat().st_mode & 0o777) == "0o600"
+    assert str(conf) in redis.argv

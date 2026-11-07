@@ -136,7 +136,13 @@ async def get_principal(
                 user = await session.get(UserRow, UUID(claims["sub"]))
             except (ValueError, KeyError):
                 user = None
-            if user is not None and user.active:
+            # Versão da sessão: logout, troca de senha e desativação sobem a do usuário
+            # e derrubam todo JWT emitido antes. JWT antigo sem `sv` vale como 0.
+            if (
+                user is not None
+                and user.active
+                and int(claims.get("sv", 0)) == int(user.session_version or 0)
+            ):
                 return Principal(
                     id=str(user.id),
                     email=user.email,

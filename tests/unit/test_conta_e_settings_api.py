@@ -19,6 +19,7 @@ from orchestrator.config import settings
 from orchestrator.main import app
 
 SENHA = "senha-forte-do-admin"
+CODIGO = "codigo-de-primeiro-uso"
 
 
 @pytest.fixture
@@ -37,6 +38,11 @@ async def cliente(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncItera
     monkeypatch.setattr(settings, "SECRETS_KEY", Fernet.generate_key().decode())
     monkeypatch.setattr(settings, "SESSION_SECRET", secrets.token_hex(32))
     monkeypatch.setattr(rs, "_DO_AMBIENTE", frozenset())
+    monkeypatch.setattr(settings, "SETUP_CODE", CODIGO)
+    from orchestrator.api.routers import conta
+    from orchestrator.auth.limite import Freio
+
+    monkeypatch.setattr(conta, "freio", Freio())
     app.dependency_overrides[deps.get_session] = _sessao
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
         yield c
@@ -45,7 +51,9 @@ async def cliente(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncItera
 
 
 async def _setup(c: AsyncClient) -> None:
-    r = await c.post("/setup", json={"email": "Admin@X.com", "password": SENHA})
+    r = await c.post(
+        "/setup", json={"email": "Admin@X.com", "password": SENHA, "setup_code": CODIGO}
+    )
     assert r.status_code == 201, r.text
 
 
@@ -54,12 +62,16 @@ async def test_primeiro_uso_so_uma_vez(cliente: AsyncClient) -> None:
     await _setup(cliente)
     assert "rs_session" in cliente.cookies
     assert (await cliente.get("/setup")).json()["needs_setup"] is False
-    r = await cliente.post("/setup", json={"email": "outro@x.com", "password": SENHA})
+    r = await cliente.post(
+        "/setup", json={"email": "outro@x.com", "password": SENHA, "setup_code": CODIGO}
+    )
     assert r.status_code == 410
 
 
 async def test_setup_recusa_senha_curta(cliente: AsyncClient) -> None:
-    r = await cliente.post("/setup", json={"email": "a@x.com", "password": "curta"})
+    r = await cliente.post(
+        "/setup", json={"email": "a@x.com", "password": "curta", "setup_code": CODIGO}
+    )
     assert r.status_code == 422
     assert (await cliente.get("/setup")).json()["needs_setup"] is True
 
@@ -177,3 +189,109 @@ async def test_usuarios_com_senha_e_ultimo_admin(cliente: AsyncClient) -> None:
         "/auth/session", json={"email": "op@x.com", "password": "senha-do-operador"}
     )
     assert r.status_code == 200 and r.json()["role"] == "operator"
+
+
+async def test_setup_exige_codigo_ou_app_token(cliente: AsyncClient) -> None:
+    """Quem alcança a porta antes do dono não vira admin sem acesso ao container."""
+    sem = await cliente.post("/setup", json={"email": "a@x.com", "password": SENHA})
+    errado = await cliente.post(
+        "/setup", json={"email": "a@x.com", "password": SENHA, "setup_code": "chute"}
+    )
+    assert sem.status_code == errado.status_code == 403
+    assert (await cliente.get("/setup")).json()["needs_setup"] is True
+    ok = await cliente.post(
+        "/setup",
+        json={"email": "a@x.com", "password": SENHA},
+        headers={"X-API-Token": settings.APP_TOKEN},
+    )
+    assert ok.status_code == 201, ok.text
+
+
+async def test_setup_simultaneo_cria_um_admin_so(cliente: AsyncClient) -> None:
+    import asyncio
+
+    pedidos = [
+        cliente.post(
+            "/setup",
+            json={"email": f"a{i}@x.com", "password": SENHA, "setup_code": CODIGO},
+        )
+        for i in range(5)
+    ]
+    codigos = sorted(r.status_code for r in await asyncio.gather(*pedidos))
+    assert codigos.count(201) == 1, codigos
+    r = await cliente.get("/users", headers={"X-API-Token": settings.APP_TOKEN})
+    assert len(r.json()) == 1
+
+
+async def test_logout_e_troca_de_senha_derrubam_a_sessao(cliente: AsyncClient) -> None:
+    await _setup(cliente)
+    copiado = cliente.cookies["rs_session"]
+    assert (
+        await cliente.delete("/auth/session", headers={"X-RoqueShield": "1"})
+    ).status_code == 204
+    cliente.cookies.clear()
+    cliente.cookies.set("rs_session", copiado)
+    assert (await cliente.get("/auth/session")).status_code == 401
+
+    cliente.cookies.clear()
+    r = await cliente.post("/auth/session", json={"email": "admin@x.com", "password": SENHA})
+    assert r.status_code == 200
+    antes = cliente.cookies["rs_session"]
+    eu = (await cliente.get("/auth/session")).json()["id"]
+    r = await cliente.put(
+        f"/users/{eu}/password",
+        json={"password": "outra-senha-forte"},
+        headers={"X-API-Token": settings.APP_TOKEN},
+    )
+    assert r.status_code == 200
+    cliente.cookies.clear()
+    cliente.cookies.set("rs_session", antes)
+    assert (await cliente.get("/auth/session")).status_code == 401
+
+
+async def test_login_trava_depois_de_cinco_falhas(cliente: AsyncClient) -> None:
+    await _setup(cliente)
+    cliente.cookies.clear()
+    for _ in range(5):
+        r = await cliente.post(
+            "/auth/session", json={"email": "admin@x.com", "password": "errada-1234"}
+        )
+        assert r.status_code == 401
+    # Bloqueado: nem a senha certa entra até a espera passar.
+    r = await cliente.post("/auth/session", json={"email": "admin@x.com", "password": SENHA})
+    assert r.status_code == 429
+    assert int(r.headers["Retry-After"]) >= 1
+
+
+async def test_listar_modelos_nao_manda_chave_guardada_para_endereco_do_pedido(
+    cliente: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from orchestrator.standalone import modelos
+
+    vistos: list[dict] = []
+
+    async def falso(c, url, cab):  # type: ignore[no-untyped-def]
+        vistos.append({"url": url, **cab})
+        return ["m"]
+
+    monkeypatch.setattr(modelos, "_ids", falso)
+    monkeypatch.setattr(settings, "LLM_API_KEY", "chave-do-ambiente")
+    monkeypatch.setattr(settings, "LLM_API_BASE", "http://lm-local:1234/v1")
+    h = {"X-API-Token": settings.APP_TOKEN}
+    r = await cliente.post("/settings/ai/models", json={"apiBase": "http://atacante"}, headers=h)
+    assert r.status_code == 200
+    local = [v for v in vistos if v["url"].startswith("http://atacante")]
+    assert local and all("chave-do-ambiente" not in v.get("Authorization", "") for v in local)
+    # Com o endereço travado pelo ambiente, nem tenta.
+    monkeypatch.setattr(rs, "_DO_AMBIENTE", frozenset({"LLM_API_BASE"}))
+    r = await cliente.post("/settings/ai/models", json={"apiBase": "http://atacante"}, headers=h)
+    assert r.status_code == 409
+
+
+async def test_cabecalhos_de_seguranca(cliente: AsyncClient) -> None:
+    r = await cliente.get("/health")
+    assert r.headers["X-Content-Type-Options"] == "nosniff"
+    assert r.headers["X-Frame-Options"] == "DENY"
+    assert "frame-ancestors 'none'" in r.headers["Content-Security-Policy"]
+    docs = await cliente.get("/docs")
+    assert "Content-Security-Policy" not in docs.headers

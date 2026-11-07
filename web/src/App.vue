@@ -23,7 +23,12 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import ROSPentest from 'src/components/roqueos/apps/ROSPentest.vue'
 import TelaEntrada from 'src/components/shield/TelaEntrada.vue'
 import ROSConfirmHost from 'src/components/roqueos/ROSConfirmHost.vue'
+import { useI18n } from 'vue-i18n'
+import { useRoqueOSStore } from 'stores/roqueos'
 import { aoPerderSessao, del, get } from 'src/services/http'
+
+const { t } = useI18n()
+const rosStore = useRoqueOSStore()
 
 const etapa = ref('carregando') // carregando | sem-servidor | setup | login | app
 const versao = ref('')
@@ -66,6 +71,7 @@ onMounted(() => {
   // Sessão expirou no meio do uso: volta para o login em vez de mostrar erro em cada aba.
   pararDeOuvir = aoPerderSessao(() => {
     if (etapa.value === 'app') {
+      rosStore.showNotification({ type: 'warning', message: t('shield.conta.sessaoExpirou') })
       conta.value = null
       etapa.value = 'login'
     }

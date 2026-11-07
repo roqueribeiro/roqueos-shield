@@ -2,7 +2,7 @@
   <div class="entrada">
     <ROSCard class="entrada__cartao">
       <div class="entrada__marca">
-        <span class="entrada__logo"><q-icon name="security" size="26px" /></span>
+        <span class="entrada__logo" aria-hidden="true"><q-icon name="security" size="26px" /></span>
         <div>
           <h1 class="entrada__titulo">RoqueShield</h1>
           <p class="entrada__sub">{{ t('shield.entrada.loginSub') }}</p>
@@ -15,7 +15,7 @@
       </div>
 
       <div v-else-if="etapa === 'sem-servidor'" class="entrada__estado" role="alert">
-        <q-icon name="cloud_off" size="22px" />
+        <q-icon name="cloud_off" size="22px" aria-hidden="true" />
         <span>{{ t('shield.entrada.semServidor') }}</span>
         <ROSButton variant="secondary" icon="refresh" @click="emit('tentar')">
           {{ t('shield.entrada.tentar') }}
@@ -48,8 +48,25 @@
           name="password"
           :autocomplete="etapa === 'setup' ? 'new-password' : 'current-password'"
           :label="t('shield.entrada.senha')"
+          :aria-describedby="etapa === 'setup' ? 'entrada-senha-dica' : undefined"
         />
-        <p v-if="etapa === 'setup'" class="entrada__dica">{{ t('shield.entrada.senhaDica') }}</p>
+        <p v-if="etapa === 'setup'" id="entrada-senha-dica" class="entrada__dica">
+          {{ t('shield.entrada.senhaDica') }}
+        </p>
+        <template v-if="etapa === 'setup'">
+          <ROSFormField
+            v-model="codigo"
+            name="setup_code"
+            autocomplete="off"
+            spellcheck="false"
+            :label="t('shield.entrada.codigo')"
+            aria-describedby="entrada-codigo-dica"
+          />
+          <p id="entrada-codigo-dica" class="entrada__dica">
+            {{ t('shield.entrada.codigoDica') }}
+            <code class="entrada__cmd">docker exec &lt;container&gt; cat /data/secrets/SETUP_CODE</code>
+          </p>
+        </template>
         <p v-if="erro" class="entrada__erro" role="alert">{{ erro }}</p>
 
         <ROSButton type="submit" variant="primary" block :loading="enviando" :disabled="!podeEnviar">
@@ -84,11 +101,14 @@ const { t } = useI18n()
 const email = ref('')
 const nome = ref('')
 const senha = ref('')
+const codigo = ref('')
 const erro = ref('')
 const enviando = ref(false)
 
 const podeEnviar = computed(
-  () => email.value.includes('@') && (props.etapa === 'setup' ? senha.value.length >= 10 : !!senha.value),
+  () =>
+    email.value.includes('@') &&
+    (props.etapa === 'setup' ? senha.value.length >= 10 && !!codigo.value.trim() : !!senha.value),
 )
 
 async function enviar() {
@@ -98,17 +118,26 @@ async function enviar() {
   try {
     const conta =
       props.etapa === 'setup'
-        ? await post('/setup', { email: email.value, name: nome.value || null, password: senha.value })
+        ? await post('/setup', {
+            email: email.value,
+            name: nome.value || null,
+            password: senha.value,
+            setup_code: codigo.value.trim(),
+          })
         : await post('/auth/session', { email: email.value, password: senha.value })
     senha.value = ''
     emit('entrou', conta)
   } catch (e) {
-    erro.value =
-      e?.status === 401
-        ? t('shield.entrada.erroLogin')
-        : typeof e?.detail === 'string'
-          ? e.detail
-          : t('shield.entrada.erroGenerico')
+    // O texto da API é só em português (e um proxy pode responder HTML): a tela usa o dela.
+    const porStatus = {
+      0: 'shield.entrada.semServidor',
+      401: 'shield.entrada.erroLogin',
+      403: 'shield.entrada.codigoErrado',
+      410: 'shield.entrada.setupFeito',
+      422: 'shield.entrada.senhaDica',
+      429: 'shield.entrada.muitasTentativas',
+    }
+    erro.value = t(porStatus[e?.status] || 'shield.entrada.erroGenerico')
   } finally {
     enviando.value = false
   }
@@ -178,6 +207,16 @@ async function enviar() {
   margin: 0;
   color: #fb7185;
   font-size: var(--ros-text-sm);
+}
+.entrada__cmd {
+  display: block;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: var(--ros-radius-sm);
+  background: var(--ros-fill-04);
+  font-size: var(--ros-text-xs);
+  overflow-wrap: anywhere;
+  user-select: all;
 }
 .entrada__rodape {
   display: flex;

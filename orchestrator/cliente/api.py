@@ -2,7 +2,11 @@
 
 Ordem da configuração: variável de ambiente (`ROQUESHIELD_URL`, `ROQUESHIELD_TOKEN`,
 o caso do CI), depois o arquivo que o `roqueshield login` grava
-(`~/.config/roqueshield/config.json`, 0600). O token nunca é impresso.
+(`~/.config/roqueshield/config.json`, 0600), e por último, dentro do container
+standalone, o próprio shield local com o `APP_TOKEN` de `$DATA_DIR/secrets` ou do
+ambiente (é o que faz
+`docker exec <container> roqueshield status` funcionar sem configurar nada). O token
+nunca é impresso.
 """
 
 from __future__ import annotations
@@ -46,6 +50,15 @@ def carregar(env: dict[str, str] | None = None) -> Config:
         salvo = json.loads(arq.read_text(encoding="utf-8"))
     servidor = e.get("ROQUESHIELD_URL") or salvo.get("server", "")
     token = e.get("ROQUESHIELD_TOKEN") or salvo.get("token", "")
+    if not servidor and not token:
+        local = Path(e.get("DATA_DIR", "/data")) / "secrets" / "APP_TOKEN"
+        try:
+            token = local.read_text(encoding="utf-8").strip()
+        except OSError:
+            # No compose de produção o APP_TOKEN vem do ambiente e não vira arquivo.
+            token = (e.get("APP_TOKEN") or "").strip()
+        if token:
+            servidor = f"http://127.0.0.1:{e.get('PORT', '8080')}"
     if not servidor or not token:
         raise SemConfig(
             "sem servidor ou token: rode `roqueshield login --server URL`, "

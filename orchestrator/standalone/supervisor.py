@@ -35,6 +35,35 @@ from orchestrator.standalone import segredos
 from orchestrator.standalone.logtee import Tee
 
 REDIS_LOCAL = "redis://127.0.0.1:6379/0"
+
+# O que cada processo NÃO recebe do ambiente. Os scanners rodam como filhos do worker,
+# herdam o ambiente dele e processam conteúdo do alvo: lá não entra o APP_TOKEN (admin
+# de serviço), nem a chave que assina sessão, nem o código de primeiro uso. O worker
+# fica com a SECRETS_KEY porque decifra a chave de IA guardada. Redis e ZAP recebem o
+# que precisam pela linha de comando ou arquivo, e mais nada.
+_SO_DA_API = frozenset({"APP_TOKEN", "SESSION_SECRET", "SETUP_CODE"})
+_SEGREDOS = frozenset(segredos.SEGREDOS) | {"DATABASE_URL", "REDIS_URL"}
+_FORA_DE: dict[str, frozenset[str]] = {
+    "orchestrator": frozenset(),
+    "worker": _SO_DA_API | {"REDIS_PASSWORD"},
+    "redis": _SEGREDOS,
+    "zap": _SEGREDOS,
+}
+
+
+def ambiente_de(nome: str, env: dict[str, str]) -> dict[str, str]:
+    fora = _FORA_DE.get(nome, _SEGREDOS)
+    return {k: v for k, v in env.items() if k not in fora}
+
+
+def _redis_embutido(url: str) -> bool:
+    """O REDIS_URL aponta para o Redis deste container (com ou sem senha)?"""
+    from urllib.parse import urlparse
+
+    u = urlparse(url)
+    return u.scheme == "redis" and u.hostname == "127.0.0.1" and (u.port or 6379) == 6379
+
+
 ZAP_LOCAL = "http://127.0.0.1:8090"
 ESPERA_MAX = 60.0
 
@@ -55,7 +84,9 @@ def ambiente_base(env: dict[str, str], data: Path) -> dict[str, str]:
     saida.setdefault("DATA_DIR", str(data))
     saida.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{data / 'shield.db'}")
     saida.setdefault("REPORTS_DIR", str(data / "reports"))
-    saida.setdefault("REDIS_URL", REDIS_LOCAL)
+    if "REDIS_URL" not in saida:
+        senha = saida.get("REDIS_PASSWORD", "")
+        saida["REDIS_URL"] = f"redis://:{senha}@127.0.0.1:6379/0" if senha else REDIS_LOCAL
     saida.setdefault("TRIVY_SERVER_URL", "")  # trivy em modo cliente, cache local
     saida.setdefault("TRIVY_CACHE_DIR", str(data / "trivy-cache"))
     saida.setdefault("LOG_FORMAT", "json")
@@ -72,12 +103,23 @@ def servicos(env: dict[str, str], data: Path) -> list[Servico]:
     """
     py = sys.executable
     lista: list[Servico] = []
-    if env.get("REDIS_URL") == REDIS_LOCAL:
+    if _redis_embutido(env.get("REDIS_URL", "")):
+        # Senha por arquivo de config (0600), não por argumento: argumento aparece no
+        # /proc/<pid>/cmdline de qualquer processo do container.
+        conf: list[str] = []
+        if env.get("REDIS_PASSWORD"):
+            arq = data / "secrets" / "redis.conf"
+            arq.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(arq, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(f"requirepass {env['REDIS_PASSWORD']}\n")
+            conf = [str(arq)]
         lista.append(
             Servico(
                 "redis",
                 [
                     "redis-server",
+                    *conf,
                     "--bind",
                     "127.0.0.1",
                     "--port",
@@ -138,16 +180,44 @@ def servicos(env: dict[str, str], data: Path) -> list[Servico]:
     return [svc for svc in lista if not so or svc.nome in so]
 
 
-def precisa_migrar(env: dict[str, str], lista: list[Servico]) -> bool:
-    """Postgres com a API neste container: roda o alembic antes de servir.
+# A primeira versão com o standalone (0.5.0) nasce no schema 0008. Um SQLite criado
+# pelo `create_all` dessa versão, sem `alembic_version`, está nesse ponto.
+BASE_DO_STANDALONE = "0008"
 
-    Em SQLite a API cria as tabelas no boot; em Postgres o schema (e o trigger que torna
-    a trilha de auditoria imutável) vem das migrations, e servir sem elas é servir sem a
-    garantia. Só quem sobe a API migra, para N workers não disputarem a migração.
+
+def precisa_migrar(env: dict[str, str], lista: list[Servico]) -> bool:
+    """Com a API neste container, o alembic roda antes de servir, em Postgres e SQLite.
+
+    Em Postgres o schema (e o trigger que torna a trilha de auditoria imutável) vem das
+    migrations. Em SQLite também: o `create_all` do boot cria tabela nova mas não põe
+    coluna nova numa tabela que já existe, então o volume de uma versão antiga ficaria
+    sem a coluna depois do upgrade da imagem. Só quem sobe a API migra, para N workers
+    não disputarem a migração.
     """
-    return env.get("DATABASE_URL", "").startswith("postgresql") and any(
-        s.nome == "orchestrator" for s in lista
-    )
+    url = env.get("DATABASE_URL", "")
+    return url.startswith(("postgresql", "sqlite")) and any(s.nome == "orchestrator" for s in lista)
+
+
+def sqlite_sem_versao(url: str) -> bool:
+    """SQLite com tabelas e sem `alembic_version`: criado pelo `create_all`.
+
+    O alembic tentaria criar de novo o que já existe. Esse banco é carimbado na base do
+    standalone antes do upgrade. Banco que não existe ou está vazio segue o upgrade
+    normal, que cria tudo.
+    """
+    if not url.startswith("sqlite"):
+        return False
+    caminho = Path(url.split(":///", 1)[-1])
+    if not caminho.is_file():
+        return False
+    import sqlite3
+
+    con = sqlite3.connect(caminho)
+    try:
+        tabelas = {r[0] for r in con.execute("select name from sqlite_master where type='table'")}
+    finally:
+        con.close()
+    return bool(tabelas) and "alembic_version" not in tabelas
 
 
 def espera(reinicios: int) -> float:
@@ -190,14 +260,22 @@ async def _rodar(svc: Servico, redis_cliente: Any, parar: asyncio.Event) -> None
             continue
 
 
-async def _encerrar(lista: list[Servico], prazo: float = 20.0) -> None:
+async def _encerrar(lista: list[Servico], prazo: float = 8.0) -> None:
+    """Para em ordem inversa (API antes do Redis), com `prazo` segundos NO TOTAL.
+
+    O `docker stop` manda SIGKILL em 10 s por padrão. Com prazo por processo, quatro
+    serviços lentos somavam mais que isso e o último morria sem SIGTERM. Quem não sai a
+    tempo leva SIGKILL daqui, ainda dentro da janela do Docker.
+    """
+    loop = asyncio.get_running_loop()
+    fim = loop.time() + prazo
     for svc in reversed(lista):
         p = svc.processo
         if p is None or p.returncode is not None:
             continue
         p.terminate()
         try:
-            await asyncio.wait_for(p.wait(), timeout=prazo)
+            await asyncio.wait_for(p.wait(), timeout=max(0.1, fim - loop.time()))
         except TimeoutError:
             p.kill()
 
@@ -212,16 +290,27 @@ async def principal(env: dict[str, str] | None = None) -> int:
     filho = ambiente_base({**base, **valores}, data)
     lista = servicos(filho, data)
     for svc in lista:
-        svc.env = filho
+        svc.env = ambiente_de(svc.nome, filho)
+    if any(o.nome == "SETUP_CODE" and o.de_onde != "ambiente" for o in origens):
+        print(
+            "[supervisor] se o primeiro uso ainda não foi feito, o código para criar o admin está em "
+            f"{data / 'secrets' / 'SETUP_CODE'} "
+            "(docker exec <container> cat /data/secrets/SETUP_CODE)",
+            flush=True,
+        )
     print("[supervisor] serviços: " + ", ".join(s.nome for s in lista), flush=True)
     if precisa_migrar(filho, lista):
-        print("[supervisor] alembic upgrade head", flush=True)
-        mig = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "alembic", "upgrade", "head", env=filho
-        )
-        if await mig.wait() != 0:
-            print("[supervisor] a migração falhou; a API não sobe sem o schema", flush=True)
-            return 1
+        passos = [["upgrade", "head"]]
+        if sqlite_sem_versao(filho["DATABASE_URL"]):
+            passos.insert(0, ["stamp", BASE_DO_STANDALONE])
+        for passo in passos:
+            print("[supervisor] alembic " + " ".join(passo), flush=True)
+            mig = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "alembic", *passo, env=filho
+            )
+            if await mig.wait() != 0:
+                print("[supervisor] a migração falhou; a API não sobe sem o schema", flush=True)
+                return 1
 
     redis_cliente: Any = None
     try:

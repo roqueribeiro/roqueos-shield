@@ -28,6 +28,12 @@ SEGREDOS: dict[str, int] = {
     # O ZAP do container escuta só em 127.0.0.1, mas a API dele aceita qualquer
     # processo local: a chave fecha isso para o que não for o worker.
     "ZAP_API_KEY": 24,
+    # O Redis do container também escuta só em 127.0.0.1, mas o ZAP do mesmo container
+    # processa conteúdo hostil e o arq desserializa job com pickle: senha no Redis.
+    "REDIS_PASSWORD": 24,
+    # Código de primeiro uso: o POST /setup só cria o primeiro admin com ele. É o que
+    # impede quem alcança a porta antes do dono de virar admin.
+    "SETUP_CODE": 12,
 }
 
 

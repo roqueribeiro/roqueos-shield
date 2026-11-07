@@ -58,8 +58,14 @@ async def listar(
     anthropic = f.get("anthropicKey") or settings.ANTHROPIC_API_KEY
     openai = f.get("openaiKey") or settings.OPENAI_API_KEY
     openrouter = f.get("openrouterKey") or settings.OPENROUTER_API_KEY
-    base = (f.get("apiBase") if f.get("apiBase") is not None else settings.LLM_API_BASE) or ""
-    chave_local = f.get("apiKey") or settings.LLM_API_KEY or "local"
+    if f.get("apiBase") is not None:
+        # Endereço vindo do pedido leva só a chave vinda do pedido. Com a guardada, quem
+        # pudesse chamar esta rota mandava a LLM_API_KEY do ambiente para um host seu.
+        base = f.get("apiBase") or ""
+        chave_local = f.get("apiKey") or "local"
+    else:
+        base = settings.LLM_API_BASE or ""
+        chave_local = f.get("apiKey") or settings.LLM_API_KEY or "local"
 
     grupos: list[dict[str, Any]] = []
     erros: list[str] = []

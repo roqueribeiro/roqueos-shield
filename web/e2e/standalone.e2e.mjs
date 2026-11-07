@@ -15,6 +15,8 @@ import { chromium } from '@playwright/test'
 const BASE = process.env.SHIELD_URL || 'http://127.0.0.1:8099'
 const EMAIL = process.env.E2E_EMAIL || 'admin@roqueshield.local'
 const SENHA = process.env.E2E_SENHA
+// O e2e lê o código como quem instala: do arquivo de segredos do container (aqui, o
+// script exporta o que o `segredos` gerou).
 const SHOTS = process.env.E2E_SHOTS || new URL('./shots', import.meta.url).pathname
 assert.ok(SENHA && SENHA.length >= 10, 'E2E_SENHA precisa de pelo menos 10 caracteres')
 mkdirSync(SHOTS, { recursive: true })
@@ -34,6 +36,7 @@ async function abrir(vp, nome) {
   const ctx = await b.newContext({ viewport: vp, deviceScaleFactor: 1, locale: 'pt-BR' })
   const p = await ctx.newPage()
   p.on('pageerror', (e) => erros.push(`${nome} pageerror: ${e.message}`))
+  p.on('console', (m) => /Content Security Policy|Refused to/.test(m.text()) && erros.push(`${nome} CSP: ${m.text()}`))
   return { ctx, p }
 }
 
@@ -71,9 +74,15 @@ try {
     await p.fill('input[name=email]', EMAIL)
     await p.fill('input[name=name]', 'Admin E2E')
     await p.fill('input[name=password]', SENHA)
+    // Sem o código de primeiro uso o setup é recusado (403) e a tela diz por quê.
+    await p.fill('input[name=setup_code]', 'codigo-errado')
+    await p.click('button[type=submit]')
+    await p.waitForSelector('.entrada__erro', { timeout: 5000 })
+    assert.equal((await (await fetch(`${BASE}/setup`)).json()).needs_setup, true, 'setup aceitou código errado')
+    await p.fill('input[name=setup_code]', process.env.SETUP_CODE || '')
     await p.click('button[type=submit]')
     await p.waitForSelector('.ros-pentest', { timeout: 15000 })
-    ok('primeiro uso cria o admin e entra')
+    ok('primeiro uso recusa código errado, cria o admin com o certo e entra')
     await ctx.close()
   }
   assert.equal((await (await fetch(`${BASE}/setup`)).json()).needs_setup, false, 'setup ainda pendente')

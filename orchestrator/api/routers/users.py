@@ -66,7 +66,17 @@ class PasswordUpdate(BaseModel):
 async def _sobra_admin_ativo(session: SessionDep, sem: UUID) -> bool:
     """Existe outro admin ativo além de `sem`? Sem isto o shield podia ficar sem
     ninguém que gerencie usuários, e no standalone não há RoqueOS por fora para
-    consertar."""
+    consertar.
+
+    No Postgres, um lock de transação serializa quem rebaixa ou desativa admin: sem
+    ele, dois admins se rebaixando ao mesmo tempo liam "sobra o outro" e o shield ficava
+    sem nenhum. No SQLite a escrita já é serializada pelo próprio banco.
+    """
+    bind = session.get_bind()
+    if bind.dialect.name == "postgresql":
+        from sqlalchemy import text
+
+        await session.exec(text("SELECT pg_advisory_xact_lock(73113)"))  # type: ignore[call-overload]
     outros = (
         await session.exec(
             select(UserRow).where(
@@ -187,6 +197,7 @@ async def deactivate_user(
     if user.role == Role.ADMIN.value and not await _sobra_admin_ativo(session, user.id):
         raise HTTPException(status.HTTP_409_CONFLICT, "é o último admin ativo")
     user.active = False
+    user.session_version = int(user.session_version or 0) + 1
     session.add(user)
     await log_audit_event(
         session,
@@ -233,6 +244,8 @@ async def set_password(
     if motivo := problema_da_senha(body.password):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, motivo)
     user.password_hash = gerar_hash(body.password)
+    # Senha trocada (muitas vezes por suspeita de vazamento) derruba as sessões abertas.
+    user.session_version = int(user.session_version or 0) + 1
     session.add(user)
     await log_audit_event(
         session,

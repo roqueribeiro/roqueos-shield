@@ -136,6 +136,12 @@ class Settings(BaseSettings):
     # Chave HMAC pra assinar a sessão (JWT HS256). Vazio → cai no APP_TOKEN.
     SESSION_SECRET: str = ""
     SESSION_TTL_HOURS: int = 12
+    # Código de primeiro uso da tela standalone: o POST /setup só cria o primeiro admin
+    # com ele (ou com o APP_TOKEN). O container gera em $DATA_DIR/secrets/SETUP_CODE.
+    SETUP_CODE: str = ""
+    # Força o atributo Secure no cookie de sessão. Use atrás de proxy TLS quando o
+    # uvicorn não confia no X-Forwarded-Proto (ver FORWARDED_ALLOW_IPS).
+    COOKIE_SECURE: bool = False
 
     # Logging
     LOG_LEVEL: str = "INFO"

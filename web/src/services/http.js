@@ -22,16 +22,27 @@ export class ErroHttp extends Error {
   }
 }
 
+// Servidor que aceita a conexão e não responde deixava a tela girando para sempre.
+// 30 s cobre listar modelos de um provedor lento; relatório grande vai por outro caminho.
+const PRAZO_MS = 30000
+
 export async function http(metodo, caminho, corpo) {
   const headers = { Accept: 'application/json' }
   if (ESCRITA.has(metodo)) headers['X-RoqueShield'] = '1'
   if (corpo !== undefined) headers['Content-Type'] = 'application/json'
-  const r = await fetch(caminho, {
-    method: metodo,
-    headers,
-    credentials: 'same-origin',
-    body: corpo === undefined ? undefined : JSON.stringify(corpo),
-  })
+  let r
+  try {
+    r = await fetch(caminho, {
+      method: metodo,
+      headers,
+      credentials: 'same-origin',
+      body: corpo === undefined ? undefined : JSON.stringify(corpo),
+      signal: AbortSignal.timeout(PRAZO_MS),
+    })
+  } catch (e) {
+    // Sem resposta (rede, prazo): status 0, para quem chama tratar como "sem servidor".
+    throw new ErroHttp(0, e?.name === 'TimeoutError' ? 'prazo esgotado' : 'sem resposta')
+  }
   if (r.status === 204) return null
   const tipo = r.headers.get('content-type') || ''
   const dado = tipo.includes('json') ? await r.json().catch(() => null) : await r.text()

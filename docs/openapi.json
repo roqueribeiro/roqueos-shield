@@ -1195,6 +1195,19 @@
             "minLength": 1,
             "title": "Password",
             "type": "string"
+          },
+          "setup_code": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Código de primeiro uso (`docker exec <container> cat /data/secrets/SETUP_CODE`). Dispensado com o APP_TOKEN no X-API-Token.",
+            "title": "Setup Code"
           }
         },
         "required": [
@@ -1694,6 +1707,7 @@
     },
     "/auth/session": {
       "delete": {
+        "description": "Sai: apaga o cookie e derruba as sessões do usuário (todas, não só esta).\n\nApagar só o cookie deixava o JWT valendo até expirar para quem tivesse copiado.\nSem sessão válida, só apaga o cookie (sair nunca falha).",
         "operationId": "logout_auth_session_delete",
         "responses": {
           "204": {

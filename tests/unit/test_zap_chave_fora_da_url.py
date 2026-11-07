@@ -76,3 +76,11 @@ def test_tee_redige_tambem_o_stdout() -> None:
     tee.linha(f"GET http://zap:8090/JSON/x/?scanId=1&apikey={CHAVE}\n")
     assert CHAVE not in out.getvalue()
     assert "scanId=1" in out.getvalue()
+
+
+def test_redacao_pega_url_do_redis_com_usuario_vazio() -> None:
+    from orchestrator.domain.redaction import redact_text
+
+    texto = redact_text("conectando em redis://:senha-do-redis@127.0.0.1:6379/0")
+    assert "senha-do-redis" not in texto
+    assert "127.0.0.1:6379" in texto

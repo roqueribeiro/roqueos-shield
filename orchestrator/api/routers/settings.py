@@ -149,8 +149,14 @@ class ModelosOut(BaseModel):
 @router.post("/ai/models", response_model=ModelosOut)
 async def listar_modelos(body: ModelosIn, _p: Principal = RequireConfigManage) -> dict[str, Any]:
     """Os modelos que cada chave alcança, buscados do lado do servidor."""
+    from orchestrator.runtime_settings import CAMPOS_IA, travados
     from orchestrator.standalone.modelos import listar
 
+    if body.apiBase is not None and "apiBase" in travados(CAMPOS_IA):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "apiBase é definido pelo ambiente e não pode ser trocado aqui",
+        )
     return await listar(
         {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
     )

@@ -12,9 +12,10 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -212,6 +213,30 @@ if settings.OIDC_ISSUER and settings.OIDC_CLIENT_ID and settings.OIDC_CLIENT_SEC
         same_site="lax",
         https_only=False,
     )
+
+# Cabeçalhos de segurança da tela e da API. A CSP vale para a tela (tudo do mesmo
+# endereço, nada de CDN). Ficam sem CSP o /docs e o /redoc do FastAPI e o dashboard
+# antigo em /ui (só servido sem o build da tela), que carregam script de CDN.
+# `frame-ancestors 'none'` + X-Frame-Options valem para tudo: ninguém embute o shield.
+_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; "
+    "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+)
+_SEM_CSP = ("/docs", "/redoc", "/ui")
+
+
+@app.middleware("http")
+async def cabecalhos_de_seguranca(request: Request, call_next: Any) -> Response:
+    resposta = await call_next(request)
+    h = resposta.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("X-Frame-Options", "DENY")
+    h.setdefault("Referrer-Policy", "no-referrer")
+    if not request.url.path.startswith(_SEM_CSP):
+        h.setdefault("Content-Security-Policy", _CSP)
+    return resposta
+
 
 # A tela. Com o build da tela standalone (`web/`, saída em `orchestrator/web_dist`),
 # ela é servida na raiz e o `/ui` antigo redireciona para lá. Sem o build (clone

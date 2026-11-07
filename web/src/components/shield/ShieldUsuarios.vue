@@ -13,7 +13,10 @@
     <div v-if="carregando" class="usuarios__estado" role="status">
       <ROSSpinner />
     </div>
-    <p v-else-if="erroDaLista" class="usuarios__erro" role="alert">{{ erroDaLista }}</p>
+    <div v-else-if="erroDaLista" class="usuarios__falha" role="alert">
+      <p class="usuarios__erro">{{ erroDaLista }}</p>
+      <ROSButton variant="tonal" icon="refresh" @click="carregar">{{ t('shield.entrada.tentar') }}</ROSButton>
+    </div>
 
     <ul v-else class="usuarios__lista" :aria-label="t('shield.usuarios.titulo')">
       <li
@@ -90,8 +93,9 @@
           name="new-password"
           autocomplete="new-password"
           :label="t('shield.usuarios.senhaOpcional')"
+          aria-describedby="novo-senha-dica"
         />
-        <p class="usuarios__dica">{{ t('shield.usuarios.senhaOpcionalDica') }}</p>
+        <p id="novo-senha-dica" class="usuarios__dica">{{ t('shield.usuarios.senhaOpcionalDica') }}</p>
         <p v-if="erroDoForm" class="usuarios__erro" role="alert">{{ erroDoForm }}</p>
       </form>
       <template #footer>
@@ -124,8 +128,9 @@
           name="new-password"
           autocomplete="new-password"
           :label="t('shield.entrada.senha')"
+          aria-describedby="troca-senha-dica"
         />
-        <p class="usuarios__dica">{{ t('shield.entrada.senhaDica') }}</p>
+        <p id="troca-senha-dica" class="usuarios__dica">{{ t('shield.entrada.senhaDica') }}</p>
         <p v-if="erroDoForm" class="usuarios__erro" role="alert">{{ erroDoForm }}</p>
       </form>
       <template #footer>
@@ -169,7 +174,7 @@
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Notify } from 'quasar'
+import { useRoqueOSStore } from 'stores/roqueos'
 import { get, patch, post, put } from 'src/services/http'
 import { confirmar } from 'src/composables/useConfirm'
 import ROSBadge from 'src/components/roqueos/ROSBadge.vue'
@@ -206,14 +211,17 @@ const mostrandoToken = ref(false)
 const token = ref('')
 const tokenDe = ref('')
 
-function mensagem(e) {
-  // O 409 de papel e desativação é sempre a trava do último admin; o texto da API é
-  // só em português, então a tela usa o dela.
-  if (e?.status === 409 && /admin/.test(String(e.detail))) return t('shield.usuarios.notaToken')
-  return typeof e?.detail === 'string' ? e.detail : t('shield.entrada.erroGenerico')
+// O texto da API é só em português (e um proxy na frente pode responder HTML), então
+// a tela mostra o dela, escolhido pelo status e pela ação.
+function mensagem(e, acao = '') {
+  if (e?.status === 409) return acao === 'criar' ? t('shield.usuarios.emailJaExiste') : t('shield.usuarios.notaToken')
+  if (e?.status === 422) return t('shield.entrada.senhaDica')
+  if (e?.status === 404) return t('shield.usuarios.naoEncontrado')
+  return t('shield.entrada.erroGenerico')
 }
-function avisar(msg, tipo = 'positive') {
-  Notify.create({ type: tipo, message: msg, position: 'top' })
+const rosStore = useRoqueOSStore()
+function avisar(msg, tipo = 'success') {
+  rosStore.showNotification({ type: tipo, message: msg })
 }
 
 async function carregar() {
@@ -264,7 +272,7 @@ async function criar() {
     criando.value = false
     mostrarToken(r)
   } catch (e) {
-    erroDoForm.value = mensagem(e)
+    erroDoForm.value = mensagem(e, 'criar')
   } finally {
     enviando.value = false
   }
@@ -277,7 +285,7 @@ async function mudarPapel(u, papel) {
     trocar(await patch(`/users/${u.id}/role`, { role: papel }))
     avisar(t('shield.usuarios.papelMudou'))
   } catch (e) {
-    avisar(mensagem(e), 'negative')
+    avisar(mensagem(e), 'error')
   } finally {
     ocupado.value = null
   }
@@ -323,7 +331,7 @@ async function girarToken(u) {
     trocar(usuario)
     mostrarToken(r)
   } catch (e) {
-    avisar(mensagem(e), 'negative')
+    avisar(mensagem(e), 'error')
   }
 }
 
@@ -339,7 +347,7 @@ async function desativar(u) {
   try {
     trocar(await post(`/users/${u.id}/deactivate`))
   } catch (e) {
-    avisar(mensagem(e), 'negative')
+    avisar(mensagem(e), 'error')
   }
 }
 
@@ -395,6 +403,13 @@ onMounted(carregar)
     flex: none;
     margin-top: 2px;
   }
+}
+.usuarios__falha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ros-space-3);
+  flex-wrap: wrap;
 }
 .usuarios__estado {
   display: flex;
@@ -482,7 +497,7 @@ onMounted(carregar)
 .usuarios__dica {
   margin: 0;
   font-size: var(--ros-text-sm);
-  opacity: 0.75;
+  color: $ros-text-muted;
 }
 .usuarios__erro {
   margin: 0;

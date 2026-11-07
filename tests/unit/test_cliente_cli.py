@@ -143,3 +143,26 @@ def test_fail_on_invalido_sai_2(servidor: dict[str, Any], monkeypatch: pytest.Mo
     monkeypatch.setenv("ROQUESHIELD_URL", "http://shield:8080")
     monkeypatch.setenv("ROQUESHIELD_TOKEN", "tok-bom")
     assert runner.invoke(cli.app, ["scan", "start", "x", "--fail-on", "grave"]).exit_code == 2
+
+
+def test_dentro_do_container_usa_o_shield_local(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`docker exec <c> roqueshield status` sem configurar nada: shield local + APP_TOKEN."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    data = tmp_path / "data"
+    (data / "secrets").mkdir(parents=True)
+    (data / "secrets" / "APP_TOKEN").write_text("tok-local\n")
+    cfg = apimod.carregar({"DATA_DIR": str(data), "PORT": "9000"})
+    assert cfg == apimod.Config("http://127.0.0.1:9000", "tok-local")
+    # Configuração explícita ganha do arquivo local.
+    cfg2 = apimod.carregar(
+        {"DATA_DIR": str(data), "ROQUESHIELD_URL": "https://x", "ROQUESHIELD_TOKEN": "t"}
+    )
+    assert cfg2 == apimod.Config("https://x", "t")
+    # Compose de produção: APP_TOKEN no ambiente, sem arquivo.
+    cfg3 = apimod.carregar({"DATA_DIR": str(tmp_path / "vazio"), "APP_TOKEN": "tok-env"})
+    assert cfg3 == apimod.Config("http://127.0.0.1:8080", "tok-env")
+    # Sem arquivo nem ambiente, continua sendo erro de configuração.
+    with pytest.raises(apimod.SemConfig):
+        apimod.carregar({"DATA_DIR": str(tmp_path / "vazio")})

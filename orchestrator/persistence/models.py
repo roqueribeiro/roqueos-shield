@@ -176,6 +176,9 @@ class UserRow(SQLModel, table=True):
     # scrypt da senha (login da tela standalone). None = usuário sem senha, entra por
     # token ou OIDC. Formato em `orchestrator.auth.senha`.
     password_hash: str | None = None
+    # Sobe no logout, na troca de senha e na desativação; o JWT de sessão carrega a
+    # versão do login e deixa de valer quando ela muda (`orchestrator.auth.session`).
+    session_version: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
     idp_subject: str | None = Field(default=None, index=True)  # OIDC `sub` (Fase 6)
     active: bool = Field(default=True, index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))
