@@ -127,6 +127,10 @@ _BANNED_ARG_RE = re.compile(
       | -iL | --file
       | --script          # --script e --script-args: NSE é Lua com os.execute
       | --upload | --interactive
+      | --alert          # sqlmap: comando do SO quando acha SQLi
+      | --tamper | --load-cookies | --proxy-file | -m$ | -r$ | --resume  # leem arquivo
+      | -iR              # nmap: alvos aleatórios fora do escopo
+      | --datadir | --servicedb | --versiondb | --stylesheet | --excludefile
       | --data-binary=@
       | --config          # curl lê opções (e URLs) de arquivo (-K: por binário)
       | --resolve | --connect-to | --proxy | --socks  # desviam a conexão (-x: por binário)
@@ -254,6 +258,12 @@ def _argumento_fora_do_alvo(arg: str, host_alvo: str) -> str | None:
         return "lê arquivo local (@arquivo)"
     if arg.startswith(("/", "./", "../", "~")) or "/../" in arg:
         return "caminho de arquivo local"
+    if "/" in arg and "://" not in arg:
+        # `data/secrets/APP_TOKEN` (relativo): com barra e sem esquema, só passa
+        # `<alvo>/caminho`. O primeiro componente tem que ser o próprio alvo.
+        cabeca = arg.split("/", 1)[0]
+        if not cabeca or _host_do_alvo(cabeca) != host_alvo:
+            return "caminho de arquivo local"
     if "://" in arg:
         p = urlparse(arg)
         if p.scheme.lower() not in _ESQUEMAS_OK:
@@ -473,6 +483,11 @@ async def run_in_kali(
             phase=phase.value,
         )
         return decision
+
+    if not dry_run and not settings.AGENT_LIVE_EXECUTION:
+        # A mesma trava da rota, aqui também: outro chamador não passa por ela.
+        dry_run = True
+        log.warning("agent.live_execution_disabled", binary=_binary_of(command))
 
     if dry_run:
         decision.reason = "dry_run: comando planejado, não executado"

@@ -244,6 +244,7 @@ nome da variável, que é o que um ambiente regulado precisa.
 | `LAB_ONLY`, `TARGET_ALLOWLIST`, `REQUIRE_AUTH_REF` | pela tela | travam o escopo autorizado |
 | `LLM_MODEL`, `LLM_API_BASE`, `ANTHROPIC_API_KEY`… | pela tela | travam a configuração de IA |
 | `ALLOW_CLOUD_FALLBACK` | `true` | `false` proíbe o modelo local de cair num de nuvem |
+| `AGENT_LIVE_EXECUTION` | `false` | deixa um admin executar de verdade os comandos que o agente de IA planeja (`dry_run=false`); desligado, o agente só planeja |
 | `MCP_ALLOW_ACTIONS` | `false` | deixa o `POST /mcp` disparar scan (sempre com referência de autorização) |
 | `COOKIE_SECURE` | `false` | força o `Secure` no cookie de sessão |
 | `OIDC_*` | desligado | SSO, ao lado do login por senha |

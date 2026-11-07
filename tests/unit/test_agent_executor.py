@@ -18,6 +18,14 @@ from orchestrator.config import settings
 
 
 @pytest.fixture(autouse=True)
+def _execucao_real_ligada(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Estes testes exercitam o caminho que executa; o padrão é desligado."""
+    from orchestrator.config import settings
+
+    monkeypatch.setattr(settings, "AGENT_LIVE_EXECUTION", True)
+
+
+@pytest.fixture(autouse=True)
 def _lab(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "LAB_ONLY", True)
     monkeypatch.setattr(settings, "TARGET_ALLOWLIST", "juice-shop,dvwa")

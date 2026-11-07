@@ -75,6 +75,13 @@ ATAQUES = [
     (Phase.RECON, ["nmap", "-sV", "::1"]),
     (Phase.RECON, ["curl", "[::1]:8080"]),
     (Phase.RECON, ["curl", "-sS", "127.0.0.1:8080/setup"]),
+    # terceira rodada da revisão do PR #20
+    (Phase.EXPLOIT, ["sqlmap", "-u", "https://app.example.com/item?id=1", "--alert", "id"]),
+    (Phase.EXPLOIT, ["sqlmap", "-r", "pedido.txt"]),
+    (Phase.EXPLOIT, ["sqlmap", "-u", "https://app.example.com/?id=1", "--tamper", "x"]),
+    (Phase.RECON, ["nmap", "-sV", "-iR", "5"]),
+    (Phase.RECON, ["nmap", "-sV", "data/secrets/APP_TOKEN"]),
+    (Phase.EXPLOIT, ["nuclei", "-u", ALVO, "-t", "data/x.yaml"]),
 ]
 
 
@@ -107,3 +114,25 @@ def test_comando_contra_o_proprio_alvo_passa(fase: Phase, comando: list[str]) ->
 
 def test_sem_alvo_nao_roda() -> None:
     assert check_command(["curl", ALVO], phase=Phase.RECON, target=None).allowed is False
+
+
+async def test_execucao_real_desligada_por_padrao(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sem AGENT_LIVE_EXECUTION, dry_run=false vira planejamento: nada executa."""
+    from orchestrator.ai.agentic import executor
+
+    monkeypatch.setattr(settings, "AGENT_LIVE_EXECUTION", False)
+    chamado: list[list[str]] = []
+
+    async def runner(argv: list[str]) -> tuple[int, str, str]:
+        chamado.append(argv)
+        return 0, "", ""
+
+    d = await executor.run_in_kali(
+        ["curl", "-sSI", ALVO],
+        phase=Phase.RECON,
+        target=ALVO,
+        dry_run=False,
+        runner=runner,
+        mode="local",
+    )
+    assert chamado == [] and d.executed is False

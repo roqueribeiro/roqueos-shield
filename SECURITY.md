@@ -94,5 +94,10 @@ before public disclosure. If in doubt, ask first.
   outside `127.0.0.1`: put a TLS reverse proxy in front.
 - Treat a backup of `/data` as a secret: it holds the `APP_TOKEN` and the `SECRETS_KEY`.
 - Give `operator` and `viewer` roles to people and CI; keep `admin` for who changes scope
-  and AI settings. Running the AI agent for real (`dry_run=false`) is admin-only.
+  and AI settings.
+- The AI agent's investigation only **plans** commands by default. Executing them
+  (`dry_run=false`) needs `AGENT_LIVE_EXECUTION=true` and an admin. The command leash
+  (allowed binaries, curl options, scope of every host, URL and path in the argv) is
+  defense in depth, not a sandbox: turn live execution on only in an isolated
+  environment.
 - Read the threat model in [`docs/threat-model.md`](docs/threat-model.md).

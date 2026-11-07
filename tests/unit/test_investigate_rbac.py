@@ -78,6 +78,14 @@ async def test_executar_de_verdade_e_so_de_admin(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(inv_router, "log_audit_event", nada)
     monkeypatch.setattr("orchestrator.ai.agentic.cai_expert.investigate_finding", fake_investigate)
+    from orchestrator.config import settings
+
+    # Desligada (o padrão): nem admin executa.
+    monkeypatch.setattr(settings, "AGENT_LIVE_EXECUTION", False)
+    async with _client(Role.ADMIN) as c:
+        r = await c.post(f"/investigate/{uuid4()}", json={"dry_run": False})
+    assert r.status_code == 403 and "AGENT_LIVE_EXECUTION" in r.text
+    monkeypatch.setattr(settings, "AGENT_LIVE_EXECUTION", True)
     async with _client(Role.OPERATOR) as c:
         r = await c.post(f"/investigate/{uuid4()}", json={"dry_run": False})
     assert r.status_code == 403

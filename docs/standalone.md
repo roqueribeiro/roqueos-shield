@@ -246,6 +246,7 @@ UI, with the variable's name, which is what a regulated environment needs.
 | `LAB_ONLY`, `TARGET_ALLOWLIST`, `REQUIRE_AUTH_REF` | from the UI | lock the authorized scope |
 | `LLM_MODEL`, `LLM_API_BASE`, `ANTHROPIC_API_KEY`… | from the UI | lock the AI configuration |
 | `ALLOW_CLOUD_FALLBACK` | `true` | `false` forbids a local model from falling back to a cloud one |
+| `AGENT_LIVE_EXECUTION` | `false` | lets an admin run the AI agent's planned commands for real (`dry_run=false`); off, the agent only plans |
 | `MCP_ALLOW_ACTIONS` | `false` | lets `POST /mcp` start scans (always with an authorization reference) |
 | `COOKIE_SECURE` | `false` | forces `Secure` on the session cookie |
 | `OIDC_*` | off | SSO, next to password login |

@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     # publica NÃO sobe o kali-toolbox — sem o modo local o agente não rodaria lá.
     # A coleira do executor é idêntica nos dois modos.
     AGENT_EXECUTOR: str = "auto"
+    # Executar de verdade (dry_run=false) os comandos que o agente planeja. Desligado por
+    # padrão: a coleira do executor é defesa em profundidade (cada rodada de revisão
+    # achou mais uma forma de um scanner ler arquivo ou sair do alvo pelo argv), e no
+    # container único o comando nasce ao lado dos segredos. Com False, a investigação
+    # PLANEJA (dry_run=true) e mostra os comandos; ninguém os executa pela API.
+    AGENT_LIVE_EXECUTION: bool = False
     # Aliases legados (mantidos por compatibilidade, não usados pelo gateway)
     LLM_LOCAL_BASE_URL: str = "http://ollama:11434/v1"
     LLM_LOCAL_MODEL: str = "ollama/qwen2.5:32b-instruct-q4_K_M"
