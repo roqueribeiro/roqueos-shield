@@ -1,0 +1,72 @@
+export default {
+  auth: {
+    emailNotVerifiedBeforeLogin: '请在登录前验证你的邮箱。',
+    userNotAuthenticated: '用户未认证',
+  },
+  env: {
+    missingRequired: 'Missing required environment variable: {key}',
+  },
+  chat: {
+    localModelUnreachable:
+      '无法连接本地模型。请在“设置 → AI 提供商”中确认其地址在线，并且 RoqueOS 服务器可以访问它。',
+    aiKeyMissing: '请在“设置 → AI 提供商”中配置 AI 提供商密钥以使用此助手。',
+    aiNeedsServerMode: 'AI 聊天需要启用服务器模式才能回复。请连接到服务器。',
+    apiKeyNotConfiguredForAgent: '该代理未配置 API 密钥',
+    assistantNeedsServerMode: '助手需要启用服务器模式才能操作你的桌面。',
+    assistantConnectFailed: '无法连接到助手。请检查服务器模式后重试。',
+    assistantFailed: '助手无法完成该请求。请重试。',
+    providerNotSupported: '不支持的提供商 "{provider}"',
+    agentNotFoundOrNoPermission: '未找到代理或无权限',
+    openAiApiError: 'OpenAI API 错误',
+    anthropicApiError: 'Anthropic API 错误',
+    geminiApiError: 'Gemini API 错误',
+    groqApiError: 'Groq API 错误',
+    mistralApiError: 'Mistral API 错误',
+    openRouterApiError: 'OpenRouter API 错误',
+  },
+  remoteDesktop: {
+    websocketNotConnected: 'WebSocket 未连接',
+    connectionError: '连接错误',
+  },
+  api: {
+    requestFailed: '请求失败',
+    httpStatus: 'HTTP {status}',
+    uploadFailed: '上传失败',
+    uploadFailedWithStatus: '上传失败：{status}',
+  },
+  googleDrive: {
+    notConnected: '未连接到 Google Drive',
+    downloadFailed: '下载失败',
+    getFileContentFailed: '获取文件内容失败',
+    uploadFailed: '上传失败',
+    exportFailed: '导出失败',
+  },
+  appStore: {
+    failedToFetchCatalog: '获取目录失败',
+    invalidCatalogStructure: '目录结构无效',
+    invalidJsonFormat: 'JSON 格式无效',
+  },
+  fileStorage: {
+    fileNotFound: '未找到文件',
+    folderIntoItself: '文件夹不能移动到其自身内部。',
+  },
+  http: {
+    timeout: '请求超时（{ms} 毫秒）。',
+    httpErrorStatus: 'HTTP 错误！状态：{status}',
+    networkError: '网络错误。请检查您的连接。',
+  },
+  loadFailed: '加载失败',
+  appLoadError: '无法加载应用。请检查您的连接并重试。',
+  generic: '发生意外错误',
+  appOffline: '无网络连接',
+  appOfflineMessage: '此应用尚未保存在这台设备上。请连接互联网后重试：首次打开之后，即可离线使用。',
+  operationFailed: '无法完成此操作，请重试。',
+  copyFailed: '无法复制。',
+  featureDisabledByServerTitle: '功能不可用',
+  featureDisabledByServer: '此功能在当前服务器上未启用。请连接到兼容的服务器以使用该功能。',
+  clipboardAccess: '无法访问剪贴板。请检查浏览器权限。',
+  notFound: {
+    titlePart2: '找到',
+    openApp: '打开 RoqueOS',
+  },
+}

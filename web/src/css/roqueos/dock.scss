@@ -1,0 +1,285 @@
+// ==================== DOCK ====================
+.ros-dock {
+  position: fixed;
+  // A phone in landscape is 852px+ wide, so it never reaches the 768px mobile
+  // rule and lands here, where a flat 8px sat under the landscape home
+  // indicator (21px).
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+
+  // Liquid glass surface — refraction (Chromium) or premium blur
+  // (Safari/Firefox) or opaque tint (low-end). All visual params
+  // come from tokens (`--ros-liquid-glass-*` in tokens.scss).
+  @include liquid-glass-surface;
+
+  border: none;
+  border-radius: var(--ros-radius-lg);
+  z-index: 9998;
+  transition: all 0.3s ease;
+
+  &--hidden {
+    transform: translateX(-50%) translateY(100%);
+    opacity: 0;
+  }
+
+  // Posição inferior (padrão)
+  &--bottom {
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    top: auto;
+    right: auto;
+    transform: translateX(-50%);
+    flex-direction: row;
+
+    &.ros-dock--hidden {
+      transform: translateX(-50%) translateY(100%);
+    }
+  }
+
+  // Posição esquerda
+  &--left {
+    left: 8px;
+    top: 50%;
+    bottom: auto;
+    right: auto;
+    transform: translateY(-50%);
+    flex-direction: column;
+    align-items: center;
+
+    &.ros-dock--hidden {
+      transform: translateY(-50%) translateX(-100%);
+    }
+
+    .ros-dock__separator {
+      width: 48px;
+      height: 1px;
+      margin: 4px 0;
+    }
+  }
+
+  // Posição direita
+  &--right {
+    right: 8px;
+    top: 50%;
+    bottom: auto;
+    left: auto;
+    transform: translateY(-50%);
+    flex-direction: column;
+    align-items: center;
+
+    &.ros-dock--hidden {
+      transform: translateY(-50%) translateX(100%);
+    }
+
+    .ros-dock__separator {
+      width: 48px;
+      height: 1px;
+      margin: 4px 0;
+    }
+  }
+
+  --dock-icon-size: 52px;
+
+  &__separator {
+    width: 1px;
+    height: calc(var(--dock-icon-size) - 4px);
+    background: rgba(var(--ros-fill-rgb), 0.3);
+    margin: 0 4px;
+    align-self: center;
+  }
+}
+
+// Dock container groups
+.ros-dock__pinned,
+.ros-dock__running,
+.ros-dock__minimized {
+  display: contents;
+}
+
+// Dock item animations
+.dock-item-enter-active {
+  animation: dock-item-enter 0.3s var(--ros-ease-bounce);
+}
+
+.dock-item-leave-active {
+  animation: dock-item-leave 0.25s ease-out forwards;
+}
+
+.dock-item-move {
+  transition: transform 0.3s var(--ros-ease-bounce);
+}
+
+@keyframes dock-item-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0) translateY(20px);
+  }
+  50% {
+    transform: scale(1.1) translateY(-5px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes dock-item-leave {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0) translateY(20px);
+  }
+}
+
+// Separator animations
+.dock-separator-enter-active {
+  animation: dock-separator-enter 0.2s ease-out;
+}
+
+.dock-separator-leave-active {
+  animation: dock-separator-leave 0.2s ease-out forwards;
+}
+
+@keyframes dock-separator-enter {
+  from {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes dock-separator-leave {
+  from {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  to {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+}
+
+.ros-dock-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition:
+    transform 0.15s var(--ros-ease-bounce),
+    opacity 0.15s ease;
+  padding: 0 2px;
+
+  // Dragging state
+  &--dragging {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+
+  // Drop target indicator
+  &--drop-target {
+    transform: translateX(10px);
+  }
+
+  // Default hover without magnification
+  &:hover {
+    transform: translateY(-4px);
+
+    .ros-dock-item__tooltip {
+      opacity: 1;
+    }
+
+    // "Light up" — intensify the coloured glow halo on hover (specular + glyph
+    // stay put; only the hue glow strengthens). Flattened in low-end mode.
+    .ros-dock-item__icon {
+      --app-icon-glow-a: 0.55;
+    }
+  }
+
+  // Magnification effect when enabled
+  .ros-dock--magnify & {
+    &:hover {
+      transform: translateY(-10px) scale(1.2);
+      z-index: 10;
+    }
+  }
+
+  &__icon {
+    width: var(--dock-icon-size, 52px);
+    height: var(--dock-icon-size, 52px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: $ros-brand-gradient;
+    border-radius: calc(var(--dock-icon-size, 52px) * 0.23);
+    font-size: calc(var(--dock-icon-size, 52px) * 0.54);
+    color: white;
+    transition: all var(--ros-duration-normal) var(--ros-ease-default);
+
+    // Premium surface: specular highlight + glass edge ring + depth/coloured
+    // glow + glyph shadow (shared mixin — dock / launchpad / desktop tiles).
+    @include ros-app-icon-surface;
+
+    img {
+      width: 100%;
+      height: 100%;
+      border-radius: calc(var(--dock-icon-size, 52px) * 0.23);
+      object-fit: cover;
+    }
+  }
+
+  &__indicator {
+    width: 4px;
+    height: 4px;
+    background: rgba(var(--ros-fill-rgb), 0.9);
+    border-radius: 50%;
+    margin-top: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+
+    &--active {
+      opacity: 1;
+    }
+  }
+
+  &__tooltip {
+    position: absolute;
+    bottom: calc(var(--dock-icon-size, 52px) + 18px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(var(--ros-surface-0-rgb), 0.95);
+    color: var(--ros-text-100);
+    padding: 6px 12px;
+    border-radius: var(--ros-radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    box-shadow: var(--ros-elevation-2);
+    z-index: 10000;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: rgba(var(--ros-surface-0-rgb), 0.95);
+    }
+  }
+}

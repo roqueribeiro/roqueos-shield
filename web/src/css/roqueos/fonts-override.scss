@@ -1,0 +1,29 @@
+// ============================================================================
+// FONTS OVERRIDE
+// ----------------------------------------------------------------------------
+// Purpose: pin the Material Icons webfont to a stable, unhashed URL under
+// /fonts/ so that (a) <link rel="preload"> in index.html can point at the
+// exact same file the browser will request from CSS, and (b) the Workbox
+// service-worker precache always covers it under one predictable entry.
+//
+// Without this override, @quasar/extras ships its own @font-face that
+// references the woff2 via a relative URL that ends up under /assets/ with
+// a Vite-generated hash (e.g. /assets/flUhRq6tzZclQEJ-*-abc123.woff2). A
+// preload written at author-time cannot guess that hash, so the preload
+// would silently miss and we'd see FOIT on first load anyway.
+//
+// Because this @font-face uses the same `font-family: 'Material Icons'` and
+// is loaded BEFORE the Quasar one (see src/css/roqueos/index.scss import
+// order), our `src` wins by cascade-proximity when both are valid. We keep
+// font-display: block because Material Icons is an icon font — a fallback
+// render would show the raw ligature text ("arrow_back") which is worse
+// than a brief blank.
+// ============================================================================
+
+@font-face {
+  font-family: 'Material Icons';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/material-icons.woff2') format('woff2');
+}

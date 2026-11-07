@@ -1,0 +1,292 @@
+// =============================================================================
+// BOTÕES DO SISTEMA (Goal 63, 10/10/2026)
+//
+// A linguagem do modal aprovado em 09/10/2026 levada para o sistema inteiro: canto
+// de 12px, 40px no mouse e 44px no dedo, primário claro com texto escuro, tonal no
+// lugar do cinza chapado, perigo e aviso fechados. `.ros-modal__btn` (overlays.scss)
+// estende este `.ros-btn`, então os dois falam a mesma língua.
+//
+// Use o componente: `<ROSButton variant="primary">Salvar</ROSButton>` e
+// `<ROSIconButton icon="refresh" :label="t('common.refresh')" />`. As classes ficam
+// públicas para quem precisa de um `<a>` ou de um `<label>` com cara de botão.
+//
+// O accent do app (`--ros-app-accent-rgb`, publicado pela janela) entra na variante
+// `accent` e no anel de foco; fora de uma janela ele é o do tema (temas.scss).
+// =============================================================================
+
+.ros-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ros-space-2);
+  min-height: 40px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 var(--ros-space-4);
+  border: none;
+  border-radius: var(--ros-radius-md);
+  background: var(--ros-btn-bg);
+  color: var(--ros-btn-text);
+  font-family: inherit;
+  font-size: var(--ros-text-md);
+  font-weight: var(--ros-font-medium);
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--ros-duration-fast) var(--ros-ease-default),
+    color var(--ros-duration-fast) var(--ros-ease-default),
+    opacity var(--ros-duration-fast) var(--ros-ease-default),
+    transform var(--ros-duration-fast) var(--ros-ease-default);
+
+  // No toque o alvo alcança 44 nas duas direções num pseudo-elemento, sem mudar o desenho
+  // (a receita do botão de ícone, logo abaixo). O `sm` tem 40 de alto no dedo e o botão só
+  // de ícone pode ter 40 de largo: a 21px do centro o dedo caía fora dele (Goal 70,
+  // Recursos Docker e Stacks). Num botão que já passa de 44 o inset é zero.
+  @media (pointer: coarse) {
+    min-height: 44px;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: min(0px, calc((100% - 44px) / 2));
+    }
+  }
+
+  &:hover {
+    background: var(--ros-btn-bg-hover);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgb(var(--ros-app-accent-rgb));
+    outline-offset: 2px;
+  }
+
+  &:disabled,
+  &[aria-disabled='true'] {
+    background: var(--ros-fill-06);
+    color: var(--ros-text-50);
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  // No ROSButton o rótulo nunca quebra em duas linhas: degrada para reticências
+  // (regra 10, "rótulo curto"). O certo continua sendo o rótulo caber. O `.ros-btn`
+  // escrito à mão nos apps não ganha o nowrap: lá o texto não tem caixa própria para
+  // cortar, e forçar uma linha só faria o botão vazar do contêiner.
+  &__rotulo {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__icone {
+    flex-shrink: 0;
+  }
+
+  // --- variantes -----------------------------------------------------------
+
+  &--primary {
+    background: var(--ros-modal-btn-primary-bg);
+    color: var(--ros-modal-btn-primary-text);
+    font-weight: var(--ros-font-semibold);
+
+    &:hover {
+      background: var(--ros-modal-btn-primary-bg);
+      opacity: 0.88;
+    }
+  }
+
+  &--ghost {
+    background: transparent;
+    color: var(--ros-btn-ghost-text);
+
+    &:hover {
+      background: var(--ros-btn-ghost-bg-hover);
+      color: var(--ros-btn-ghost-text-hover);
+    }
+  }
+
+  &--danger {
+    background: var(--ros-btn-danger-bg);
+    color: var(--ros-btn-danger-text);
+    font-weight: var(--ros-font-semibold);
+
+    &:hover {
+      background: var(--ros-btn-danger-bg-hover);
+    }
+  }
+
+  &--warning {
+    background: var(--ros-modal-btn-warning-bg);
+    color: var(--ros-modal-btn-warning-text);
+    font-weight: var(--ros-font-semibold);
+
+    &:hover {
+      background: var(--ros-modal-btn-warning-bg);
+      opacity: 0.88;
+    }
+  }
+
+  // Tonal no accent do app: o jeito de dar cor ao botão sem pôr texto branco sobre o
+  // accent (que reprova o contraste em todos os temas).
+  &--accent {
+    background: rgba(var(--ros-app-accent-rgb), 0.16);
+    box-shadow: inset 0 0 0 1px rgba(var(--ros-app-accent-rgb), 0.3);
+    color: rgb(var(--ros-app-accent-text-rgb));
+    font-weight: var(--ros-font-semibold);
+
+    &:hover {
+      background: rgba(var(--ros-app-accent-rgb), 0.24);
+    }
+  }
+
+  &:disabled,
+  &[aria-disabled='true'] {
+    &.ros-btn--primary,
+    &.ros-btn--danger,
+    &.ros-btn--warning,
+    &.ros-btn--accent {
+      background: var(--ros-fill-06);
+      box-shadow: none;
+      color: var(--ros-text-50);
+      opacity: 1;
+    }
+  }
+
+  // --- tamanhos ------------------------------------------------------------
+
+  &--sm {
+    min-height: 32px;
+    padding: 0 var(--ros-space-3);
+    border-radius: var(--ros-radius-sm);
+    font-size: var(--ros-text-base);
+    gap: var(--ros-space-1);
+
+    @media (pointer: coarse) {
+      min-height: 40px;
+    }
+  }
+
+  &--lg {
+    min-height: 48px;
+    padding: 0 var(--ros-space-6);
+    font-size: var(--ros-text-lg);
+  }
+
+  &--block {
+    display: flex;
+    width: 100%;
+  }
+
+  &--carregando {
+    cursor: progress;
+  }
+}
+
+// =============================================================================
+// BOTÃO DE ÍCONE
+//
+// Três tamanhos (28, 32, 36) no lugar dos dez que o código tinha (18 a 46px). No
+// toque, a área de clique cresce por um pseudo-elemento até 44px sem mexer no
+// desenho: o botão de 32px continua com 32px, o dedo acerta 44.
+// =============================================================================
+
+.ros-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--ros-radius-pill);
+  background: transparent;
+  color: var(--ros-text-80);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--ros-duration-fast) var(--ros-ease-default),
+    color var(--ros-duration-fast) var(--ros-ease-default),
+    transform var(--ros-duration-fast) var(--ros-ease-default);
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  @media (pointer: coarse) {
+    &::after {
+      inset: min(0px, calc((100% - 44px) / 2));
+    }
+  }
+
+  &:hover {
+    background: var(--ros-fill-08);
+    color: var(--ros-text-100);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.94);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgb(var(--ros-app-accent-rgb));
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    color: var(--ros-text-40);
+    cursor: not-allowed;
+    background: transparent;
+  }
+
+  &--28 {
+    width: 28px;
+    height: 28px;
+  }
+
+  &--36 {
+    width: 36px;
+    height: 36px;
+  }
+
+  &--tonal {
+    background: var(--ros-fill-08);
+    color: var(--ros-text-100);
+
+    &:hover {
+      background: var(--ros-fill-12);
+    }
+  }
+
+  &--quadrado {
+    border-radius: var(--ros-radius-md);
+
+    &.ros-icon-btn--28 {
+      border-radius: var(--ros-radius-sm);
+    }
+  }
+
+  &--ativo,
+  &--ativo:hover {
+    background: rgba(var(--ros-app-accent-rgb), 0.16);
+    color: rgb(var(--ros-app-accent-text-rgb));
+  }
+
+  &--perigo:hover {
+    background: rgba(var(--ros-danger-strong-rgb), 0.16);
+    color: rgb(var(--ros-danger-strong-rgb));
+  }
+}

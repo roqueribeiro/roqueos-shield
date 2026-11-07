@@ -1,0 +1,140 @@
+// =============================================================================
+// UI SCALE CSS
+// =============================================================================
+// Applies zoom scaling to UI elements while keeping the layout fullscreen.
+// The --ros-ui-scale CSS variable is set dynamically via JavaScript.
+// =============================================================================
+
+// Elements that should be scaled
+.ros-layout {
+  // Menu bar
+  .ros-menubar {
+    zoom: var(--ros-ui-scale, 1);
+    // Compensate for zoom on fixed positioning
+    transform-origin: top left;
+  }
+
+  // Dock
+  .ros-dock {
+    zoom: var(--ros-ui-scale, 1);
+    transform-origin: bottom center;
+  }
+
+  // Windows
+  .ros-window {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Context menu
+  .ros-context-menu {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Desktop icons
+  .ros-desktop__icons {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Notifications
+  .ros-notifications {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Notification center drawer
+  .ros-notification-center-drawer {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Spotlight
+  .ros-spotlight {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Launchpad
+  .ros-launchpad {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Control center
+  .ros-control-center {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Media widget
+  .ros-media-widget {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Modals (via Teleport, need global selector)
+  .ros-modal-overlay {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // PWA prompt
+  .ros-pwa-prompt {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Offline indicator
+  .ros-offline-indicator {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Boot screen
+  .ros-boot-screen {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Login screen
+  .ros-login {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Maintenance screen
+  .ros-maintenance {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Server down overlay
+  .ros-server-down {
+    zoom: var(--ros-ui-scale, 1);
+  }
+}
+
+// Snap preview - uses screen coordinates, NOT scaled
+// It's positioned outside the scaled elements to show the actual screen area
+
+// Global elements that use Teleport (outside .ros-layout)
+// These need to read the variable from :root or body
+body {
+  .ros-modal-overlay {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // RoqueOS context menu (uses Teleport to body)
+  .ros-context-menu-overlay {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Quasar menus - scaled with transform
+  // Using transform instead of zoom to maintain position
+  .q-menu {
+    transform: scale(var(--ros-ui-scale, 1));
+    transform-origin: top left;
+  }
+
+  // Quasar dialogs
+  .q-dialog {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Quasar tooltips
+  .q-tooltip {
+    zoom: var(--ros-ui-scale, 1);
+  }
+
+  // Quasar notifications
+  .q-notification {
+    zoom: var(--ros-ui-scale, 1);
+  }
+}

@@ -1,0 +1,106 @@
+// Unified AI configuration system (providers, models, local LLM, tunnel).
+// Used by AIProviderSheet, AILocalConnections, useAIProvider and the Settings hub.
+export default {
+  imageGen: {
+    section: 'Image generation',
+    intro: "Choose the engine that creates your agents' images.",
+    title: 'Image engine',
+    desc: 'The provider and model the agent uses to generate images. OpenAI and Google reuse the same key as your AI models; Stability and FLUX use their own key.',
+    providerLabel: 'Provider',
+    modelLabel: 'Model',
+    keyLabel: 'API key',
+    keyPlaceholder: 'Paste the API key',
+    keyShared: 'Uses the same key as your AI models.',
+    keyOwn: 'A key used only for image generation.',
+    saved: 'Image settings saved.',
+    removeKey: 'Remove key',
+  },
+  toolKeys: {
+    title: 'Tool keys',
+    intro:
+      'Above are the keys for the models. These are the keys for what the agent can DO. Each one applies to your agents, flows and automations.',
+    on: 'Configured',
+    off: 'Not configured',
+    keyLabel: 'Key',
+    stored: 'Key stored. Type a new one to replace it.',
+    test: 'Test',
+    getKey: 'Get a key',
+    saved: 'Key saved.',
+    removed: 'Key removed.',
+    removeTitle: 'Remove the key?',
+    removeSubtitle: '{name} goes back to being unavailable to your agents.',
+    tavily: {
+      title: 'Web search',
+      desc: 'Lets the agent search the internet and cite its sources. Without it, it says it cannot search instead of making something up.',
+      hint: 'We use Tavily. The free plan covers 1,000 searches a month.',
+      placeholder: 'tvly-...',
+    },
+  },
+  title: 'AI Providers',
+  hubSubtitle: 'Set up your keys and models once',
+  pickerSubtitle: 'Choose the AI model',
+  serverRequired: 'Connect a RoqueOS server to list models automatically.', // Provider keys
+  providerKeys: 'Provider keys',
+  configuredPlaceholder: '•••••••• Configured',
+  notConfigured: 'Not configured',
+  getKey: 'Get key',
+  moreProviders: 'More providers',
+  fewerProviders: 'Fewer providers', // Local LLM + tunnel
+  localTitle: 'Local LLM (LM Studio / Ollama)',
+  localDesc:
+    'Connect a model running on your machine or network. Generate a Cloudflare tunnel to reach it from anywhere in the world.',
+  connectionName: 'Connection name',
+  connectionNamePlaceholder: 'e.g. My LM Studio',
+  endpoint: 'Endpoint (OpenAI-compatible)',
+  endpointPlaceholder: 'http://192.168.0.10:1234/v1',
+  optionalKey: 'Key (optional)',
+  optionalKeyPlaceholder: 'Leave blank for "local"',
+  apiKey: 'API key',
+  apiKeyPlaceholder: 'Paste this provider’s key',
+  addConnection: 'Add connection',
+  noConnections: 'No local connections yet.',
+  generateTunnel: 'Generate tunnel',
+  stopTunnel: 'Stop tunnel',
+  tunnelRunning: 'Live',
+  tunnelStarting: 'Starting',
+  tunnelError: 'Error',
+  tunnelOff: 'Off',
+  copyUrl: 'Copy URL',
+  tunnelHint:
+    'The tunnel exposes the local endpoint via Cloudflare, the server must be able to reach the LLM machine.',
+  tunnelFailed: 'Could not generate the tunnel. Check that the server can reach the endpoint.', // Models
+  chooseModel: 'Choose the model',
+  listModels: 'List available models',
+  listing: 'Fetching models…',
+  fetchPartial: 'Could not list from: {providers}. Showing known models.',
+  model: 'Primary model',
+  fallbackModel: 'Fallback model',
+  modelsFound: '{n} models available',
+  modelPlaceholder: 'e.g. openai/gpt-4o-mini',
+  fallbackPlaceholder: 'Optional',
+  noFallback: 'No fallback', // Model field (AIModelField), used by Chat, Automations, Flows, Pentest
+  chooseModelCta: 'Choose an AI model',
+  fallbackShort: 'fallback',
+  ownShort: 'own key', // Per-surface override (picker)
+  ownCredentials: 'Use own credentials',
+  ownCredentialsHint:
+    'This item uses a specific key/endpoint instead of the providers configured in the hub.',
+  provider: 'Provider',
+  localOption: 'Local endpoint', // Actions / feedback
+  save: 'Save',
+  apply: 'Apply',
+  saved: 'AI configuration saved.',
+  connectionAdded: 'Connection added.',
+  connectionRemoved: 'Connection removed.',
+  deleteConnection: 'Remove connection?', // Hub (Settings → AI Providers)
+  hubDesc:
+    'Set up your AI keys and local connections once. Every app (Chat, Flows, Automations…) uses these providers.',
+  manage: 'Configure AI providers',
+  manageShort: 'Manage',
+  connectServerHint:
+    'Connect a RoqueOS server (in the Server tab) to configure providers and list models.',
+  summaryConfigured: '{n} provider(s) with a key',
+  summaryNone: 'No providers configured yet',
+  summaryConnections: '{n} local connection(s)',
+  summaryDefault: 'Default model',
+}

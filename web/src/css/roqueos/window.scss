@@ -1,0 +1,283 @@
+// ==================== WINDOW ====================
+.ros-window {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  background: $ros-bg-dark;
+  backdrop-filter: blur(25px) saturate(1.2);
+  -webkit-backdrop-filter: blur(25px) saturate(1.2);
+  border-radius: $ros-window-border-radius;
+  box-shadow:
+    var(--ros-elevation-4),
+    0 0 0 1px $ros-window-border;
+  overflow: hidden;
+  transition: all var(--ros-duration-slow) var(--ros-ease-default);
+  animation: windowOpen var(--ros-duration-slow) var(--ros-ease-decelerate);
+
+  &--active {
+    box-shadow:
+      var(--ros-elevation-5),
+      0 0 0 1px $ros-window-border-active;
+  }
+
+  &--maximized {
+    border-radius: 0 !important;
+    // menubar-offset already includes menu bar height + safe-area-inset-top.
+    // max(JS var, CSS env()) so a maximized window never snaps flush to the top
+    // even if the JS safe-area probe reads 0 on iPhone (CSS env() resolves the
+    // real notch). See responsive.scss for the rationale.
+    top: max(
+      var(--ros-menubar-offset, #{$ros-menubar-height}),
+      env(safe-area-inset-top, 0px)
+    ) !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: var(--ros-dock-offset, 0px) !important;
+    width: auto !important;
+    height: auto !important;
+    transition: all var(--ros-duration-slow) var(--ros-ease-default);
+  }
+
+  &--snapped {
+    border-radius: 0 !important;
+    transition: all var(--ros-duration-normal) var(--ros-ease-default);
+  }
+
+  &--minimized {
+    transform: scale(0.3) translateY(100vh);
+    opacity: 0;
+    pointer-events: none;
+    transition: all var(--ros-duration-slow) var(--ros-ease-accelerate);
+  }
+
+  &--closing {
+    animation: windowClose 0.25s var(--ros-ease-accelerate) forwards;
+  }
+
+  &--dragging,
+  &--resizing {
+    transition: none !important;
+  }
+
+  &--no-animations {
+    animation: none !important;
+    transition: none !important;
+
+    &.ros-window--minimized,
+    &.ros-window--maximized,
+    &.ros-window--closing {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+
+  &--no-transparency {
+    background: rgba(var(--ros-surface-0-rgb), 0.98) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  // True fullscreen (e.g. browser immersive): drop the window header so the
+  // content goes edge-to-edge, and — when maximized — cover the menu bar + dock
+  // area too (no RoqueOS chrome left but the app's own edge trigger).
+  &--immersive {
+    border-radius: 0 !important;
+
+    &.ros-window--maximized {
+      top: 0 !important;
+      bottom: 0 !important;
+    }
+
+    // No RoqueOS chrome in true fullscreen — drop the window header AND the
+    // mobile swipe-to-close handle (the bar + pill at the top) so the site
+    // fills the WHOLE screen. Exit is via the right-edge arrow → "Sair da
+    // tela cheia".
+    .ros-window__header,
+    .ros-window__swipe-handle {
+      display: none !important;
+    }
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    height: $ros-window-header-height;
+    padding: 0 12px;
+    background: $ros-window-header-bg;
+    border-bottom: 1px solid $ros-window-header-border;
+    cursor: grab;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  &__controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__control {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: transparent;
+
+    &:hover {
+      color: $ros-window-control-hover-color;
+    }
+
+    &--close {
+      background: $ros-red;
+
+      &:hover {
+        background: $ros-red-hover;
+      }
+    }
+
+    &--minimize {
+      background: $ros-yellow;
+
+      &:hover {
+        background: $ros-yellow-hover;
+      }
+    }
+
+    &--maximize {
+      background: $ros-green;
+
+      &:hover {
+        background: $ros-green-hover;
+      }
+    }
+  }
+
+  &__title {
+    flex: 1;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    color: $ros-text-strong;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  &__title-icon {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  &__content {
+    flex: 1;
+    overflow: auto;
+    background: $ros-surface-1;
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  }
+
+  // Resize handles
+  &__resize {
+    position: absolute;
+    z-index: 100;
+
+    // No toque, só os cantos (Goal 70). A alça da borda é uma faixa de 4px por cima da
+    // borda do conteúdo, e o dedo que mira o primeiro ou o último botão de uma barra a
+    // alcança: no tablet de 820, a 21px do centro, o "Desfazer" do Editor e o "Alternar
+    // barra lateral" do RoqueCode davam na alça da esquerda, e o "Novo" do Editor e o
+    // "Nova aba" do Navegador na da direita. Uma faixa de 4px também não é alvo para um
+    // dedo. Os cantos ficam (10px, fora das barras) e o mouse continua com as oito; no
+    // celular a janela não tem alça nenhuma (`responsive.scss`).
+    &--n,
+    &--s,
+    &--e,
+    &--w {
+      @media (pointer: coarse) {
+        display: none;
+      }
+    }
+
+    &--n {
+      top: 0;
+      left: 10px;
+      right: 10px;
+      height: 4px;
+      cursor: n-resize;
+    }
+
+    &--s {
+      bottom: 0;
+      left: 10px;
+      right: 10px;
+      height: 4px;
+      cursor: s-resize;
+    }
+
+    &--e {
+      right: 0;
+      top: 10px;
+      bottom: 10px;
+      width: 4px;
+      cursor: e-resize;
+    }
+
+    &--w {
+      left: 0;
+      top: 10px;
+      bottom: 10px;
+      width: 4px;
+      cursor: w-resize;
+    }
+
+    &--ne {
+      top: 0;
+      right: 0;
+      width: 10px;
+      height: 10px;
+      cursor: ne-resize;
+    }
+
+    &--nw {
+      top: 0;
+      left: 0;
+      width: 10px;
+      height: 10px;
+      cursor: nw-resize;
+    }
+
+    &--se {
+      bottom: 0;
+      right: 0;
+      width: 10px;
+      height: 10px;
+      cursor: se-resize;
+    }
+
+    &--sw {
+      bottom: 0;
+      left: 0;
+      width: 10px;
+      height: 10px;
+      cursor: sw-resize;
+    }
+  }
+}

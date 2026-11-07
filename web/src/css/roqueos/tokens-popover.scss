@@ -1,0 +1,49 @@
+// =============================================================================
+// TOKENS DE SUPERFÍCIE TELEPORTADA
+// =============================================================================
+//
+// ⚠️ ESTES TÊM QUE SER GLOBAIS, E O MOTIVO É O TELEPORTE.
+//
+// `q-menu`, `q-dialog` e `q-tooltip` são movidos para o `<body>`. A REGRA que
+// veste o menu continua alcançando (a classe viaja com o elemento), mas a
+// PROPRIEDADE CUSTOMIZADA não: declarada em `.ros-<app>`, ela não herda para um
+// nó que não é descendente daquele app. E `var()` sem valor invalida a
+// declaração inteira no tempo de computo — o fundo some, o Quasar põe o claro
+// dele, e o texto branco fica em cima.
+//
+// ⚠️ E DECLARAR ISSO EM `:root` DENTRO DE UM `<style scoped>` NÃO RESOLVE.
+// O Vue carimba o `data-v` no último composto: `:root` vira
+// `[data-v-x]:root`, e o `<html>` nunca carrega o atributo de um componente.
+// A regra não casa com nada, calada. Foi exatamente o que eu fiz em 29/08 ao
+// tentar consertar isso — cinco blocos mortos, e o menu do ROSBrowser continuou
+// ilegível em produção depois de eu dizer que estava resolvido.
+//
+// O `index.scss` é NÃO-scoped, então é daqui que estes tokens saem. O portão
+// `tokens-de-popover` reprova quem declarar em qualquer outro lugar.
+//
+// Continuam sendo do app pelo NOME: um tema alcança `--ros-browser-bg-46` daqui
+// do mesmo jeito que alcançaria de dentro de `.ros-browser`.
+
+:root {
+  // --- ROSBrowser: o menu "Modo embutido" ---
+  --ros-browser-bg-46: rgba(var(--ros-surface-0-rgb), 0.97);
+  --ros-browser-bg-49: rgba(var(--ros-surface-0-rgb), 0.98);
+  // Ícone do cabeçalho do menu: passa a seguir o acento do tema.
+  --ros-browser-fg-4: var(--ros-accent);
+
+  // --- ROSChat: o menu de reação da mensagem ---
+  --ros-chat-bg-12: rgba(var(--ros-surface-0-rgb), 0.97);
+  // Ação destrutiva no menu da mensagem: o vermelho do sistema.
+  --ros-chat-fg-3: rgb(var(--ros-danger-rgb));
+
+  // --- Player: o seletor de faixa ---
+  --music-picker-bg-1: rgba(var(--ros-surface-0-rgb), 0.94);
+  --music-picker-bg-2: rgba(var(--ros-surface-0-rgb), 0.98);
+
+  // --- Terminal: barra de status e abas ---
+  --terminal-status-bar-bg-6: rgba(var(--ros-surface-0-rgb), 0.98);
+  --terminal-status-bar-fg-1: var(--ros-text-85);
+  --terminal-status-bar-fg-2: var(--ros-text-55);
+  --terminal-tabs-bg-2: rgba(var(--ros-surface-0-rgb), 0.98);
+  --terminal-tabs-fg-2: var(--ros-text-85);
+}

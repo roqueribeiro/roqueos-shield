@@ -1,0 +1,86 @@
+// =============================================================================
+// RoqueOS - Global Component Styles
+// =============================================================================
+
+// =============================================================================
+// Q-Select (Dropdown) - Padrão RoqueOS
+// =============================================================================
+// Referência: ROSRoqueman.vue
+// Uso: class="ros-qselect" + popup-content-class="ros-qselect-popup ros-scrollbar-dark"
+
+.ros-qselect {
+  .q-field__control {
+    background: var(--ros-bg-primary, rgb(var(--ros-surface-0-rgb)));
+  }
+
+  &.q-field--outlined .q-field__control:before {
+    border-color: var(--ros-border, #3c3c3c);
+  }
+
+  &.q-field--outlined.q-field--focused .q-field__control:before {
+    border-color: var(--ros-accent, #007acc);
+  }
+
+  &.q-field--outlined .q-field__control:hover:before {
+    border-color: var(--ros-text-tertiary, #6e6e6e);
+  }
+
+  .q-field__native,
+  .q-field__input {
+    color: var(--ros-text-primary, #e0e0e0);
+  }
+
+  .q-field__append .q-icon,
+  .q-field__prepend .q-icon {
+    color: var(--ros-text-secondary, #a0a0a0);
+  }
+
+  // Variante compacta para toolbars
+  &--compact {
+    .q-field__control {
+      min-height: 26px;
+    }
+
+    .q-field__native,
+    .q-field__input {
+      font-size: var(--ros-text-sm);
+    }
+  }
+}
+
+// Popup do q-select
+.ros-qselect-popup {
+  background: var(--ros-bg-secondary, #252526) !important;
+  border: 1px solid var(--ros-border, #3c3c3c) !important;
+  border-radius: var(--ros-radius-md) !important;
+  padding: 8px !important;
+  box-shadow: var(--ros-elevation-3) !important;
+  max-height: 380px !important;
+  overflow: auto !important;
+  // Always paint above ROSModal (z-index 9999). The body-scoped rule in
+  // overlays.scss (`body.ros-modal-open .q-menu`) covers most cases but
+  // fails on the FIRST popup-open right after a modal mount — Quasar
+  // commits an inline z-index before the body class is observed by the
+  // popup's stacking context, so the dropdown renders behind the modal
+  // until the user closes and reopens it. Pinning the popup class itself
+  // makes the fix deterministic and independent of modal state.
+  z-index: 10001 !important;
+
+  .q-item {
+    border-radius: var(--ros-radius-sm) !important;
+    margin: 2px 0 !important;
+    min-height: 36px !important;
+    color: var(--ros-text-primary, #e0e0e0) !important;
+  }
+
+  .q-item--active,
+  .q-item.q-manual-focusable--focused,
+  .q-item:hover {
+    background: var(--ros-fill-08) !important;
+  }
+
+  .q-item__section--main {
+    font-size: var(--ros-text-base);
+    line-height: 1.2;
+  }
+}

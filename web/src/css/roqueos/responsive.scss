@@ -1,0 +1,301 @@
+// ==================== MOBILE RESPONSIVE ====================
+@include ros-tablet {
+  .ros-menubar {
+    // 68px = 44px brand/notif chip + 12px top + 12px bottom — mirrors
+    // the 12px horizontal padding so the chips have symmetric breathing
+    // on all four sides. Paired with baseHeight=68 in RoqueOSLayout.vue
+    // so --ros-menubar-offset stays in sync — changing one without the
+    // other makes windows overlap the bar.
+    height: 68px;
+    padding-left: 12px;
+    padding-right: 12px;
+
+    // Capacitor: adicionar safe-area
+    .capacitor-app & {
+      height: calc(68px + var(--safe-area-inset-top, 0px));
+      padding-top: var(--safe-area-inset-top, 0px);
+      padding-left: max(12px, var(--safe-area-inset-left, 0px));
+      padding-right: max(12px, var(--safe-area-inset-right, 0px));
+    }
+
+    &__left {
+      gap: 8px;
+
+      // Hide menu items on mobile, keep only logo and app name
+      .ros-menubar__item:not(.ros-menubar__logo):not(.ros-menubar__app-name) {
+        display: none;
+      }
+    }
+
+    &__right {
+      gap: 8px;
+    }
+
+    // NOTE: the mobile hide for `.ros-menubar__time` lives in the
+    // scoped <style> block of ROSMenuBar.vue — that's where it can win
+    // on specificity against the scoped base rule. Do NOT move it back
+    // here without also removing the base scoped rule.
+  }
+
+  .ros-desktop {
+    // Use CSS variable that includes menu bar height + safe-area-inset-top
+    top: var(--ros-menubar-offset, 68px);
+    bottom: 70px;
+
+    &__icons {
+      padding: 12px;
+      gap: 4px;
+    }
+  }
+
+  .ros-icon {
+    width: 72px;
+
+    &__image {
+      width: 60px;
+      height: 60px;
+      font-size: 32px;
+      border-radius: var(--ros-radius-md);
+    }
+
+    &__label {
+      font-size: var(--ros-text-xs);
+      margin-top: 4px;
+    }
+  }
+
+  .ros-dock {
+    // The 25px alone put the dock's bottom edge INSIDE the iPhone home
+    // indicator band (34px), so the system pill painted across it and an
+    // upward drag from a dock icon triggered the OS home gesture. The mobile
+    // home grid already reserves "dock footprint + safe area" assuming the
+    // dock clears the inset, so it has to actually clear it.
+    bottom: calc(25px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 25px !important;
+    right: 25px !important;
+    top: auto !important;
+    transform: none !important;
+    border-radius: var(--ros-radius-lg) !important;
+    padding: 12px 5px;
+    justify-content: space-around !important;
+    overflow: hidden !important;
+    gap: 0 !important;
+    background: transparent !important;
+    backdrop-filter: blur(var(--ros-blur-md)) saturate(80%) !important;
+    -webkit-backdrop-filter: blur(var(--ros-blur-md)) saturate(80%) !important;
+    border: none;
+    flex-direction: row !important;
+    width: auto !important;
+    height: auto !important;
+
+    &.ros-dock--hidden {
+      transform: translateY(120%) !important;
+    }
+  }
+
+  .ros-dock__mobile-items {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    gap: 0;
+    // `min-width: 0` on the container lets children shrink below their
+    // intrinsic min-content (52px icon) when the screen is narrow. Without
+    // this, the 6th slot (task switcher) gets clipped on devices < 360px
+    // because the row tries to keep every child at its natural 52px width.
+    min-width: 0;
+  }
+
+  // NOTE: `.ros-dock__task-switcher-*` lived here too, the layers button with a
+  // count badge inside the phone dock. Removed 2026-08-02: it came and went
+  // with the window count, so the dock changed width depending on what was
+  // open, and that is where the odd layouts on narrow screens came from. The
+  // switcher is reached by swiping DOWN on the home screen, arbitrated by the
+  // grid alongside the swipe up that opens the Launchpad (ROSMobileHomeGrid).
+  //
+  // NOTE: the old `.ros-task-switcher-fab` (bottom-right pill) was
+  // removed when the persistent top-right FAB was introduced. It had
+  // no consumer in markup. See `ROSMobileWindowSwitcherFab.vue` for the
+  // current implementation (top-right, liquid glass, scoped styles).
+
+  .ros-dock-item {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    justify-content: center;
+
+    &:hover {
+      transform: none !important;
+    }
+
+    &__icon {
+      // Same shrink strategy as the task switcher icon: cap at 52px but
+      // allow shrinking on narrow viewports so 6 slots fit without clip.
+      width: min(52px, 100%);
+      aspect-ratio: 1;
+      height: auto;
+      max-width: 52px;
+      max-height: 52px;
+      font-size: 26px;
+      border-radius: var(--ros-radius-md);
+    }
+
+    &__tooltip {
+      display: none !important;
+    }
+
+    &__indicator {
+      display: none !important;
+    }
+  }
+
+  // Extra-narrow viewports (< 360px): shrink the dock side margins so the
+  // 6 slots still have breathing room. Tap targets remain ≥ 40px to stay
+  // within iOS / Android accessibility minimums.
+  @media (max-width: 359px) {
+    .ros-dock {
+      left: 8px !important;
+      right: 8px !important;
+      padding: 10px 4px;
+    }
+  }
+
+  .ros-dock--magnify .ros-dock-item:hover {
+    transform: none !important;
+  }
+
+  .ros-window {
+    border-radius: 0 !important;
+    // menubar-offset already includes menu bar height + safe-area-inset-top.
+    // max(JS var, CSS env()) so the window NEVER snaps flush to the top: the JS
+    // var (--ros-menubar-offset) can read 0 on iPhone when the JS safe-area
+    // probe fails, but CSS env(safe-area-inset-top) resolves the real notch on
+    // iOS even then. The larger of the two wins. (Bug: app pushed to top 0,
+    // swipe-close behind the status bar → impossible to close.)
+    top: max(var(--ros-menubar-offset, 0px), env(safe-area-inset-top, 0px)) !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: var(--ros-dock-offset, 0px) !important;
+    width: auto !important;
+    height: auto !important;
+    transition:
+      transform var(--ros-duration-slow) var(--ros-ease-smooth),
+      opacity var(--ros-duration-slow) ease-out;
+    animation: windowOpenMobile 0.35s var(--ros-ease-smooth);
+
+    &--closing {
+      animation: windowCloseMobile 0.25s var(--ros-ease-smooth) forwards;
+    }
+
+    &--minimized {
+      transform: translateY(100%);
+      opacity: 0;
+      transition:
+        transform var(--ros-duration-slow) var(--ros-ease-smooth),
+        opacity var(--ros-duration-normal) ease-out;
+    }
+
+    &__header {
+      display: none !important;
+    }
+
+    &__controls {
+      display: none !important;
+    }
+
+    &__resize {
+      display: none;
+    }
+
+    &--dragging {
+      transition: none;
+    }
+  }
+
+  // Browser/app immersive (true fullscreen): cover the top safe-area too so the
+  // content goes edge-to-edge under the status bar (no gray strip). 2 classes →
+  // beats the general `.ros-window` top above even when the window isn't in the
+  // `maximized` state. The statusbar-backdrop is also hidden in this mode (see
+  // RoqueOSLayout.vue). NOTE: `--immersive` (browser) is distinct from
+  // `--immersive-mobile` (marquee etc.) below, which keeps the top inset.
+  .ros-window.ros-window--immersive {
+    top: 0 !important;
+    bottom: 0 !important;
+  }
+
+  // =========================================================================
+  // Immersive mobile apps (opt-in via windowConfig.customClass)
+  // Fill the full physical viewport and paint over the dock. The window
+  // anchors at the same `top` (safe-area-inset-top) and same `bottom` (0)
+  // as standard mobile windows when a window is visible — the regular
+  // .ros-window rule above resolves --ros-dock-offset to 0 in that case
+  // (see RoqueOSLayout.vue:447). Bottom safe-area is intentionally NOT
+  // consumed here — apps that need to keep their tappable controls clear
+  // of the iOS home indicator add `padding-bottom: env(safe-area-inset-bottom)`
+  // internally on their controls (see ROSMarquee for an example). Without
+  // this, immersive apps used to end ~34px short on iPhones, leaving a
+  // visible gap under the window that other apps don't have.
+  // =========================================================================
+  .ros-window.ros-window--immersive-mobile {
+    // The custom prop --safe-area-inset-top is set ONLY by
+    // boot/capacitor-safe-area.js and ONLY when running under Capacitor
+    // (or with explicit URL params / saved insets from a previous Capacitor
+    // session). On a plain PWA (Safari iOS without Capacitor) the var is
+    // undefined → previous fallback `0` placed the window UNDER the notch.
+    // env() is the native CSS source for safe-area in any modern browser
+    // (iOS 11.2+, Chrome 69+) and is the safe fallback regardless of
+    // whether Capacitor wrote the custom prop.
+    top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    border-radius: 0 !important;
+    z-index: 9999 !important;
+  }
+
+  @keyframes windowOpenMobile {
+    0% {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes windowCloseMobile {
+    0% {
+      opacity: var(--swipe-opacity, 1);
+      transform: translateY(var(--swipe-start, 0)) scale(var(--swipe-scale, 1));
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(100%) scale(0.85);
+    }
+  }
+
+  .ros-login {
+    &__time {
+      font-size: var(--ros-text-display);
+      top: 80px;
+    }
+
+    &__date {
+      top: 150px;
+      font-size: var(--ros-text-lg);
+    }
+
+    &__avatar {
+      width: 100px;
+      height: 100px;
+      font-size: 44px;
+    }
+
+    &__name {
+      font-size: var(--ros-text-xl);
+    }
+  }
+}

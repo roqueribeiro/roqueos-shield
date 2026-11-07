@@ -1,0 +1,349 @@
+// =============================================================================
+// LOW-END MODE CSS OPTIMIZATIONS
+// =============================================================================
+// This file contains CSS rules that are applied when low-end mode is active.
+// Low-end mode is triggered by the useLowEndMode composable when:
+// - Device has low memory (≤4GB)
+// - Device has few CPU cores (≤4)
+// - User prefers reduced motion
+// - Device is running old Android (8/9)
+// - Performance issues are detected at runtime (long tasks, low FPS)
+//
+// When active, data-low-end="1" is added to the <html> element.
+// =============================================================================
+
+// Global optimizations for low-end mode
+html[data-low-end='1'] {
+  // Disable all backdrop-filter effects globally
+  *,
+  *::before,
+  *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  // Reduce will-change usage (saves GPU memory)
+  .ros-window,
+  .ros-dock,
+  .ros-menubar,
+  .ros-context-menu {
+    will-change: auto !important;
+  }
+
+  // Disable complex animations on lists
+  .q-list,
+  .q-virtual-scroll,
+  .ros-finder__files {
+    .q-item,
+    .ros-file-item {
+      transition: background-color var(--ros-duration-fast) ease-out !important;
+
+      &::before,
+      &::after {
+        transition: none !important;
+      }
+    }
+  }
+
+  // Simplify scrolling
+  .q-scroll-area,
+  .ros-window__content {
+    scroll-behavior: auto !important;
+  }
+}
+
+// =============================================================================
+// COMPONENT-SPECIFIC OPTIMIZATIONS
+// =============================================================================
+
+// Window optimizations
+html[data-low-end='1'] {
+  .ros-window {
+    box-shadow: var(--ros-shadow-window) !important;
+    transition: box-shadow var(--ros-transition-fast) !important;
+
+    &--active {
+      box-shadow: var(--ros-shadow-window-active) !important;
+    }
+
+    // Disable resize/drag animations
+    &--dragging,
+    &--resizing {
+      transition: none !important;
+    }
+  }
+
+  .ros-window__header {
+    backdrop-filter: none !important;
+    background: rgba(50, 50, 50, 0.98) !important;
+  }
+
+  .ros-window__content {
+    // Disable content animations during window operations
+    transition: none !important;
+  }
+}
+
+// Dock optimizations
+html[data-low-end='1'] {
+  .ros-dock {
+    backdrop-filter: none !important;
+    background: rgba(var(--ros-surface-0-rgb), 0.95) !important;
+    box-shadow: var(--ros-shadow-dock) !important;
+
+    &__item {
+      transition: transform var(--ros-transition-fast) !important;
+
+      // Disable magnification effect
+      &:hover {
+        transform: scale(1.05) !important;
+      }
+    }
+
+    // Disable bounce animation
+    &__item--bouncing {
+      animation: none !important;
+    }
+  }
+}
+
+// Menu bar optimizations
+html[data-low-end='1'] {
+  .ros-menubar {
+    backdrop-filter: none !important;
+    background: rgba(var(--ros-surface-0-rgb), 0.98) !important;
+  }
+
+  .ros-menubar__menu {
+    backdrop-filter: none !important;
+    background: rgba(var(--ros-surface-1-rgb), 0.98) !important;
+    box-shadow: var(--ros-shadow-menu) !important;
+  }
+}
+
+// Context menu optimizations
+html[data-low-end='1'] {
+  .ros-context-menu {
+    backdrop-filter: none !important;
+    background: rgba(var(--ros-surface-1-rgb), 0.98) !important;
+    box-shadow: var(--ros-shadow-menu) !important;
+
+    &__item {
+      transition: background-color var(--ros-duration-fast) ease-out !important;
+    }
+  }
+}
+
+// Modal optimizations
+// Seletores corretos: a classe do overlay é `.ros-modal-overlay` (root)
+// e do panel é `.ros-modal` — não `.ros-modal__overlay`/`__container`
+// (essa convenção BEM era de uma versão antiga do componente). Sem
+// blur, opacidade sobe pra garantir leitura.
+html[data-low-end='1'] {
+  .ros-modal-overlay {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(var(--ros-scrim-rgb), 0.78) !important;
+  }
+
+  .ros-modal {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(var(--ros-surface-0-rgb), 0.95) !important;
+    box-shadow: var(--ros-shadow-modal) !important;
+    // Sem o anel de vidro (o token zera no economia), o card opaco precisa de uma borda
+    // de verdade para se separar do fundo escuro.
+    border: 1px solid rgba(var(--ros-line-rgb), 0.12) !important;
+    animation-duration: var(--ros-duration-normal) !important;
+  }
+
+  // Mobile sheet (opt-in via mobile-sheet, overlays.scss) — drop the slide-up
+  // transform entirely on low-end; the duration override doesn't kill the keyframe.
+  .ros-modal--mobile-sheet {
+    animation: none !important;
+  }
+}
+
+// Login screen optimizations
+html[data-low-end='1'] {
+  .ros-login {
+    &__blur-bg {
+      filter: none !important;
+      backdrop-filter: none !important;
+    }
+
+    &__card {
+      backdrop-filter: none !important;
+      background: rgba(var(--ros-surface-0-rgb), 0.95) !important;
+    }
+  }
+}
+
+// Launchpad optimizations
+// IMPORTANT: the overlay element is `.ros-launchpad-overlay`; the bare
+// `.ros-launchpad` is NOT an element — it only namespaces `&__shell`,
+// `&__item`, `&__icon`… (BEM). A previous version toned `.ros-launchpad`
+// (matched nothing) and `&__app` (the template uses `&__item`), so after the
+// premium icon surface landed, the per-icon hover scale, `transition: all`
+// and favicon/app-image drop-shadows went UNTAMED in performance mode — the
+// real cause of the Launchpad regression on simple devices. (Same dead-BEM
+// gotcha already noted for the modal selectors above.) These are the real
+// selectors. The icon's box-shadow/specular/glyph-glow is flattened inside the
+// `ros-app-icon-surface` mixin's own low-end branch — here we trim the rest.
+html[data-low-end='1'] {
+  // Backdrop blur is already killed by the global `* { backdrop-filter: none }`
+  // rule above — just make the scrim opaque enough to stay legible without it
+  // (sharp wallpaper behind 40 icons reads busy otherwise).
+  .ros-launchpad-overlay::before {
+    background: rgba(var(--ros-scrim-rgb), 0.82) !important;
+  }
+
+  .ros-launchpad {
+    &__item {
+      // Was `transition: all` + hover scale(1.08); trim to a cheap transform.
+      transition: transform var(--ros-transition-fast) !important;
+
+      &:hover {
+        transform: scale(1.04) !important;
+      }
+    }
+
+    &__icon {
+      // Stop the box-shadow transition and drop the favicon / app-image
+      // drop-shadow filters (the glyph filter is handled by the mixin).
+      transition: none !important;
+
+      img {
+        filter: none !important;
+      }
+    }
+
+    // Keep the entrance animation but shorten it and drop the stagger so
+    // the whole batch resolves in ~150ms instead of 1s+.
+    &__item--fresh {
+      animation-duration: var(--ros-duration-fast) !important;
+      animation-delay: 0ms !important;
+    }
+  }
+
+  // Mobile home-grid drag ghost: drop the moving-element drop-shadow filter
+  // (stutters a drag-reorder on weak GPUs).
+  .ros-mhg__ghost {
+    filter: none !important;
+  }
+}
+
+// Notification center optimizations
+html[data-low-end='1'] {
+  .ros-notification-center {
+    backdrop-filter: none !important;
+    background: rgba(var(--ros-surface-0-rgb), 0.98) !important;
+  }
+
+  .ros-notification {
+    backdrop-filter: none !important;
+    background: rgba(50, 50, 50, 0.95) !important;
+    transition:
+      transform var(--ros-transition-fast),
+      opacity var(--ros-transition-fast) !important;
+  }
+}
+
+// Spotlight optimizations
+html[data-low-end='1'] {
+  .ros-spotlight {
+    &__overlay {
+      backdrop-filter: none !important;
+    }
+
+    &__container {
+      backdrop-filter: none !important;
+      background: rgba(var(--ros-surface-1-rgb), 0.98) !important;
+    }
+  }
+}
+
+// Control center optimizations
+html[data-low-end='1'] {
+  .ros-control-center {
+    backdrop-filter: none !important;
+    background: rgba(var(--ros-surface-0-rgb), 0.98) !important;
+  }
+}
+
+// Finder optimizations
+html[data-low-end='1'] {
+  .ros-finder {
+    &__sidebar {
+      backdrop-filter: none !important;
+    }
+
+    &__file-item {
+      transition: background-color var(--ros-duration-fast) ease-out !important;
+
+      &--selected {
+        transition: none !important;
+      }
+    }
+
+    // Disable drag preview effects
+    &__drag-preview {
+      box-shadow: 0 4px 12px var(--ros-shadow-30) !important;
+      backdrop-filter: none !important;
+    }
+  }
+}
+
+// =============================================================================
+// ANIMATION REDUCTIONS
+// =============================================================================
+
+html[data-low-end='1'] {
+  // Reduce all CSS animations
+  @keyframes ros-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes ros-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  // Disable decorative animations
+  .ros-boot-screen__logo,
+  .ros-loading-spinner {
+    animation-duration: var(--ros-duration-slow) !important;
+  }
+
+  // Disable hover scale effects on non-interactive elements
+  img,
+  .ros-icon:not(button *):not(a *) {
+    transition: none !important;
+  }
+}
+
+// =============================================================================
+// PREFERS-REDUCED-MOTION SUPPORT
+// =============================================================================
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: var(--ros-duration-fast) !important;
+    scroll-behavior: auto !important;
+  }
+}

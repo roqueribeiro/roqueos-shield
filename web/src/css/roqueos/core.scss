@@ -1,0 +1,933 @@
+// ==================== KEYFRAMES ====================
+@keyframes windowOpen {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes windowClose {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes iconMove {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes wallpaperFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// ==================== ROQUEOS VARIABLES ====================
+
+$ros-dock-height: 70px !default;
+$ros-dock-height-mobile: 60px !default;
+$ros-menubar-height: 28px !default;
+$ros-window-header-height: 38px !default;
+$ros-window-border-radius: 10px !default;
+$ros-icon-size: 48px !default;
+$ros-icon-size-mobile: 44px !default;
+
+// Colors
+$ros-bg-dark: var(--ros-bg-dark) !default;
+$ros-bg-light: var(--ros-bg-light) !default;
+$ros-glass: var(--ros-glass) !default;
+$ros-glass-border: var(--ros-glass-border) !default;
+$ros-accent: var(--ros-accent) !default;
+$ros-red: var(--ros-red) !default;
+$ros-yellow: var(--ros-yellow) !default;
+$ros-green: var(--ros-green) !default;
+
+// ==================== ROQUEOS BASE ====================
+.ros-layout {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  // ⚠️ `hidden` NÃO IMPEDE ROLAGEM, SÓ ESCONDE A BARRA. Um elemento com
+  // `overflow: hidden` continua sendo um scroll container, e o WebKit ROLA ele
+  // sozinho para revelar o campo de texto focado — sem evento, sem barra, e
+  // sem desfazer quando o teclado fecha. Era isto que "empurrava tudo e
+  // quebrava o app" no iPhone: a casca inteira subia e ficava subida.
+  //
+  // Medido no simulador do iPhone 17 Pro Max, contra produção, focando um
+  // textarea alto dentro da janela do Sticky Notes:
+  //
+  //   hidden   janela 62..611 → 0..549   `.ros-layout.scrollTop = 62`
+  //            e ao desfocar continua em 0..894 num layout de 956
+  //   clip     janela 62..611 fica 62..611, e quem rola é o próprio textarea
+  //
+  // `clip` não cria scrollport nenhum: nem o WebKit consegue rolar. O `hidden`
+  // fica antes como reserva para quem não conhece `clip` (Safari < 16).
+  //
+  // ⚠️ E foi por isso que o vigia `tecladoNaoDesalinha` nunca disparou: ele
+  // olhava `document.scrollingElement`, e quem rolava era ESTE elemento.
+  overflow: hidden;
+  overflow: clip;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  // NOTE: -webkit-touch-callout is intentionally NOT set here — it would also
+  // kill the long-press paste/select callout inside inputs/text editors. The
+  // callout is disabled only on the interactive "chrome" surfaces below.
+  -webkit-tap-highlight-color: transparent;
+  // Prevent pull-to-refresh on mobile browsers
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  touch-action: pan-x pan-y;
+}
+
+// =============================================================================
+// NO long-press text-selection / callout on interactive "chrome" surfaces.
+// These are CONTROLS, not content — a long-press opens a context menu, never a
+// text selection. Listed globally (NOT scoped) so it also reaches the Launchpad,
+// which is Teleported to <body> (outside `.ros-layout`, so it doesn't inherit
+// the root's user-select:none). Inputs/textareas re-enable selection below.
+// =============================================================================
+.ros-launchpad__item,
+.ros-launchpad__name,
+.ros-icon,
+.ros-file-tile,
+.ros-finder__item,
+.ros-finder__item-name,
+.ros-mhg__cell,
+.ros-context-menu,
+.ros-context-menu__item {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+// Editable fields must KEEP native selection + the long-press paste/select
+// callout, even under the app root's user-select:none (e.g. the Launchpad
+// search box, the text/code editors, chat input).
+input,
+textarea,
+[contenteditable='true'] {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+// Base styles - Prevent pull-to-refresh globally
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+}
+
+// Body lock while one or more ROSModal is open. Mere `overflow: hidden`
+// is NOT enough on iOS Safari / Android Chrome — the browser happily
+// ignores it during an in-flight touch and the page keeps scrolling
+// behind the modal. The JS side (ROSModal.vue) also pins `top` to the
+// current scrollY and restores it on close, which is the only reliable
+// way to freeze the document on mobile.
+body.ros-modal-open {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  left: 0;
+  right: 0;
+}
+
+// ==================== WALLPAPER CREDIT (Unsplash/Pexels attribution) ====================
+// Chip discreto bottom-right, sempre clicável, com blur sutil sobre o
+// wallpaper. Honra ToS de Unsplash e Pexels que exigem atribuição visível.
+// Esconde em mobile fullscreen-app (`hideUIOnMobile`) pra não cobrir
+// elementos do app ativo — o chip volta quando o user sai pro desktop.
+.ros-wallpaper-credit {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  z-index: 100; // acima do wallpaper + abaixo de menubar/dock
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: var(--ros-scrim-40);
+  backdrop-filter: blur(var(--ros-blur-sm));
+  -webkit-backdrop-filter: blur(var(--ros-blur-sm));
+  border: 1px solid rgba(var(--ros-line-rgb), 0.1);
+  border-radius: var(--ros-radius-pill);
+  font-size: var(--ros-text-xs);
+  color: var(--ros-text-70);
+  text-decoration: none;
+  // Pílula uma linha só — sem quebras de texto entre filhos do flex.
+  // Sem isso, em iPhone com chip centralizado e nome de fotógrafo
+  // longo (ex: "Milad Fakurian"), o flex empurrava o nome pra
+  // proxima linha visual e o chip ficava torto/duplo de altura.
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  transition: all var(--ros-duration-normal) ease;
+
+  &:hover {
+    background: rgba(var(--ros-scrim-rgb), 0.6);
+    color: var(--ros-text-100);
+    border-color: var(--ros-line-20);
+  }
+
+  &__icon {
+    color: var(--ros-text-50);
+    flex-shrink: 0;
+  }
+
+  &__photographer {
+    font-weight: 500;
+    color: var(--ros-text-100);
+    // Truncate gracioso pra nomes muito longos (raríssimos no Unsplash/
+    // Pexels mas cobre caso). max-width relativa pra adaptar à largura
+    // do chip; ellipsis indica continuação.
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 60vw;
+  }
+
+  &__sep {
+    opacity: 0.4;
+    flex-shrink: 0;
+  }
+
+  &__source {
+    font-weight: 600;
+    opacity: 0.85;
+    flex-shrink: 0;
+  }
+}
+
+// Em mobile, reposicionar acima do dock + centralizado. O dock mobile
+// ocupa bottom(8) + padding(12) + icon(52) ≈ 72px da borda inferior;
+// usamos 112px de bottom pra deixar respiro confortável (~40px) entre
+// chip e o topo do dock. Hide quando app fullscreen está visível é
+// controlado por `v-if="!hideUIOnMobile"` no template — não precisa
+// de regra display:none aqui. z-index NÃO sobe acima do dock — pra
+// não cobrir janelas/apps em outros estados.
+@include ros-tablet {
+  .ros-wallpaper-credit {
+    bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 24px);
+  }
+}
+
+// Low-end mode: blur off, fundo mais opaco
+html[data-low-end='1'] .ros-wallpaper-credit {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--ros-scrim-70);
+}
+
+// ==================== WALLPAPER ====================
+.ros-wallpaper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  z-index: 0;
+  transition: background-image 0.5s ease;
+
+  &::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    background: $ros-overlay-dim;
+    pointer-events: none;
+  }
+}
+
+// ==================== MENU BAR TRIGGER (for auto-hide on small screens) ====================
+.ros-menubar-trigger {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 10px;
+  z-index: 10000;
+  background: transparent;
+  cursor: pointer;
+}
+
+// ==================== MENU BAR ====================
+.ros-menubar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(#{$ros-menubar-height} + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+  padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  background: $ros-menubar-bg;
+  backdrop-filter: blur(var(--ros-blur-lg));
+  -webkit-backdrop-filter: blur(var(--ros-blur-lg));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: max(12px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
+  padding-right: max(12px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px)));
+  z-index: 9999;
+  color: var(--ros-text-100);
+  font-size: var(--ros-text-base);
+  font-weight: 500;
+
+  &__left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  &__center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  &__right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__item {
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: var(--ros-radius-xs);
+    transition: background var(--ros-duration-fast);
+
+    &:hover {
+      background: $ros-hover-bg;
+    }
+  }
+
+  &__logo {
+    font-size: var(--ros-text-lg);
+    opacity: 0.9;
+  }
+
+  &__time {
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__win-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: var(--ros-radius-xs);
+    object-fit: contain;
+  }
+}
+
+// ==================== DESKTOP ====================
+.ros-desktop {
+  position: absolute;
+  // Use CSS variable that includes menu bar height + safe-area-inset-top
+  top: var(--ros-menubar-offset, calc(#{$ros-menubar-height} + env(safe-area-inset-top, 0px)));
+  left: 0;
+  right: 0;
+  bottom: $ros-dock-height + 10px;
+  overflow: hidden;
+  z-index: 1;
+
+  &__icons {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    align-content: flex-end;
+    gap: 8px;
+    padding: 16px;
+    height: 100%;
+  }
+}
+
+// ==================== DESKTOP ICON ====================
+.ros-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  padding: 6px;
+  border-radius: var(--ros-radius-sm);
+  cursor: pointer;
+  transition: all var(--ros-duration-fast) ease;
+
+  &:hover {
+    background: $ros-hover-bg;
+  }
+
+  &--selected {
+    background: $ros-selection-bg !important;
+  }
+
+  &__image {
+    width: $ros-icon-size;
+    height: $ros-icon-size;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: $ros-brand-gradient;
+    border-radius: var(--ros-radius-md);
+    font-size: 24px;
+    color: white;
+    box-shadow: var(--ros-elevation-1);
+    margin-bottom: 4px;
+
+    &--file {
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+
+    img {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--ros-radius-sm);
+      object-fit: contain;
+    }
+
+    .ros-icon__file-icon {
+      width: $ros-icon-size;
+      height: $ros-icon-size;
+      border-radius: 0;
+    }
+
+    .ros-icon__thumb {
+      width: $ros-icon-size;
+      height: $ros-icon-size;
+      border-radius: var(--ros-radius-sm);
+      object-fit: cover;
+    }
+  }
+
+  &__label {
+    font-size: var(--ros-text-xs);
+    color: var(--ros-text-100);
+    text-shadow: $ros-text-shadow-strong;
+    text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.3;
+  }
+}
+
+// ==================== BOOT SCREEN ====================
+.ros-boot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: $ros-boot-bg;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+
+  &__logo {
+    width: 100px;
+    height: 100px;
+    margin-bottom: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      fill: var(--ros-text-100);
+    }
+  }
+
+  &__progress {
+    width: 200px;
+    height: 4px;
+    background: $ros-progress-track;
+    border-radius: var(--ros-radius-pill);
+    overflow: hidden;
+
+    &-bar {
+      height: 100%;
+      background: var(--ros-text-100);
+      border-radius: var(--ros-radius-xs);
+      transition: width var(--ros-duration-slow) ease;
+    }
+  }
+}
+
+// ==================== LOGIN SCREEN ====================
+.ros-login {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 99998;
+  backdrop-filter: blur(var(--ros-blur-xl));
+  -webkit-backdrop-filter: blur(var(--ros-blur-xl));
+
+  &__avatar {
+    width: 128px;
+    height: 128px;
+    border-radius: 50%;
+    background: $ros-brand-gradient;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--ros-text-display);
+    color: white;
+    margin-bottom: 16px;
+    box-shadow: var(--ros-elevation-2);
+    overflow: hidden;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+
+  &__name {
+    font-size: var(--ros-text-2xl);
+    font-weight: 500;
+    color: white;
+    margin-bottom: 20px;
+    text-shadow: $ros-text-shadow-soft;
+  }
+
+  &__input {
+    width: 100%;
+    height: 36px;
+    background: $ros-input-bg;
+    border: none;
+    border-radius: var(--ros-radius-lg);
+    padding: 0 16px;
+    font-size: var(--ros-text-md);
+    color: white;
+    outline: none;
+    text-align: center;
+    box-sizing: border-box;
+
+    &::placeholder {
+      color: $ros-input-placeholder;
+    }
+
+    &:focus {
+      background: $ros-input-bg-focus;
+    }
+  }
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+  }
+
+  &__login-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  &__hint {
+    margin-top: 16px;
+    font-size: var(--ros-text-sm);
+    color: $ros-hint-text;
+    cursor: pointer;
+
+    &:hover {
+      color: white;
+    }
+  }
+
+  &__btn {
+    padding: 10px 24px;
+    background: $ros-btn-glass-bg;
+    border: none;
+    border-radius: var(--ros-radius-sm);
+    color: white;
+    font-size: var(--ros-text-md);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--ros-duration-normal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+
+    &:hover {
+      background: $ros-btn-glass-bg-hover;
+    }
+
+    &--primary {
+      background: $ros-accent;
+
+      &:hover {
+        background: $ros-accent-hover;
+      }
+    }
+  }
+
+  &__divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+
+    &::before,
+    &::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--ros-fill-12);
+    }
+
+    span {
+      font-size: var(--ros-text-sm);
+      color: var(--ros-text-55);
+      white-space: nowrap;
+    }
+  }
+
+  &__social-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+  }
+
+  &__social-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: var(--ros-radius-md);
+    border: 1px solid var(--ros-line-15);
+    background: var(--ros-fill-06);
+    color: white;
+    font-size: var(--ros-text-md);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--ros-duration-normal) ease;
+
+    &:hover {
+      background: var(--ros-fill-12);
+      border-color: rgba(var(--ros-line-rgb), 0.25);
+    }
+
+    &--apple {
+      .q-icon {
+        filter: brightness(10);
+      }
+    }
+  }
+}
+
+// ==================== CONTEXT MENU ====================
+.ros-context-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99996;
+}
+
+.ros-context-menu {
+  position: fixed;
+  min-width: 220px;
+  background: $ros-surface-0;
+  backdrop-filter: blur(var(--ros-blur-xl));
+  -webkit-backdrop-filter: blur(var(--ros-blur-xl));
+  border: 1px solid $ros-border-subtle;
+  border-radius: var(--ros-radius-sm);
+  padding: 6px;
+  z-index: 99997;
+  box-shadow: var(--ros-elevation-3);
+  animation: contextMenuFadeIn 0.15s var(--ros-ease-decelerate);
+  overflow: hidden;
+  // The context menu is a control surface, not content — disable the browser's
+  // default text selection so long-press / drag-select never highlights item
+  // labels (looks broken, and on touch the long-press would start a selection).
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    font-size: var(--ros-text-base);
+    color: $ros-text;
+    cursor: pointer;
+    border-radius: var(--ros-radius-sm);
+    transition: all var(--ros-duration-fast) ease;
+
+    &:hover {
+      background: $ros-accent;
+      color: white;
+    }
+
+    &--disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+  }
+
+  &__separator {
+    height: 1px;
+    background: $ros-divider;
+    margin: 6px 8px;
+  }
+
+  &__icon {
+    font-size: var(--ros-text-xl);
+    opacity: 0.85;
+    width: 20px;
+    text-align: center;
+  }
+
+  &__shortcut {
+    margin-left: auto;
+    font-size: var(--ros-text-xs);
+    opacity: 0.5;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+
+  &__arrow {
+    margin-left: auto;
+    font-size: var(--ros-text-lg);
+    opacity: 0.6;
+  }
+
+  &__item--submenu {
+    &:hover .ros-context-menu__arrow {
+      opacity: 1;
+    }
+  }
+
+  &--submenu {
+    min-width: 200px;
+  }
+
+  &__item--back {
+    border-bottom: 1px solid $ros-divider;
+    margin-bottom: 4px;
+    padding-bottom: 12px;
+    font-weight: 500;
+    color: $ros-accent;
+
+    &:hover {
+      background: rgba(var(--ros-accent-rgb), 0.1);
+      color: $ros-accent;
+    }
+
+    .ros-context-menu__icon {
+      opacity: 1;
+    }
+  }
+
+  // Mobile styles
+  &--mobile {
+    left: 50% !important;
+    transform: translateX(-50%);
+    min-width: min(280px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// ==================== ANIMATIONS ====================
+@keyframes ros-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ros-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ros-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ros-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.ros-animate-fade-in {
+  animation: ros-fade-in 0.3s ease forwards;
+}
+
+.ros-animate-scale-in {
+  animation: ros-scale-in 0.3s var(--ros-ease-bounce) forwards;
+}
+
+.ros-animate-slide-up {
+  animation: ros-slide-up 0.3s ease forwards;
+}
+
+.ros-animate-bounce {
+  animation: ros-bounce 0.5s ease;
+}
+
+// ==================== UTILITIES ====================
+.ros-glass {
+  background: $ros-glass;
+  backdrop-filter: blur(var(--ros-blur-lg));
+  -webkit-backdrop-filter: blur(var(--ros-blur-lg));
+  border: 1px solid $ros-glass-border;
+}
+
+.ros-no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+// `.ros-btn` e `.ros-icon-btn` moram em botoes.scss (Goal 63).
+
+// ==================== FOCUS-VISIBLE (Accessibility) ====================
+
+:focus-visible {
+  outline: 2px solid $ros-accent;
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+// Containers de q-dialog (incluindo nosso ROSDrawer mobile) recebem
+// programmatic focus quando abrem — não devem mostrar o outline azul
+// genérico (que aparece como linha azul vertical no edge do drawer).
+.q-dialog__inner,
+.q-dialog__inner:focus,
+.q-dialog__inner:focus-visible,
+.q-card:focus,
+.q-card:focus-visible {
+  outline: none;
+}
+
+.ros-window__control:focus-visible {
+  outline: 2px solid rgba(var(--ros-line-rgb), 0.8);
+  outline-offset: 1px;
+  border-radius: 50%;
+}
+
+.ros-dock-item:focus-visible {
+  outline: 2px solid $ros-accent;
+  outline-offset: 4px;
+  border-radius: var(--ros-radius-md);
+}
+
+.ros-menubar__item:focus-visible {
+  outline: 2px solid $ros-accent;
+  outline-offset: -2px;
+  border-radius: var(--ros-radius-xs); // Small enough to keep hardcoded
+}
+
+.ros-context-menu__item:focus-visible {
+  outline: none;
+  background: $ros-selection-bg;
+}
+
+.ros-desktop__icon:focus-visible {
+  outline: 2px solid $ros-accent;
+  outline-offset: 2px;
+  border-radius: var(--ros-radius-sm);
+}

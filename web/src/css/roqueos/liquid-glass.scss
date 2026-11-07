@@ -1,0 +1,113 @@
+// ==================== LIQUID GLASS ====================
+// iOS 26 / macOS Tahoe-inspired glass surface, tier-adaptive.
+//
+// Tier 1 — Chromium (Web, Android Capacitor, Electron):
+//   SVG `#ros-liquid-glass` filter via backdrop-filter URL reference
+//   gives real refraction. Provided by <ROSLiquidGlassFilter /> mounted
+//   once in RoqueOSLayout.vue.
+//
+// Tier 2 — Safari (iOS Capacitor, macOS), Firefox:
+//   No backdrop-filter URL support → falls back to blur(20px) + saturate.
+//   Edge bezel ring + specular highlight still applied.
+//
+// Tier 3 — html[data-low-end="1"]:
+//   Tokens flatten to an opaque tint, no blur, no specular, no edge.
+//
+// All visual parameters live as CSS custom properties in tokens.scss
+// (`--ros-liquid-glass-*`). The mixin only wires them together so
+// runtime overrides (e.g. settings toggles in the future) only need
+// to touch the tokens.
+
+// IMPORTANT: this mixin is intentionally MINIMAL — it sets background,
+// edge ring (via box-shadow inset), drop shadow, and the tier-adaptive
+// backdrop-filter. Nothing else.
+//
+// What this mixin DOES NOT do (and why):
+//   - No `position` declaration: would clobber `position: fixed` on the
+//     dock and `position: relative` on the notif-btn.
+//   - No `isolation: isolate`: it broke q-btn ripple + dock-item
+//     magnification transforms.
+//   - No `::before` specular pseudo-element: an absolute ::before with
+//     `inset: 0` paints OVER the flex children (positioned beats static
+//     in paint order), making dock icons appear clipped and creating
+//     visual jitter on q-btn :active scale. The edge ring already gives
+//     enough "glass thickness" — specular was cosmetic, not essential.
+//   - No `> *` z-index rules: would interfere with `display: contents`
+//     on `.ros-dock__pinned/__running/__minimized` group wrappers.
+//
+// Result: a drop-in replacement for `background: rgba(...) + backdrop-
+// filter: blur(...)` that adds refraction (on Chromium) and edge depth
+// without touching layout or stacking of the host element's content.
+@mixin liquid-glass-surface {
+  background: var(--ros-liquid-glass-tint);
+  box-shadow: var(--ros-liquid-glass-edge), var(--ros-liquid-glass-drop-shadow);
+
+  // Tier 2 fallback — applied by default in every browser
+  backdrop-filter: var(--ros-liquid-glass-blur-tier2);
+  -webkit-backdrop-filter: var(--ros-liquid-glass-blur-tier2);
+
+  // Tier 1 overrides — only Chromium honors `backdrop-filter: url(#x)`
+  @supports (backdrop-filter: url(#ros-liquid-glass)) {
+    backdrop-filter: url(#ros-liquid-glass) var(--ros-liquid-glass-blur-tier1);
+    -webkit-backdrop-filter: url(#ros-liquid-glass) var(--ros-liquid-glass-blur-tier1);
+  }
+}
+
+// =====================================================================
+// NOTE on tap-target buttons (FAB, menubar chips, lock-screen "Abrir"):
+//
+// We previously had a `liquid-glass-shell` mixin (and a `liquid-glass-
+// button` predecessor with a `::before` pseudo) for buttons. Both were
+// removed after multiple regressions on real iPhone — see git history
+// 038ef09 → 24f3cbd for the full saga.
+//
+// Final pattern (no mixin, inline scoped styles):
+//   <div class="my-shell">
+//     <div class="my-shell__bg" aria-hidden="true" />
+//     <button class="my-shell__btn" @click="...">...</button>
+//   </div>
+//
+//   .my-shell {
+//     position: relative;       // anchor for absolute __bg child
+//     width: 44px;
+//     height: 44px;
+//     border-radius: 50%;
+//     // ... your sizing/positioning ...
+//
+//     .my-shell__bg {
+//       position: absolute;
+//       inset: 0;
+//       pointer-events: none;
+//       z-index: 0;
+//       border-radius: inherit;
+//       background: rgba(255, 255, 255, 0.12);   // dock-style tint
+//       backdrop-filter: blur(10px) saturate(80%);
+//       -webkit-backdrop-filter: blur(10px) saturate(80%);
+//     }
+//
+//     .my-shell__btn {
+//       position: relative;
+//       z-index: 1;
+//       width: 100%;
+//       height: 100%;
+//       background: transparent;
+//       border: none;
+//       -webkit-appearance: none;
+//       appearance: none;
+//       cursor: pointer;
+//       -webkit-tap-highlight-color: transparent;
+//     }
+//   }
+//
+// Why no mixin: every refactor of a shared button-glass mixin caused a
+// regression in at least one consumer (FAB position: fixed clobbered,
+// notif __bg display: none cascading from desktop into mobile, etc.).
+// Inline ~10 lines per consumer is verbose but isolated — a change in
+// one consumer can't silently break the others. See live consumers:
+// ROSMobileWindowSwitcherFab.vue, ROSMenuBar.vue (brand-chip + notif-btn
+// in mobile @media), ROSLoginScreen.vue (__btn-unlock-shell).
+
+// Utility class for ad-hoc surface (dock-style chrome on a <div>).
+.ros-liquid-glass {
+  @include liquid-glass-surface;
+}

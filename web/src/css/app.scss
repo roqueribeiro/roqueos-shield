@@ -1,0 +1,15 @@
+// Os estilos do RoqueOS que a tela do RoqueShield usa (tokens, primitivos ROS,
+// overlays). Copiados do roqueos-front; ver web/README.md.
+@import './roqueos/index.scss';
+
+html,
+body,
+#q-app {
+  height: 100%;
+}
+
+body {
+  background: radial-gradient(1200px 800px at 15% -10%, rgba(225, 29, 72, 0.16), transparent 60%),
+    radial-gradient(900px 700px at 110% 110%, rgba(88, 86, 214, 0.14), transparent 60%), #0e0f13;
+  color: var(--ros-text-100);
+}

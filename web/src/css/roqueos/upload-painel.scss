@@ -1,0 +1,291 @@
+// O painel e os indicadores de upload. Não é global: carrega com o `ROSUploadDialog`, que vem
+// com o layout do /app (e com o Chat e o Finder, também no /tv). Até o Goal 87 morava no
+// `index.scss` e pesava na abertura de toda página, landing inclusive, que nunca sobe arquivo.
+@import 'src/css/roqueos/tokens.scss';
+
+// ==================== UPLOAD INDICATORS (Floating - Multiple Sessions) ====================
+.ros-upload-indicators {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 9999;
+}
+
+.ros-upload-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: $ros-bg-dark;
+  backdrop-filter: blur(var(--ros-blur-lg));
+  border-radius: var(--ros-radius-md);
+  border: 1px solid $ros-border-muted;
+  box-shadow: var(--ros-elevation-2);
+  cursor: pointer;
+  transition: all var(--ros-duration-normal);
+
+  &:hover {
+    background: $ros-surface-0;
+    transform: translateX(-4px);
+    box-shadow: $ros-shadow-xl;
+  }
+
+  &__icon {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $ros-accent;
+  }
+
+  &__progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__title {
+    font-size: var(--ros-text-base);
+    font-weight: 500;
+    color: white;
+    white-space: nowrap;
+  }
+
+  &__percent {
+    font-size: var(--ros-text-sm);
+    color: $ros-accent;
+    font-weight: 600;
+  }
+}
+
+// ==================== ROS UPLOAD DIALOG (Global) ====================
+.ros-upload-dialog {
+  min-width: 320px;
+  max-width: 500px;
+  width: calc(100vw - 32px);
+  background: $ros-surface-0;
+  backdrop-filter: blur(var(--ros-blur-xl));
+  border-radius: var(--ros-radius-lg);
+  border: 1px solid $ros-border-muted;
+  color: white;
+  overflow: hidden;
+
+  @media (max-width: 480px) {
+    min-width: unset;
+    max-width: unset;
+    width: calc(100vw - 16px);
+    border-radius: var(--ros-radius-md);
+  }
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 24px 24px 16px;
+    background: linear-gradient(180deg, var(--ros-fill-05) 0%, transparent 100%);
+
+    @media (max-width: 480px) {
+      gap: 12px;
+      padding: 16px 16px 12px;
+    }
+  }
+
+  &__header-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--ros-radius-md);
+    background: $ros-accent-gradient;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    @media (max-width: 480px) {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--ros-radius-md);
+
+      .q-icon {
+        font-size: var(--ros-text-2xl) !important;
+      }
+    }
+  }
+
+  &__header-text {
+    flex: 1;
+    min-width: 0;
+
+    h3 {
+      margin: 0 0 4px 0;
+      font-size: var(--ros-text-xl);
+      font-weight: 600;
+      color: white;
+
+      @media (max-width: 480px) {
+        font-size: var(--ros-text-lg);
+      }
+    }
+
+    p {
+      margin: 0;
+      font-size: var(--ros-text-base);
+      color: var(--ros-text-60);
+
+      @media (max-width: 480px) {
+        font-size: var(--ros-text-sm);
+      }
+    }
+  }
+
+  &__header-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  &__content {
+    padding: 0 24px 16px;
+    max-height: 350px;
+    overflow-y: auto;
+
+    @media (max-width: 480px) {
+      padding: 0 16px 12px;
+      max-height: 40vh;
+    }
+  }
+
+  &__footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: var(--ros-scrim-20);
+    border-top: 1px solid rgba(var(--ros-line-rgb), 0.08);
+  }
+
+  &__complete {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--ros-text-md);
+    font-weight: 500;
+    color: $ros-success-bright;
+  }
+
+  &__progress-footer {
+    width: 100%;
+  }
+
+  &__progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: var(--ros-text-base);
+
+    span:first-child {
+      color: var(--ros-text-70);
+    }
+
+    span:last-child {
+      font-weight: 600;
+      color: $ros-accent;
+    }
+  }
+
+  &__overall-progress {
+    border-radius: var(--ros-radius-xs);
+  }
+}
+
+.ros-upload-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px;
+  margin-bottom: 10px;
+  background: var(--ros-fill-05);
+  border-radius: var(--ros-radius-md);
+  border: 1px solid $ros-border-muted;
+  transition: all var(--ros-duration-normal) ease;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  &--completed {
+    background: rgba(var(--ros-success-rgb), 0.1);
+    border-color: rgba(var(--ros-success-rgb), 0.2);
+
+    .ros-upload-item__icon {
+      color: $ros-success;
+    }
+  }
+
+  &--error {
+    background: rgba(var(--ros-danger-rgb), 0.1);
+    border-color: rgba(var(--ros-danger-rgb), 0.2);
+
+    .ros-upload-item__icon {
+      color: $ros-danger;
+    }
+  }
+
+  &__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--ros-radius-sm);
+    background: var(--ros-fill-08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--ros-text-70);
+  }
+
+  &__info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__name {
+    font-size: var(--ros-text-md);
+    font-weight: 500;
+    color: white;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 10px;
+  }
+
+  &__progress-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__progress {
+    flex: 1;
+  }
+
+  &__percent {
+    font-size: var(--ros-text-sm);
+    font-weight: 600;
+    color: var(--ros-text-70);
+    min-width: 40px;
+    text-align: right;
+  }
+}
