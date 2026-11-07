@@ -13,6 +13,8 @@
 #
 # Obrigatórios no .env: POSTGRES_PASSWORD, APP_TOKEN, SESSION_SECRET, SECRETS_KEY,
 # ZAP_API_KEY. Em produção, gere-os no cofre e injete aqui; nada é gerado no disco.
+# Opcionais: SHIELD_BIND (padrão 127.0.0.1) e SHIELD_PORT (padrão 8080) para a porta
+# publicada no host.
 
 name: roqueshield
 
@@ -49,7 +51,7 @@ services:
       <<: *env
       SHIELD_SERVICES: orchestrator
     ports:
-      - "${SHIELD_BIND:-127.0.0.1}:8080:8080"
+      - "${SHIELD_BIND:-127.0.0.1}:${SHIELD_PORT:-8080}:8080"
 
   worker:
     <<: *shield

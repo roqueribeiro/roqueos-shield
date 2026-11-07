@@ -60,12 +60,19 @@ class ZAPAdapter:
         self.api_key = api_key
         # 60s (e não 30): sob o AJAX spider crawleando uma SPA grande, o thread da API
         # do daemon satura e as chamadas de status demoram. O poll ainda tolera timeout.
-        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=60.0)
+        #
+        # A chave vai no cabeçalho `X-ZAP-API-Key`, nunca em `?apikey=`: o httpx põe a URL
+        # inteira na mensagem de erro, e essa mensagem vai para o log do worker (stdout e
+        # `docker logs`). Com a chave na query, todo 400 do ZAP vazava o segredo.
+        self._client = httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=60.0,
+            headers={"X-ZAP-API-Key": api_key} if api_key else None,
+        )
         # mapa: native_id -> {"spider_id": ..., "ascan_id": ..., "url": ..., "active": bool}
         self._scans: dict[str, dict[str, Any]] = {}
 
     async def _get(self, path: str, **params: Any) -> dict[str, Any]:
-        params.setdefault("apikey", self.api_key)
         r = await self._client.get(path, params=params)
         r.raise_for_status()
         return r.json()

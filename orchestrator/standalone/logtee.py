@@ -38,7 +38,9 @@ class Tee:
         self._proxima_tentativa = 0.0
 
     def linha(self, texto: str) -> None:
-        texto = texto.rstrip("\n")
+        # Redige também o que vai para o stdout (`docker logs`), não só o stream do Redis:
+        # o log do container é tão lido quanto a aba Execução.
+        texto = redact_text(texto.rstrip("\n"))
         self.saida.write(texto + "\n")
         self.saida.flush()
         if self.cliente is None or time.monotonic() < self._proxima_tentativa:
@@ -46,7 +48,7 @@ class Tee:
         try:
             self.cliente.xadd(
                 chave(self.servico),
-                {"ts": datetime.now(UTC).isoformat(), "text": redact_text(texto)},
+                {"ts": datetime.now(UTC).isoformat(), "text": texto},
                 maxlen=TETO,
                 approximate=True,
             )
