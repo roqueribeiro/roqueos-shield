@@ -118,6 +118,7 @@ Security      = "https://github.com/roqueribeiro/roqueos-shield/blob/main/SECURI
 
 [project.scripts]
 cai = "orchestrator.cli:app"
+roqueshield = "orchestrator.cliente.cli:main"
 
 [build-system]
 requires = ["hatchling"]

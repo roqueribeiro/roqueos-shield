@@ -38,6 +38,9 @@ from orchestrator.api.routers import (
     investigate as investigate_router,
 )
 from orchestrator.api.routers import (
+    mcp as mcp_router,
+)
+from orchestrator.api.routers import (
     reports as reports_router,
 )
 from orchestrator.api.routers import (
@@ -170,6 +173,7 @@ _TAGS = [
     {"name": "auth", "description": "Login OIDC (SSO)."},
     {"name": "ui", "description": "Leituras agregadas que a tela usa, e o SSE de progresso."},
     {"name": "health", "description": "Saúde do serviço e de cada dependência."},
+    {"name": "mcp", "description": "Servidor MCP (JSON-RPC) para agentes."},
 ]
 
 app = FastAPI(
@@ -193,6 +197,7 @@ app.include_router(auth_router.router)  # /auth (OIDC SSO)
 app.include_router(conta_router.router)  # /setup, /auth/session (senha, standalone)
 app.include_router(settings_router.router)  # /settings/ai, /settings/scope
 app.include_router(system_router.router)  # /system/services, /system/logs, /system/usage
+app.include_router(mcp_router.router)  # /mcp (MCP por HTTP)
 
 # Session cookie pro state/nonce do fluxo OIDC (authlib usa request.session).
 # Só montamos o SessionMiddleware quando o OIDC está realmente configurado — assim

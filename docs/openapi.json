@@ -2286,6 +2286,44 @@
         ]
       }
     },
+    "/mcp": {
+      "post": {
+        "description": "Uma mensagem JSON-RPC do protocolo MCP (initialize, tools/list, tools/call…).",
+        "operationId": "mcp_http_mcp_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Mcp Http",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
     "/reports/{scan_id}": {
       "get": {
         "operationId": "download_report_reports__scan_id__get",
@@ -4007,6 +4045,10 @@
     {
       "description": "Saúde do serviço e de cada dependência.",
       "name": "health"
+    },
+    {
+      "description": "Servidor MCP (JSON-RPC) para agentes.",
+      "name": "mcp"
     }
   ]
 }

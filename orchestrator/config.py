@@ -100,6 +100,9 @@ class Settings(BaseSettings):
     # tela (chave de API de IA). No standalone o primeiro boot gera; vazio = a tela
     # não aceita gravar segredo (o RoqueOS injeta os dele por ambiente).
     SECRETS_KEY: str = ""
+    # MCP por HTTP (`/mcp`): liga as ferramentas que AGEM (disparar scan). Desligado,
+    # o agente só lê. Disparar scan contra terceiro tem peso legal.
+    MCP_ALLOW_ACTIONS: bool = False
     # Pasta de dados do standalone (segredos gerados, SQLite, cache do trivy).
     DATA_DIR: Path = Path("./data")
     APP_TOKEN: str = "dev-changeme"  # token simples API; trocar em prod
