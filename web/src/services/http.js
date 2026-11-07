@@ -45,4 +45,5 @@ export async function http(metodo, caminho, corpo) {
 export const get = (c) => http('GET', c)
 export const post = (c, b = {}) => http('POST', c, b)
 export const put = (c, b = {}) => http('PUT', c, b)
+export const patch = (c, b = {}) => http('PATCH', c, b)
 export const del = (c) => http('DELETE', c)
