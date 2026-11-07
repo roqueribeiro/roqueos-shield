@@ -5,16 +5,16 @@ resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'win32' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-sast' and extra == 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.15' and sys_platform == 'emscripten' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-sast' and extra == 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-sast' and extra == 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and sys_platform == 'win32' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-sast' and extra == 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and sys_platform == 'emscripten' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-sast' and extra == 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-sast' and extra == 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and sys_platform == 'win32' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-sast' and extra == 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and sys_platform == 'emscripten' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-sast' and extra == 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-sast' and extra == 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 conflicts = [[
@@ -799,7 +799,7 @@ wheels = [
 
 [[package]]
 name = "cai-orchestrator"
-version = "0.4.1"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
@@ -1152,8 +1152,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
@@ -1473,8 +1473,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/09/35/2495c4ac46b980e4ca1f6ad6db102322ef3ad2410b79fdde159a4b0f3b92/exceptiongroup-1.2.2.tar.gz", hash = "sha256:47c2edf7c6738fafb49fd34290706d1a1a2f4d1c6df275526b62cbb4aa5393cc", size = 28883, upload-time = "2024-07-12T22:26:00.161Z" }
@@ -1521,8 +1521,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
@@ -2160,8 +2160,8 @@ name = "httpcore2"
 version = "2.16.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "h11" },
-    { name = "truststore" },
+    { name = "h11", marker = "sys_platform != 'emscripten' or extra == 'extra-16-cai-orchestrator-dev' or extra == 'extra-16-cai-orchestrator-sast' or extra != 'extra-16-cai-orchestrator-tracing'" },
+    { name = "truststore", marker = "sys_platform != 'emscripten' or extra == 'extra-16-cai-orchestrator-dev' or extra == 'extra-16-cai-orchestrator-sast' or extra != 'extra-16-cai-orchestrator-tracing'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c0/61/afa9d6b7452f9eca73f73d45324eb0bb52f098fd5e6049bf6b8263be9b4e/httpcore2-2.16.0.tar.gz", hash = "sha256:c72cd0413563b17e1cd8354677dff887466f8ec2551679759e93126534428643", size = 69886, upload-time = "2026-10-21T07:09:45.31Z" }
 wheels = [
@@ -2346,12 +2346,12 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
-    { name = "zipp" },
+    { name = "zipp", marker = "extra == 'extra-16-cai-orchestrator-dev' or extra == 'extra-16-cai-orchestrator-sast' or extra != 'extra-16-cai-orchestrator-tracing'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f3/49/3b30cad09e7771a4982d9975a8cbf64f00d4a1ececb53297f1d9a7be1b10/importlib_metadata-8.7.1.tar.gz", hash = "sha256:49fef1ae6440c182052f407c8d34a68f72efc36db9ca90dc0113398f2fdde8bb", size = 57107, upload-time = "2025-12-21T10:00:19.278Z" }
 wheels = [
@@ -2543,15 +2543,15 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
-    { name = "attrs" },
-    { name = "jsonschema-specifications" },
-    { name = "referencing" },
-    { name = "rpds-py" },
+    { name = "attrs", marker = "extra == 'extra-16-cai-orchestrator-dev' or extra == 'extra-16-cai-orchestrator-sast' or extra != 'extra-16-cai-orchestrator-tracing'" },
+    { name = "jsonschema-specifications", marker = "extra == 'extra-16-cai-orchestrator-dev' or extra == 'extra-16-cai-orchestrator-sast' or extra != 'extra-16-cai-orchestrator-tracing'" },
+    { name = "referencing", marker = "extra == 'extra-16-cai-orchestrator-dev' or extra == 'extra-16-cai-orchestrator-sast' or extra != 'extra-16-cai-orchestrator-tracing'" },
+    { name = "rpds-py", marker = "extra == 'extra-16-cai-orchestrator-dev' or extra == 'extra-16-cai-orchestrator-sast' or extra != 'extra-16-cai-orchestrator-tracing'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/74/69/f7185de793a29082a9f3c7728268ffb31cb5095131a9c139a74078e27336/jsonschema-4.25.1.tar.gz", hash = "sha256:e4a9655ce0da0c0b67a085847e00a3a51449e1157f4f75e9fb5aa545e122eb85", size = 357342, upload-time = "2025-08-18T17:03:50.038Z" }
 wheels = [
@@ -2979,8 +2979,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
@@ -3396,8 +3396,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
@@ -3481,8 +3481,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
@@ -3542,8 +3542,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
@@ -3598,8 +3598,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
@@ -3675,8 +3675,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
@@ -3717,8 +3717,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
@@ -3763,8 +3763,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 dependencies = [
@@ -4155,8 +4155,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/66/70/e908e9c5e52ef7c3a6c7902c9dfbb34c7e29c25d2f81ade3856445fd5c94/protobuf-6.33.6.tar.gz", hash = "sha256:a6768d25248312c297558af96a9f9c929e8c4cee0659cb07e780731095f38135", size = 444531, upload-time = "2026-03-18T19:05:00.988Z" }
@@ -4806,8 +4806,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 wheels = [
@@ -5962,8 +5962,8 @@ source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version == '3.14.*' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
-    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version >= '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
+    "python_full_version < '3.14' and extra == 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
     "python_full_version < '3.14' and extra != 'extra-16-cai-orchestrator-dev' and extra != 'extra-16-cai-orchestrator-tracing'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/95/8f/aeb76c5b46e273670962298c23e7ddde79916cb74db802131d49a85e4b7d/wrapt-1.17.3.tar.gz", hash = "sha256:f66eb08feaa410fe4eebd17f2a2c8e2e46d3476e9f8c783daa8e09e0faa666d0", size = 55547, upload-time = "2025-08-12T05:53:21.714Z" }

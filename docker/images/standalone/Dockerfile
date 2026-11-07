@@ -28,6 +28,12 @@ RUN yarn quasar prepare >/dev/null && yarn quasar build \
 
 # --- o ZAP, da imagem oficial, fixada por digest --------------------------------
 FROM zaproxy/zap-stable@sha256:781a2bdaea47324e7bab583e2263f21d257b0aee61ed51521a5be45f5f5081ef AS zap
+# O Webswing (a interface do ZAP no navegador) não é usado no modo daemon e traz um
+# Jetty 9.4.56 com três HIGH (smuggling, bypass de Digest, buffer do gzip). Sai da
+# imagem em vez de virar aceite no Trivy. Medido em 2026-11-07: o daemon sobe e varre
+# sem ele.
+USER root
+RUN rm -rf /zap/webswing && test ! -e /zap/webswing && test -x /zap/zap.sh
 
 # --- o container final -----------------------------------------------------------
 FROM ${ENGINE}

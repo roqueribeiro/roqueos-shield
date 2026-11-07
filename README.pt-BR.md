@@ -345,7 +345,7 @@ problema que o `check_docs_fresh.py` existe para pegar.)*
 
 ## Limitações conhecidas
 
-- **A versão do bundle não é a do build** — o pacote e a API são `0.4.1`, e o AI Fix
+- **A versão do bundle não é a do build** — o pacote e a API são `0.5.0`, e o AI Fix
   Bundle ainda emite `"version": "0.3.0"`. Quem consome o bundle não consegue dizer
   qual build o produziu.
 - **`render_pdf()` não tem chamador** — o extra `[pdf]` instala o WeasyPrint e nada

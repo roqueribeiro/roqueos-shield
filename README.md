@@ -299,7 +299,7 @@ Known inconsistencies, listed rather than hidden:
 
 | What | Where | Effect |
 | --- | --- | --- |
-| Bundle version is not the build version | the package and the API are `0.4.1`, the AI Fix Bundle still emits `"version": "0.3.0"` | a consumer of the bundle cannot tell which build produced it |
+| Bundle version is not the build version | the package and the API are `0.5.0`, the AI Fix Bundle still emits `"version": "0.3.0"` | a consumer of the bundle cannot tell which build produced it |
 | `render_pdf()` has no caller | `orchestrator/reporting/renderer.py` | the `[pdf]` extra installs WeasyPrint and nothing invokes it |
 | `cai-expert` container is legacy | `docker/images/cai-expert/`, `docker/compose.agent.yml` | left from the `cai-framework` period; nothing in the pipeline calls it, the agent loop runs in the orchestrator itself, behind the investigate route |
 | Markdown and CSV reports | not in this repository | the RoqueOS front builds those four formats client-side from the AI Fix Bundle |

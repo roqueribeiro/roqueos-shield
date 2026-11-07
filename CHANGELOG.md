@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-07
+
+### Added
+
+- **Standalone: RoqueShield without RoqueOS.** `roqueribeiro1988/roqueos-shield:v0.5.0-standalone` runs the engine, the web UI, the REST API with Swagger, the MCP server, Redis and OWASP ZAP in one container, under a small Python supervisor (UID 1000, no capabilities). `docker/compose.prod.yml` runs the same image with Postgres, Redis and ZAP as separate services. Guide: [docs/standalone.md](docs/standalone.md).
+- **Web UI** (`web/`): the RoqueShield screen of the RoqueOS front, ported (Vue 3 + Quasar), with first-run setup, password login, a **Users** section, runtime AI and scope settings, and the Execution tab reading process logs and CPU/memory from inside the container.
+- **CLI `roqueshield`** with a pipeline exit-code contract (`0` clean, `1` findings at `--fail-on`, `2` usage/connection, `3` failed or incomplete coverage) and **MCP** over stdio and `POST /mcp` (read tools; `start_scan` only with actions on).
+- **Accounts**: optional password per user (scrypt), `PUT /users/{id}/password`, and the last active admin cannot be deactivated or demoted.
+- **Runtime settings** (`/settings/ai`, `/settings/scope`) stored in the database, secrets encrypted with `SECRETS_KEY`; fields set by the environment are locked.
+
+### Security
+
+- First-run setup requires a one-time code (`/data/secrets/SETUP_CODE`) or the `APP_TOKEN`, and is serialized: whoever reached the port first could become admin, and concurrent setups created several admins.
+- Sessions carry a version: logout, password change and deactivation end every session issued before.
+- Password login is throttled per email+IP (5 failures), and per IP across emails (50).
+- The ZAP API key goes in the `X-ZAP-API-Key` header, never in the URL: an HTTP error from ZAP put the key in the worker log, and `/health` had the same path.
+- `LLM_API_KEY` from the environment locks `LLM_API_BASE` too, and listing models with an address from the request sends only the key from the request.
+- Security headers (CSP on the UI, `X-Frame-Options: DENY`, `nosniff`); built-in and compose Redis with a password; each supervised process only gets the secrets it uses.
+- The standalone image drops ZAP's Webswing (unused in daemon mode), removing a Jetty 9.4.56 with three HIGH CVEs.
+- `.trivyignore.yaml`: go-jose and x/net in the nuclei and trivy binaries, and `filelock` 3.32.7 (litellm requires `<4`; `ReadWriteLock` is not used), accepted until 2026-12-07.
+
+### Fixed
+
+- **nuclei never ran since 0.4**: its templates were mode 0700 and the worker (UID 1000) saw none. The image build now fails below a template floor, checked as UID 1000.
+- `scans.started_at` was never written.
+- Migrations also run on SQLite in the standalone (the `create_all` boot did not add new columns to existing tables).
+
 ## [0.4.1] - 2026-10-23
 
 ### Security

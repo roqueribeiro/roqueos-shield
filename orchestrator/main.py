@@ -180,7 +180,7 @@ _TAGS = [
 app = FastAPI(
     title="RoqueShield API",
     description=_DESCRICAO,
-    version="0.4.1",
+    version="0.5.0",
     lifespan=lifespan,
     openapi_tags=_TAGS,
 )
