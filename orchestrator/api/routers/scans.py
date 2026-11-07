@@ -20,6 +20,7 @@ from orchestrator.api.deps import Principal, SessionDep, require_permission
 from orchestrator.api.ratelimit import rate_limit
 from orchestrator.audit import log_audit_event
 from orchestrator.config import settings
+from orchestrator.domain.opcoes import OpcaoRecusada, opcoes_seguras
 from orchestrator.domain.roles import Permission
 from orchestrator.domain.schemas import AssetType
 from orchestrator.domain.target_validator import (
@@ -181,7 +182,19 @@ async def create_scan(
     # Scanning autenticado: o segredo (auth.headers) NUNCA entra na tabela
     # `scans`. Helpers PUROS (testáveis) separam o que persiste do segredo
     # efêmero e redigem o audit.
-    persisted_options, auth_headers, openapi_url = split_scan_auth(body.options, body.auth)
+    # As opções de scanner passam por uma lista fechada (domain/opcoes.py): dict livre
+    # virava argv do nmap e caminho do nuclei/semgrep. E o openapi_url é uma URL que o
+    # ZAP busca de dentro do container: mesmo escopo do alvo.
+    try:
+        opcoes = opcoes_seguras(body.options)
+    except OpcaoRecusada as e:
+        raise HTTPException(422, str(e)) from e
+    if body.auth and body.auth.openapi_url:
+        try:
+            validate_target_value(body.auth.openapi_url, asset_type="url")
+        except TargetValidationError as e:
+            raise HTTPException(403, f"auth.openapi_url rejeitado pela policy: {e}") from e
+    persisted_options, auth_headers, openapi_url = split_scan_auth(opcoes, body.auth)
     persisted_options = apply_profile(persisted_options, body.profile)
     # A lista EFETIVA (pedido > profile > default do tipo). O front não manda
     # `scanners` e mostra `scanners_executed` no relatório: persistir [] deixaria a

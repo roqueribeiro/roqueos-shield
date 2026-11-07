@@ -19,14 +19,21 @@ curl -fsSL https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/in
 [install.sh](../install.sh) checks that Docker answers and has at least 6 GB of memory,
 pulls the image, starts the container listening only on `127.0.0.1:8080`, waits for the
 healthcheck and opens your browser with the first-run code in the address. Running it
-again is safe: if the container exists, it is only started again. `ROQUESHIELD_PORTA=8081`
-changes the port, `ROQUESHIELD_NAO_ABRIR=1` skips opening the browser.
+again is safe: if the container exists, it is only started again.
+
+| I want to | Command |
+| --- | --- |
+| use another port | `curl -fsSL .../install.sh \| ROQUESHIELD_PORT=8081 sh` |
+| not open the browser | `curl -fsSL .../install.sh \| sh -s -- --no-browser` |
+| update, keeping my data | `curl -fsSL .../install.sh \| sh -s -- --update` |
+
+(`...` is `https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main`.)
 
 The code goes in the address fragment (`#setup=...`), which the browser never sends to
 the server: it does not land in any access log, and the screen removes it from the bar
 as soon as it reads it. Nor does it go on the browser's command line, which another
 user on the machine could read with `ps`: the installer opens a local page in a `0700`
-folder that leads to the address and is deleted a minute later.
+folder that leads to the address and is deleted five minutes later.
 
 **By hand, or on Windows without WSL** (same in PowerShell, with `` ` `` instead of `\`):
 
@@ -69,7 +76,11 @@ Do the first run **before** publishing the port beyond `127.0.0.1`.
 It is the same RoqueShield screen you get inside RoqueOS, with the same sections.
 
 **New scan.** Target type, profile, authentication and review, with a summary on the
-side. The authorization reference goes in here.
+side. The authorization reference goes in here. The profile picks the scanners:
+**Web** runs ZAP and nuclei (plus nmap for a host), **Network** runs nmap, **Full** runs
+everything that applies and turns on ZAP's active scan. A Web scan of a small app took
+8 to 13 minutes in our tests against OWASP Juice Shop, most of it nuclei going through
+its templates; the **Execution** tab shows it live.
 
 ![New scan](assets/screens/en-US/07-novo-scan.webp)
 
@@ -145,15 +156,15 @@ and `SETUP_CODE` in the environment, the first boot generates all six in
 log only says `gerado` (generated), `arquivo` (file) or `ambiente` (environment).
 Whatever comes from the environment wins.
 
-The `APP_TOKEN` is a service key with admin power. It is the recovery path when nobody
-remembers the admin password:
+The `APP_TOKEN` is a service key with admin power, and the CLI inside the container
+already uses it. That is the recovery path when nobody remembers the admin password:
 
 ```bash
-docker exec roqueshield roqueshield status   # the CLI inside already uses the APP_TOKEN
-curl -X PUT http://127.0.0.1:8080/users/<id>/password \
-  -H "X-API-Token: $(docker exec roqueshield cat /data/secrets/APP_TOKEN)" \
-  -H 'Content-Type: application/json' -d '{"password":"a-new-strong-password"}'
+docker exec -it roqueshield roqueshield reset-password admin@example.com
 ```
+
+It asks for the new password twice, without echo (at least 10 characters), and ends
+every open session of that account.
 
 The AI provider key typed in the UI's **AI** section is stored encrypted with
 `SECRETS_KEY` and never goes back to the browser.
@@ -173,7 +184,9 @@ The AI provider key typed in the UI's **AI** section is stored encrypted with
   that email, from that IP, waits 30 s, and the wait doubles with each new error, up to
   15 min. The owner, from another IP, still gets in. A single IP is only slowed down
   after 50 errors across all emails. Behind a proxy, set `FORWARDED_ALLOW_IPS` (below),
-  or everyone shows up with the proxy's IP.
+  or everyone shows up with the proxy's IP. With the default `-p 127.0.0.1:8080:8080`,
+  every client arrives with the Docker bridge address, so in practice the wait applies
+  per email; `docker exec -it roqueshield roqueshield reset-password` is always there.
 
 ## Beyond localhost
 
@@ -233,12 +246,28 @@ UI, with the variable's name, which is what a regulated environment needs.
 | `LAB_ONLY`, `TARGET_ALLOWLIST`, `REQUIRE_AUTH_REF` | from the UI | lock the authorized scope |
 | `LLM_MODEL`, `LLM_API_BASE`, `ANTHROPIC_API_KEY`… | from the UI | lock the AI configuration |
 | `ALLOW_CLOUD_FALLBACK` | `true` | `false` forbids a local model from falling back to a cloud one |
+| `AGENT_LIVE_EXECUTION` | `false` | lets an admin run the AI agent's planned commands for real (`dry_run=false`); off, the agent only plans |
 | `MCP_ALLOW_ACTIONS` | `false` | lets `POST /mcp` start scans (always with an authorization reference) |
 | `COOKIE_SECURE` | `false` | forces `Secure` on the session cookie |
 | `OIDC_*` | off | SSO, next to password login |
 
-For production, `docker/compose.prod.yml` runs the same image with Postgres, Redis
-(with a password) and ZAP as separate services.
+For production, `docker/compose.prod.yml` runs the same image with Postgres (an
+append-only audit trail), Redis with a password and ZAP as separate services, and
+workers you can scale:
+
+```bash
+# .env at the repository root, from your secrets vault:
+#   SHIELD_VERSION=v<version>  POSTGRES_PASSWORD=...  REDIS_PASSWORD=...  APP_TOKEN=...
+#   SESSION_SECRET=...  SECRETS_KEY=...  ZAP_API_KEY=...
+#   (optional) SHIELD_BIND=127.0.0.1  SHIELD_PORT=8080
+docker compose -f docker/compose.prod.yml --env-file .env up -d
+docker compose -f docker/compose.prod.yml --env-file .env up -d --scale worker=3
+docker compose -f docker/compose.prod.yml --env-file .env exec shield cat /data/secrets/SETUP_CODE
+```
+
+`--env-file` is required: with `-f`, compose looks for `.env` next to the compose file.
+`SECRETS_KEY` is a Fernet key (`python -c "from cryptography.fernet import Fernet;
+print(Fernet.generate_key().decode())"`).
 
 ## Backup and upgrade
 
@@ -248,13 +277,42 @@ and the `SECRETS_KEY`. Losing the `SECRETS_KEY` makes the stored AI key unreadab
 (just type it again).
 
 ```bash
+docker stop roqueshield
 docker run --rm -v roqueshield:/data -v "$PWD":/bkp alpine \
-  tar czf /bkp/roqueshield-data.tgz -C /data .
+  sh -c 'umask 077 && tar czf /bkp/roqueshield-data.tgz -C /data .'
+docker start roqueshield
 ```
 
-To upgrade, change the tag and recreate the container with the same volume. On boot,
-before the API starts, the supervisor applies the database migrations (SQLite or
-Postgres).
+Restoring into a new, empty volume:
+
+```bash
+docker volume create roqueshield
+docker run --rm -v roqueshield:/data -v "$PWD":/bkp alpine \
+  sh -c 'tar xzf /bkp/roqueshield-data.tgz -C /data && chown -R 1000:1000 /data'
+```
+
+To upgrade, run the installer with `--update`. It pulls the image of its version and
+recreates the container on the same volume and port; on boot, before the API starts,
+the supervisor applies the database migrations (SQLite or Postgres).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/install.sh | sh -s -- --update
+```
+
+## When something goes wrong
+
+| What you see | What to do |
+| --- | --- |
+| `Docker is installed but did not answer` | Open Docker Desktop and wait for it to finish starting (Linux: `sudo systemctl start docker`). |
+| `your user has no permission to use Docker` | Linux: `sudo usermod -aG docker $USER`, log out and back in. |
+| `the container did not start` / port in use | Another program uses 8080: `ROQUESHIELD_PORT=8081` (see the table above). |
+| The browser did not open, or opened a blank page | Open `http://localhost:8080` yourself; the first-run code comes from `docker exec roqueshield cat /data/secrets/SETUP_CODE`. |
+| "localhost here is RoqueShield itself" | Your app runs on your computer, not in the container: use `host.docker.internal` (the button does it). |
+| "Internal network address" | Only an admin can allow it, in the same screen or in **Scope**. |
+| "AI not configured" | Optional. Findings keep the scanner's classification; set a provider in **AI** for analysis and remediation. |
+| "Coverage incomplete" | A scanner did not run; the scan's **Execution** tab says which and why. Often memory: give Docker 6 GB. |
+| Forgot the admin password | `docker exec -it roqueshield roqueshield reset-password <email>` |
+| Anything else | `docker logs roqueshield`, or the **Execution** tab of a scan. Issues are welcome (see [CONTRIBUTING](../CONTRIBUTING.md)). |
 
 ## API and Swagger
 
@@ -273,18 +331,19 @@ nothing to configure, it uses the local shield and the `APP_TOKEN`:
 docker exec roqueshield roqueshield status
 ```
 
-Outside the container, the CLI comes from the repository (it is not on PyPI):
-
-```bash
-pip install "git+https://github.com/roqueribeiro/roqueos-shield@v<version>"
-```
-
-or runs from the image itself, with nothing to install:
+Outside the container, the easiest way is the image itself, with nothing to install:
 
 ```bash
 docker run --rm -it --entrypoint roqueshield \
   -e ROQUESHIELD_URL=https://shield.example -e ROQUESHIELD_TOKEN \
   roqueribeiro1988/roqueos-shield:<version>-standalone status
+```
+
+Or install it from the repository (Python 3.13 or newer; it is not on PyPI, and it
+brings the engine's dependencies along):
+
+```bash
+pip install "git+https://github.com/roqueribeiro/roqueos-shield@v<version>"
 ```
 
 With a token created in **Users**:

@@ -18,7 +18,8 @@ from pydantic import BaseModel
 from orchestrator.api.deps import Principal, SessionDep, require_permission
 from orchestrator.api.ratelimit import rate_limit
 from orchestrator.audit import log_audit_event
-from orchestrator.domain.roles import Permission
+from orchestrator.config import settings
+from orchestrator.domain.roles import Permission, has_permission
 from orchestrator.persistence.models import FindingRow
 
 router = APIRouter(prefix="/investigate", tags=["investigate"])
@@ -51,6 +52,18 @@ async def investigate(
     session: SessionDep,
     principal: Principal = _RUN,
 ) -> InvestigationOut:
+    # Executar de verdade (dry_run=false) é o modo ofensivo, e no container único os
+    # comandos nascem ao lado dos segredos: só quem pode mudar o escopo pode ligar.
+    # O operator continua planejando (dry_run=true), que não executa nada.
+    if not body.dry_run and not settings.AGENT_LIVE_EXECUTION:
+        raise HTTPException(
+            403,
+            "execução real do agente desligada (AGENT_LIVE_EXECUTION=false): "
+            "use dry_run=true para ver os comandos planejados",
+        )
+    if not body.dry_run and not has_permission(principal.role, Permission.CONFIG_MANAGE):
+        raise HTTPException(403, "executar a investigação (dry_run=false) exige um admin")
+
     finding = await session.get(FindingRow, finding_id)
     if finding is None:
         raise HTTPException(404, "finding não encontrado")

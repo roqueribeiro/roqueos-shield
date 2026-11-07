@@ -1,5 +1,5 @@
 /**
- * Números, tamanhos, datas e tempos, no idioma de quem usa (Goal 65).
+ * Números, tamanhos, datas e tempos, no idioma de quem usa.
  *
  * Era a fonte única que quase ninguém usava: 4 arquivos importavam daqui, e 95 escreviam
  * o seu `formatBytes`, `formatDate` ou `formatDuration`, a maioria com o português
@@ -74,7 +74,7 @@ export function formatDuration(segundos) {
 }
 
 /**
- * Milissegundos de uso → "45 min", "2 h 30 min", "1.234 h" (Goal 75). É tempo de uso somado,
+ * Milissegundos de uso → "45 min", "2 h 30 min", "1.234 h". É tempo de uso somado,
  * não duração de mídia: acima de um dia continua em horas, que é como se compara uso. Abaixo
  * de um minuto (e sem valor) é "0 min".
  */
@@ -98,7 +98,7 @@ export function formatDate(data, estilo = 'medium') {
 
 /**
  * Um dia do calendário ('2026-10-10', como os resumos de uso guardam) → "10 de out.", e com
- * `semana` → "sáb., 10 de out." (Goal 75). O dia é montado no relógio de quem olha: um
+ * `semana` → "sáb., 10 de out.". O dia é montado no relógio de quem olha: um
  * `new Date('2026-10-10')` seria meia-noite UTC e cairia no dia 9 no Brasil.
  */
 export function formatDiaCurto(dia, { semana = false } = {}) {

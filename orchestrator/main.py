@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from orchestrator import __version__
 from orchestrator.ai.observability import log_processor
 from orchestrator.api.routers import (
     auth as auth_router,
@@ -180,7 +181,7 @@ _TAGS = [
 app = FastAPI(
     title="RoqueShield API",
     description=_DESCRICAO,
-    version="0.5.0",
+    version=__version__,
     lifespan=lifespan,
     openapi_tags=_TAGS,
 )

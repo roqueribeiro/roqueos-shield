@@ -136,6 +136,15 @@ def servicos(env: dict[str, str], data: Path) -> list[Servico]:
             )
         )
     if env.get("ZAP_BASE_URL") == ZAP_LOCAL:
+        # A chave também vai por arquivo 0600 (-configfile), como a senha do Redis: no
+        # `-config api.key=...` ela ficava no cmdline, legível por qualquer processo do
+        # container, inclusive os scanners que processam conteúdo do alvo.
+        arq_zap = data / "secrets" / "zap.properties"
+        arq_zap.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(arq_zap, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("api.disablekey=false\n")
+            f.write(f"api.key={env.get('ZAP_API_KEY', '')}\n")
         lista.append(
             Servico(
                 "zap",
@@ -148,10 +157,8 @@ def servicos(env: dict[str, str], data: Path) -> list[Servico]:
                     "8090",
                     "-dir",
                     str(data / "zap"),
-                    "-config",
-                    "api.disablekey=false",
-                    "-config",
-                    f"api.key={env.get('ZAP_API_KEY', '')}",
+                    "-configfile",
+                    str(arq_zap),
                 ],
             )
         )

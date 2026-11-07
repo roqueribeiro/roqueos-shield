@@ -13,7 +13,7 @@
 #      para o HEAD. É o que o /health e o relatório reportam.
 #   2. Árvore suja vira imagem que não corresponde a commit nenhum.
 #   3. Versão que já está no Hub não é republicada por cima.
-#   4. O manifesto precisa ter amd64 e arm64 (acemagic é amd64, MacBook arm64).
+#   4. O manifesto precisa ter amd64 e arm64 (servidores amd64, Macs com Apple Silicon arm64).
 #   5. Trivy com hard fail em CRITICAL/HIGH com correção.
 #
 # O roqueos-server fixa a versão da imagem (não usa :latest), então :latest só se move
@@ -66,13 +66,18 @@ docker buildx inspect "${BUILDER}" >/dev/null 2>&1 ||
   docker buildx create --name "${BUILDER}" --driver docker-container
 docker buildx inspect --bootstrap "${BUILDER}" >/dev/null
 
-echo "==> build multi-arch e push de ${IMAGE}:${TAG}"
+# As duas sobem primeiro como CANDIDATAS (`vX.Y.Z-candidato`): o Trivy roda nelas e só
+# depois elas viram `vX.Y.Z` e `vX.Y.Z-standalone`. Antes, a tag final subia antes do
+# Trivy, e uma imagem reprovada ficava pública com o nome que o install.sh baixa.
+CAND="${TAG}-candidato"
+
+echo "==> build multi-arch e push de ${IMAGE}:${CAND}"
 docker buildx build --builder "${BUILDER}" \
   --platform linux/amd64,linux/arm64 \
   -f docker/images/orchestrator/Dockerfile \
   --label "org.opencontainers.image.version=${VERSAO}" \
   --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" \
-  -t "${IMAGE}:${TAG}" \
+  -t "${IMAGE}:${CAND}" \
   --push .
 
 # 4. as duas arquiteturas
@@ -88,7 +93,7 @@ if [ "${ARCHS}" != "amd64,arm64" ]; then
   exit 1
 fi
 }
-conferir_archs "${IMAGE}:${TAG}"
+conferir_archs "${IMAGE}:${CAND}"
 
 # 5. Trivy, hard fail
 trivy_hard() {
@@ -108,24 +113,29 @@ else
     "$1" || TRIVY_RC=$?
 fi
 if [ "${TRIVY_RC}" != "0" ]; then
-  echo "ERRO: Trivy reprovou $1. A tag fica no Hub para diagnóstico;" >&2
-  echo "  não aponte o roqueos-server para ela nem a documente." >&2
+  echo "ERRO: Trivy reprovou $1. Só a candidata ficou no Hub; a tag final não foi criada." >&2
   exit 1
 fi
 }
-trivy_hard "${IMAGE}:${TAG}"
+trivy_hard "${IMAGE}:${CAND}"
 
-echo "==> build multi-arch e push de ${IMAGE}:${TAG}-standalone (em cima de ${TAG})"
+echo "==> build multi-arch e push de ${IMAGE}:${CAND}-standalone (em cima de ${CAND})"
 docker buildx build --builder "${BUILDER}" \
   --platform linux/amd64,linux/arm64 \
   -f docker/images/standalone/Dockerfile \
-  --build-arg "ENGINE=${IMAGE}:${TAG}" \
+  --build-arg "ENGINE=${IMAGE}:${CAND}" \
   --label "org.opencontainers.image.version=${VERSAO}" \
   --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" \
-  -t "${IMAGE}:${TAG}-standalone" \
+  -t "${IMAGE}:${CAND}-standalone" \
   --push .
+conferir_archs "${IMAGE}:${CAND}-standalone"
+trivy_hard "${IMAGE}:${CAND}-standalone"
+
+echo "==> as duas passaram: promovendo para ${TAG} e ${TAG}-standalone"
+docker buildx imagetools create -t "${IMAGE}:${TAG}" "${IMAGE}:${CAND}"
+docker buildx imagetools create -t "${IMAGE}:${TAG}-standalone" "${IMAGE}:${CAND}-standalone"
+conferir_archs "${IMAGE}:${TAG}"
 conferir_archs "${IMAGE}:${TAG}-standalone"
-trivy_hard "${IMAGE}:${TAG}-standalone"
 
 if [ "${MOVER_LATEST}" = "1" ]; then
   docker buildx imagetools create -t "${IMAGE}:latest" "${IMAGE}:${TAG}"

@@ -41,16 +41,17 @@ body:
   - type: input
     id: cai-version
     attributes:
-      label: CAI version / commit
-      placeholder: v0.1.0 or commit SHA
+      label: RoqueShield version / commit
+      placeholder: v0.5.1 (see /health) or commit SHA
     validations:
       required: true
 
   - type: dropdown
     id: install
     attributes:
-      label: How are you running CAI?
+      label: How are you running RoqueShield?
       options:
+        - Standalone (install.sh or docker run ...-standalone)
         - Docker Compose (default profile)
         - Docker Compose (with extra profiles)
         - Python / uv directly

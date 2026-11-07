@@ -16,6 +16,14 @@ from orchestrator.ai.agentic import cai_expert
 from orchestrator.config import settings
 
 
+@pytest.fixture(autouse=True)
+def _execucao_real_ligada(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Estes testes exercitam o caminho que executa; o padrão é desligado."""
+    from orchestrator.config import settings
+
+    monkeypatch.setattr(settings, "AGENT_LIVE_EXECUTION", True)
+
+
 def _call(name: str, args: dict, cid: str = "c1") -> SimpleNamespace:
     return SimpleNamespace(id=cid, function=SimpleNamespace(name=name, arguments=json.dumps(args)))
 

@@ -34,7 +34,7 @@ def test_rejects_empty_value() -> None:
 def test_rejects_imds_aws(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "LAB_ONLY", True)
     monkeypatch.setattr(settings, "TARGET_ALLOWLIST", "")
-    with pytest.raises(TargetValidationError, match="rede privada/loopback/IMDS"):
+    with pytest.raises(TargetValidationError, match="link-local"):
         validate_target_value("http://169.254.169.254/latest/meta-data/", asset_type="url")
 
 

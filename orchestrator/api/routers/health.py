@@ -33,9 +33,19 @@ async def _check_postgres() -> dict[str, Any]:
             # SQLModel.exec() não tipa TextClause (só Select de modelos); pro health
             # check de texto cru o runtime é ok, o ignore é o gap conhecido do SQLModel.
             await s.exec(text("SELECT 1"))  # type: ignore[call-overload]
-        return _ok("postgres", t0)
+        return _ok(_nome_do_banco(), t0)
     except Exception as e:  # noqa: BLE001
-        return _down("postgres", t0, str(e))
+        return _down(_nome_do_banco(), t0, str(e))
+
+
+def _nome_do_banco() -> str:
+    """`postgres` no compose (o nome que o RoqueOS já lê), `database` no SQLite.
+
+    O standalone usa SQLite e o `roqueshield status` dizia "postgres: ok".
+    """
+    from orchestrator.config import settings
+
+    return "postgres" if settings.DATABASE_URL.startswith("postgres") else "database"
 
 
 async def _check_redis() -> dict[str, Any]:

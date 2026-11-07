@@ -35,7 +35,7 @@ body:
   - type: dropdown
     id: invocation
     attributes:
-      label: How does CAI invoke it?
+      label: How does RoqueShield invoke it?
       options:
         - Subprocess CLI (parse stdout/stderr/JSON file)
         - HTTP API (daemon mode)
@@ -48,7 +48,7 @@ body:
     id: output
     attributes:
       label: Output format and mapping to Finding
-      description: Describe how the raw output maps to CAI's canonical `Finding` (severity, CWE, OWASP, asset, evidence).
+      description: Describe how the raw output maps to RoqueShield's canonical `Finding` (severity, CWE, OWASP, asset, evidence).
     validations:
       required: true
 

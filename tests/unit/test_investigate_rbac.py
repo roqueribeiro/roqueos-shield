@@ -62,6 +62,33 @@ async def test_investigate_audited_for_operator(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(inv_router, "log_audit_event", spy_audit)
     monkeypatch.setattr("orchestrator.ai.agentic.cai_expert.investigate_finding", fake_investigate)
     async with _client(Role.OPERATOR) as c:
-        r = await c.post(f"/investigate/{uuid4()}", json={"dry_run": False})
+        r = await c.post(f"/investigate/{uuid4()}", json={"dry_run": True})
     assert r.status_code == 200
     assert any(k.get("action") == "investigate.run" for k in calls)
+
+
+async def test_executar_de_verdade_e_so_de_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """dry_run=false roda comando ao lado dos segredos: operator não liga (07/11/2026)."""
+
+    async def fake_investigate(finding: object, **kw: object) -> dict:
+        return {"transcript": [], "final_assessment": "ok", "trace_url": None}
+
+    async def nada(*a: object, **k: object) -> None:
+        return None
+
+    monkeypatch.setattr(inv_router, "log_audit_event", nada)
+    monkeypatch.setattr("orchestrator.ai.agentic.cai_expert.investigate_finding", fake_investigate)
+    from orchestrator.config import settings
+
+    # Desligada (o padrão): nem admin executa.
+    monkeypatch.setattr(settings, "AGENT_LIVE_EXECUTION", False)
+    async with _client(Role.ADMIN) as c:
+        r = await c.post(f"/investigate/{uuid4()}", json={"dry_run": False})
+    assert r.status_code == 403 and "AGENT_LIVE_EXECUTION" in r.text
+    monkeypatch.setattr(settings, "AGENT_LIVE_EXECUTION", True)
+    async with _client(Role.OPERATOR) as c:
+        r = await c.post(f"/investigate/{uuid4()}", json={"dry_run": False})
+    assert r.status_code == 403
+    async with _client(Role.ADMIN) as c:
+        r = await c.post(f"/investigate/{uuid4()}", json={"dry_run": False})
+    assert r.status_code == 200

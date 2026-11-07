@@ -1,3 +1,7 @@
-"""CAI orchestrator package."""
+"""RoqueShield: o motor (API, worker, CLI e MCP).
 
-__version__ = "0.1.0"
+A versão mora aqui e só aqui; `scripts/check_docs_fresh.py` confere contra o
+`pyproject.toml`, o `web/package.json` e o `install.sh`.
+"""
+
+__version__ = "0.5.0"

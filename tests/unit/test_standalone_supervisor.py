@@ -32,7 +32,11 @@ def test_tudo_embutido(tmp_path: Path) -> None:
     assert redis[redis.index("--bind") + 1] == "127.0.0.1"
     zap = lista[1].argv
     assert zap[zap.index("-host") + 1] == "127.0.0.1"
-    assert "api.key=k" in zap
+    # A chave vai por arquivo 0600, nunca no cmdline (legível por qualquer processo).
+    assert not any("k" == a.split("=")[-1] for a in zap), zap
+    arq = Path(zap[zap.index("-configfile") + 1])
+    assert "api.key=k" in arq.read_text()
+    assert arq.stat().st_mode & 0o777 == 0o600
 
 
 def test_espera_cresce_e_tem_teto() -> None:

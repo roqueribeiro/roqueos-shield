@@ -122,7 +122,7 @@ what you are authorized to test. To test an app on your own machine, use
 `host.docker.internal` instead of `localhost` (the screen explains it and swaps it for
 you).
 
-Rather read what will run first? [install.sh](install.sh) is 190 lines, and the manual
+Rather read what will run first? [install.sh](install.sh) is short and commented, and the manual
 path (one `docker run`), Windows without WSL, secrets, TLS, backup, the CLI, MCP and
 the production compose are in **[docs/standalone.md](docs/standalone.md)**.
 
@@ -145,7 +145,9 @@ make migrate     # alembic upgrade head
 make smoke       # end-to-end: scan Juice Shop, produce an HTML report
 ```
 
-Then `http://127.0.0.1:8080/ui/` for the dashboard, or `/docs` for the OpenAPI spec.
+Then `http://127.0.0.1:8080/` for the UI, or `/docs` for the OpenAPI spec. The UI in the
+screenshots is built from `web/` (`cd web && yarn install && yarn build`); without that
+build the API serves the older dashboard from `orchestrator/static/`.
 
 **Data sovereignty is a switch, not a hope.** With a local model (Ollama or LM
 Studio) and `ALLOW_CLOUD_FALLBACK=false`, a failing local model fails the scan
@@ -273,7 +275,7 @@ Semgrep's `--config auto` is incompatible with the `--metrics off` this project 
 for data sovereignty, and `p/...` packs are downloaded from the registry on every
 scan — which silently yields **zero rules** on a restricted corporate network, the
 normal environment for this tool's target. The image therefore ships the
-`semgrep-rules` set (LGPL-2.1) at `/opt/semgrep-rules`, pinned by commit and
+`semgrep-rules` set (Semgrep Rules License v1.0, see NOTICE) at `/opt/semgrep-rules`, pinned by commit and
 validated at build time, and the adapter loads only the language directories present
 in the checkout. Point `SEMGREP_RULES_DIR` elsewhere to use your own ruleset.
 
@@ -306,7 +308,6 @@ Known inconsistencies, listed rather than hidden:
 
 | What | Where | Effect |
 | --- | --- | --- |
-| Bundle version is not the build version | the package and the API are `0.5.0`, the AI Fix Bundle still emits `"version": "0.3.0"` | a consumer of the bundle cannot tell which build produced it |
 | `render_pdf()` has no caller | `orchestrator/reporting/renderer.py` | the `[pdf]` extra installs WeasyPrint and nothing invokes it |
 | `cai-expert` container is legacy | `docker/images/cai-expert/`, `docker/compose.agent.yml` | left from the `cai-framework` period; nothing in the pipeline calls it, the agent loop runs in the orchestrator itself, behind the investigate route |
 | Markdown and CSV reports | not in this repository | the RoqueOS front builds those four formats client-side from the AI Fix Bundle |
@@ -345,11 +346,11 @@ README. The `--check` mode is what stops that, and it is wired into CI.
 
 ## A note on the name
 
-The product is **RoqueShield**. The Python package is still `cai-orchestrator`, the
-command is still `cai`, and the container names still carry the `cai-` prefix. That
-is deliberate for now: the published Docker image and every existing RoqueOS
-installation reference the old names, and renaming them without a migration path
-would break the stack on the next `install.sh --update`. The rename is tracked, not
+The product is **RoqueShield**, the image is `roqueribeiro1988/roqueos-shield` and the
+client is `roqueshield`. Some internals still carry the old `cai` name: the Python
+package (`cai-orchestrator`), the in-process developer command `cai`, and the `cai-`
+prefix of the containers in the development compose. RoqueOS installations reference
+those names, so they change only with a migration path. The rename is tracked, not
 forgotten.
 
 ## Contributing

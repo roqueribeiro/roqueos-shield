@@ -26,12 +26,14 @@ gravar no `audit_log`.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import shlex
 import shutil
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
+from urllib.parse import urlparse
 
 import structlog
 
@@ -123,12 +125,171 @@ _BANNED_ARG_RE = re.compile(
       | -e$
       | -w$ | --wordlist
       | -iL | --file
-      | --script-args
+      | --script          # --script e --script-args: NSE é Lua com os.execute
       | --upload | --interactive
+      | --alert          # sqlmap: comando do SO quando acha SQLi
+      | --tamper | --load-cookies | --proxy-file | -m$ | -r$ | --resume  # leem arquivo
+      | -iR              # nmap: alvos aleatórios fora do escopo
+      | --datadir | --servicedb | --versiondb | --stylesheet | --excludefile
       | --data-binary=@
+      | --config          # curl lê opções (e URLs) de arquivo (-K: por binário)
+      | --resolve | --connect-to | --proxy | --socks  # desviam a conexão (-x: por binário)
+      | -L$ | --location # redirect segue para onde o alvo mandar
+      | --unix-socket | --abstract-unix-socket
     )""",
     re.IGNORECASE | re.VERBOSE,
 )
+
+# O curl tem mais de 250 opções, e dezenas leem ou escrevem arquivo (-T, -K, -b, -c,
+# -D, -E, --cert, --key, -w @arq, --data-urlencode x@arq...), aceitando o valor colado
+# (`-T/data/x`) e em grupo (`-sd@/data/x`). Lista negra não fecha isso (revisão do PR
+# #20, duas rodadas), então o curl tem LISTA DO QUE PODE. Fora dela, recusado.
+_CURL_SEM_VALOR = frozenset("sSIikvfgNq46G")  # agrupáveis: -sSIk
+_CURL_COM_VALOR = frozenset("XHAemd")  # o valor vem no próximo argumento ou colado
+_CURL_LONGAS = frozenset(
+    {
+        "--silent",
+        "--show-error",
+        "--head",
+        "--include",
+        "--insecure",
+        "--verbose",
+        "--fail",
+        "--globoff",
+        "--no-buffer",
+        "--get",
+        "--compressed",
+        "--path-as-is",
+        "--http1.1",
+        "--http2",
+        "--request",
+        "--header",
+        "--user-agent",
+        "--referer",
+        "--max-time",
+        "--connect-timeout",
+        "--data",
+        "--data-raw",
+    }
+)
+
+
+def _curl_fora_da_lista(arg: str) -> str | None:
+    """Motivo para recusar uma opção do curl que não está na lista do que pode."""
+    if arg.startswith("--"):
+        nome = arg.split("=", 1)[0]
+        return None if nome in _CURL_LONGAS else f"opção {nome} do curl fora da lista permitida"
+    if not arg.startswith("-") or arg == "-":
+        return None
+    letras = arg[1:]
+    for c in letras:
+        if c in _CURL_SEM_VALOR:
+            continue
+        if c in _CURL_COM_VALOR:
+            return None  # o resto do token é o valor, conferido como argumento
+        return f"opção -{c} do curl fora da lista permitida"
+    return None
+
+
+# Esquemas que um argumento pode trazer. Qualquer outro (`file:`, `gopher:`, `dict:`,
+# `ftp:`, `ldap:`) lê disco ou fala protocolo interno.
+_ESQUEMAS_OK = frozenset({"http", "https"})
+
+# Nome com ponto e TLD alfabético, ou localhost. IP literal é conferido à parte (com o
+# ipaddress): um regex de dígitos e pontos confundia o `4` do `-T4` com um host.
+_PARECE_HOST = re.compile(
+    r"^(localhost|[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*)(:[0-9]+)?$",
+    re.IGNORECASE,
+)
+
+
+def _e_ip(texto: str) -> bool:
+    import ipaddress
+
+    t = texto.strip("[]")
+    if t.count(":") == 1 and "." in t:  # 1.2.3.4:80
+        t = t.split(":", 1)[0]
+    elif t.startswith("[") is False and "]:" in texto:
+        t = texto[1 : texto.index("]")]
+    try:
+        ipaddress.ip_address(t)
+        return True
+    except ValueError:
+        return False
+
+
+def _host_do_alvo(target: str) -> str:
+    """O host de um alvo (URL, host:porta, domínio, host/caminho)."""
+    t = target.strip()
+    if "://" in t:
+        return (urlparse(t).hostname or "").lower()
+    t = t.split("/", 1)[0]
+    if t.startswith("["):
+        return t[1 : t.find("]")].lower() if "]" in t else t.lower()
+    if t.count(":") == 1:
+        t = t.split(":", 1)[0]
+    return t.lower()
+
+
+def _argumento_fora_do_alvo(arg: str, host_alvo: str) -> str | None:
+    """Motivo para recusar um argumento que leva a outro lugar que não o alvo.
+
+    A coleira validava o alvo do finding e deixava o argv livre: `curl
+    file:///data/secrets/APP_TOKEN`, `curl -d @arquivo`, `nmap 169.254.169.254` e
+    `curl http://127.0.0.1:8080/` passavam com o alvo do finding em ordem (revisão de
+    segurança de 07/11/2026). Agora todo URL, host, IP, caminho ou arquivo no argv
+    tem que ser o próprio alvo, ou não roda.
+    """
+    if arg.startswith("-"):
+        # O valor de uma opção vem depois do `=` (`--data=@x`) ou colado na curta
+        # (`-d@x`, `-T/caminho`). Opção longa sem `=` não leva valor no mesmo token,
+        # mas `@` e `://` nela também não têm uso legítimo.
+        if "=" in arg:
+            arg = arg.split("=", 1)[1]
+        elif not arg.startswith("--") and len(arg) > 2:
+            # Valor colado na curta (`-T/caminho`, `-t/var/x.yaml`). Em grupo (`-sd@x`)
+            # o curl é barrado pela lista do que pode; os outros binários não agrupam.
+            arg = arg[2:]
+        else:
+            return "lê arquivo local (@arquivo)" if "@" in arg or "://" in arg else None
+    if not arg:
+        return None
+    if arg.startswith("@") or "=@" in arg or ",@" in arg or ";@" in arg:
+        return "lê arquivo local (@arquivo)"
+    if arg.startswith(("/", "./", "../", "~")) or "/../" in arg:
+        return "caminho de arquivo local"
+    if "/" in arg and "://" not in arg:
+        # `data/secrets/APP_TOKEN` (relativo): com barra e sem esquema, só passa
+        # `<alvo>/caminho`. O primeiro componente tem que ser o próprio alvo.
+        cabeca = arg.split("/", 1)[0]
+        if not cabeca or _host_do_alvo(cabeca) != host_alvo:
+            return "caminho de arquivo local"
+    if "://" in arg:
+        p = urlparse(arg)
+        if p.scheme.lower() not in _ESQUEMAS_OK:
+            return f"esquema '{p.scheme}' não permitido"
+        if (p.hostname or "").lower() != host_alvo:
+            return f"URL para outro host ({p.hostname!r}), não o alvo"
+        return None
+    if ":" in arg and arg.split(":", 1)[0].lower() in {"file", "gopher", "dict", "ftp", "ldap"}:
+        return "esquema não permitido"
+    base, _, resto = arg.partition("/")
+    # Endereço numérico em forma que o ipaddress não aceita mas o nmap e o curl aceitam:
+    # `127.1`, `2130706433`, `0x7f000001`, `[::1]:8080`. Porta (`80`, `1-1000`,
+    # `80,443`) e o `4` do `-T4` não têm ponto, dois-pontos nem 6+ dígitos.
+    numerico = re.fullmatch(r"[0-9a-fA-FxX.:\[\]]+", base) is not None and (
+        any(c in base for c in ".:[") or base.lower().startswith("0x") or len(base) >= 6
+    )
+    if numerico and _host_do_alvo(base) != host_alvo:
+        return f"endereço numérico {base!r} não é o alvo"
+    if _PARECE_HOST.match(base) or _e_ip(base):
+        h = _host_do_alvo(base)
+        if h != host_alvo:
+            return f"host {h!r} não é o alvo"
+        if resto[:1].isdigit():
+            return "faixa de rede (CIDR) no lugar do alvo"
+    return None
+
 
 # Metacaracteres de shell: mesmo com argv list, um argumento com isto é sinal de
 # tentativa de injeção (vinda do modelo ou de texto de um alvo malicioso).
@@ -201,11 +362,23 @@ def check_command(
             f"({', '.join(sorted(allowed_for_phase))})",
         )
 
+    if not target:
+        return d(False, "sem alvo: o agente só roda comando contra o alvo do finding")
+    host_alvo = _host_do_alvo(target)
     for arg in command[1:]:
         if any(ch in arg for ch in _SHELL_METACHARS):
             return d(False, f"argumento com metacaractere de shell: {arg!r}")
-        if _BANNED_ARG_RE.match(arg):
+        if binary == "curl":
+            if motivo := _curl_fora_da_lista(arg):
+                return d(False, f"argumento {arg!r} recusado: {motivo}")
+            if "@" in arg and "://" not in arg:
+                # `-d @arq`, `--data-urlencode x@arq`, `-F f=@arq`: o curl lê o arquivo.
+                return d(False, f"argumento {arg!r} recusado: lê arquivo local (@)")
+        elif _BANNED_ARG_RE.match(arg):
             return d(False, f"flag '{arg}' recusada (escrita em disco/leitura local/shell)")
+        motivo = _argumento_fora_do_alvo(arg, host_alvo)
+        if motivo:
+            return d(False, f"argumento {arg!r} recusado: {motivo}")
 
     # Escopo: o alvo passa pelo MESMO validador dos scanners.
     if target:
@@ -224,6 +397,9 @@ def check_command(
     )
 
 
+_AMBIENTE_DO_COMANDO = frozenset({"PATH", "HOME", "LANG", "LC_ALL", "TZ", "TMPDIR"})
+
+
 async def _local_exec(argv: list[str]) -> tuple[int, str, str]:
     """Executor local: o binário roda no próprio container do orchestrator.
 
@@ -233,10 +409,14 @@ async def _local_exec(argv: list[str]) -> tuple[int, str, str]:
     o RoqueShield publica, porque lá o container Kali não sobe. A coleira é a MESMA
     nos dois modos: o que muda é onde o processo nasce, não o que ele pode ser.
     """
+    # Ambiente mínimo: o processo da API tem APP_TOKEN, SESSION_SECRET e a chave de
+    # cifra no ambiente, e nada disso é da conta de um nmap ou de um curl.
+    env = {k: v for k, v in os.environ.items() if k in _AMBIENTE_DO_COMANDO}
     proc = await asyncio.create_subprocess_exec(
         *argv,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=env,
     )
     out, err = await proc.communicate()
     return proc.returncode or 0, out.decode(errors="replace"), err.decode(errors="replace")
@@ -303,6 +483,11 @@ async def run_in_kali(
             phase=phase.value,
         )
         return decision
+
+    if not dry_run and not settings.AGENT_LIVE_EXECUTION:
+        # A mesma trava da rota, aqui também: outro chamador não passa por ela.
+        dry_run = True
+        log.warning("agent.live_execution_disabled", binary=_binary_of(command))
 
     if dry_run:
         decision.reason = "dry_run: comando planejado, não executado"
