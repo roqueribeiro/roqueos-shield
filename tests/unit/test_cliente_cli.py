@@ -67,6 +67,10 @@ def servidor(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]:
             return httpx.Response(201, json={"id": "s1"})
         if p == "/ui/api/scans/s1":
             return httpx.Response(200, json=estado["scan"])
+        if p == "/users":
+            return httpx.Response(200, json=[{"id": "u1", "email": "admin@x.com"}])
+        if p == "/users/u1/password":
+            return httpx.Response(200, json={"id": "u1"})
         return httpx.Response(404, json={"detail": "?"})
 
     original = apimod.Api.__init__
@@ -166,3 +170,30 @@ def test_dentro_do_container_usa_o_shield_local(
     # Sem arquivo nem ambiente, continua sendo erro de configuração.
     with pytest.raises(apimod.SemConfig):
         apimod.carregar({"DATA_DIR": str(tmp_path / "vazio")})
+
+
+def test_reset_password_pede_sem_eco_e_troca(
+    servidor: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ROQUESHIELD_URL", "http://shield:8080")
+    monkeypatch.setenv("ROQUESHIELD_TOKEN", "tok-bom")
+    respostas = iter(["senha-nova-forte", "senha-nova-forte"])
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": next(respostas))
+    r = runner.invoke(cli.app, ["reset-password", "Admin@X.com"])
+    assert r.exit_code == 0, r.output
+    assert "senha-nova-forte" not in r.output
+    assert ("PUT", "/users/u1/password", '{"password":"senha-nova-forte"}') in [
+        (m, p, (c or "").replace(" ", "")) for m, p, c in servidor["recebido"]
+    ]
+
+
+def test_reset_password_com_senhas_diferentes_nao_troca(
+    servidor: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ROQUESHIELD_URL", "http://shield:8080")
+    monkeypatch.setenv("ROQUESHIELD_TOKEN", "tok-bom")
+    respostas = iter(["uma-senha-forte", "outra-senha-forte"])
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": next(respostas))
+    r = runner.invoke(cli.app, ["reset-password", "admin@x.com"])
+    assert r.exit_code == 2
+    assert not [x for x in servidor["recebido"] if x[0] == "PUT"]

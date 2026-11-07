@@ -1,49 +1,62 @@
-CAI — Continuous AI Security
-Copyright 2024-2026 Roque Ribeiro and CAI contributors
+RoqueShield
+Copyright 2024-2026 Roque Ribeiro and RoqueShield contributors
 
-This product includes software developed at the CAI project
-(https://github.com/roqueribeiro/roqueos-shield).
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+This product includes software developed at the RoqueShield project
+(https://github.com/roqueribeiro/roqueos-shield), licensed under the Apache
+License, Version 2.0 (the "License"). You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
 ----------------------------------------------------------------------
-Third-Party Dependencies
+Python dependencies
 ----------------------------------------------------------------------
 
-CAI builds on top of many open-source projects. See `pyproject.toml`
-for the authoritative dependency list. Notable runtime dependencies
-and their licenses:
+See `pyproject.toml` and `uv.lock` for the authoritative list. Notable
+runtime dependencies and their licenses:
 
-  - FastAPI                  (MIT)
-  - Pydantic / Pydantic-Settings (MIT)
-  - SQLModel / SQLAlchemy    (MIT)
-  - litellm                  (MIT)
-  - httpx                    (BSD-3-Clause)
-  - structlog                (Apache-2.0 / MIT)
-  - arq                      (MIT)
-  - Jinja2                   (BSD-3-Clause)
-  - Typer / Rich             (MIT)
-  - python-libnmap           (Apache-2.0)
-  - zaproxy (python client)  (Apache-2.0)
-  - PyGithub                 (LGPL-3.0)
-  - shodan                   (MIT)
-  - python-gvm               (GPL-3.0)
-  - authlib                  (BSD-3-Clause)
-
-Some optional integrations invoke external binaries (Nmap, Trivy,
-Nuclei, Gitleaks, Trufflehog, dnstwist, Checkov, kube-bench, ZAP,
-Greenbone) which are NOT redistributed by this project and remain
-under their respective upstream licenses.
+  - FastAPI, Pydantic, SQLModel / SQLAlchemy, litellm, arq, Typer / Rich (MIT)
+  - httpx, Jinja2, authlib (BSD-3-Clause)
+  - structlog (Apache-2.0 / MIT)
+  - zaproxy python client (Apache-2.0)
+  - PyGithub (LGPL-3.0), python-gvm (GPL-3.0), shodan (MIT)
 
 ----------------------------------------------------------------------
-Lab Targets (NOT redistributed)
+Third-party software inside the Docker images
 ----------------------------------------------------------------------
 
-The `lab` Docker Compose profile references intentionally vulnerable
-third-party applications (OWASP Juice Shop, DVWA, WebGoat). These
-images are pulled at runtime from their official registries and are
-not part of this distribution.
+The images published as `roqueribeiro1988/roqueos-shield` (engine, tag
+`vX.Y.Z`) and `...-standalone` (all-in-one, tag `vX.Y.Z-standalone`) bundle
+the following third-party programs and data, unmodified, each under its own
+license. Their source is available from the upstream projects.
+
+Engine image (docker/images/orchestrator/Dockerfile):
+
+  - Nmap (Debian package)            Nmap Public Source License
+  - nuclei                           MIT
+  - nuclei-templates                 MIT
+  - gitleaks                         MIT
+  - trufflehog                       AGPL-3.0
+  - trivy                            Apache-2.0
+  - semgrep (engine)                 LGPL-2.1
+  - semgrep-rules                    Semgrep Rules License v1.0
+  - checkov                          Apache-2.0
+  - Debian packages (base image)     their respective licenses
+  - Python 3.13                      PSF License
+
+Standalone image (docker/images/standalone/Dockerfile), in addition:
+
+  - OWASP ZAP                        Apache-2.0
+  - Redis (Debian package)           BSD-3-Clause
+  - OpenJDK 21 JRE (Debian package)  GPL-2.0 with Classpath Exception
+  - Firefox ESR (Debian package)     MPL-2.0
+
+The scanners are run as separate programs; RoqueShield does not link against
+them.
+
+----------------------------------------------------------------------
+Lab targets (not redistributed)
+----------------------------------------------------------------------
+
+The `lab` profile of `docker/compose.yml` references intentionally vulnerable
+third-party applications (OWASP Juice Shop, DVWA, WebGoat). They are pulled at
+runtime from their official registries and are not part of this distribution.

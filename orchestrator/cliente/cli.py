@@ -160,7 +160,7 @@ def scan_start(
     tipo: Annotated[
         str, typer.Option("--type", help="url|domain|host|image|repo|k8s_resource")
     ] = "url",
-    perfil: Annotated[str, typer.Option("--profile", help="web|network|full|exposure")] = "web",
+    perfil: Annotated[str, typer.Option("--profile", help="web|network|full")] = "web",
     scanner: Annotated[
         list[str] | None, typer.Option("--scanner", help="Repetir para mais de um")
     ] = None,
@@ -331,6 +331,31 @@ def settings_scope(
     out.print_json(json.dumps(dado))
 
 
+@app.command("reset-password")
+def reset_password(
+    email: Annotated[str, typer.Argument(help="E-mail da conta (ex.: o admin esquecido)")],
+) -> None:
+    """Troca a senha de uma conta. Pede a senha nova sem eco.
+
+    É o caminho de quem esqueceu a senha do admin: dentro do container a CLI já usa o
+    APP_TOKEN, então `docker exec -it roqueshield roqueshield reset-password admin@x`
+    resolve sem copiar token nenhum para a tela.
+    """
+    api = _api()
+    alvo = email.strip().lower()
+    usuarios = _chamar(api.get, "/users")
+    conta = next((u for u in usuarios if u.get("email") == alvo), None)
+    if conta is None:
+        err.print(f"[red]nenhuma conta com o e-mail {alvo}[/red]")
+        raise typer.Exit(Saida.USO)
+    senha = getpass.getpass("Senha nova (10+ caracteres): ")
+    if senha != getpass.getpass("De novo: "):
+        err.print("[red]as duas não batem; nada foi trocado[/red]")
+        raise typer.Exit(Saida.USO)
+    _chamar(api.put, f"/users/{conta['id']}/password", {"password": senha})
+    out.print(f"senha de {alvo} trocada; as sessões abertas dessa conta foram encerradas")
+
+
 @app.command()
 def logs(
     servico: Annotated[str, typer.Argument(help="orchestrator|worker|redis|zap")],
@@ -368,7 +393,8 @@ def mcp(
 
 
 def main() -> None:
-    app()
+    # Sem prog_name, a ajuda dizia `python -m orchestrator.cliente.cli`.
+    app(prog_name="roqueshield")
 
 
 if __name__ == "__main__":

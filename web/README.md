@@ -5,7 +5,7 @@ na raiz (`/`). Vue 3 + Quasar + Vite, JavaScript, yarn.
 
 ## De onde veio
 
-Portada do `roqueos-front` em 06/11/2026, por decisão do founder: a tela do RoqueOS
+Portada do `roqueos-front` em 06/11/2026, por decisão do mantenedor: a tela do RoqueOS
 continua no RoqueOS, e o shield ganha a sua versão. A partir daqui as duas evoluem
 separadas. O que veio de lá, sem mudança de comportamento:
 

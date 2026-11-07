@@ -1,4 +1,8 @@
-# Runbook operacional — CAI Orchestrator
+# Runbook operacional — RoqueShield pelo compose de desenvolvimento
+
+> Este runbook é do `docker/compose.yml` (Postgres, Redis, ZAP e alvos de lab em
+> containers separados), o caminho de quem desenvolve o projeto. Para **usar** o
+> RoqueShield, o caminho é o container único: [docs/standalone.pt-BR.md](standalone.pt-BR.md).
 
 ## Setup inicial
 
@@ -49,7 +53,7 @@ echo "http://127.0.0.1:8080/ui/?token=$TOKEN"
 
 ### Dashboard UI
 
-`http://127.0.0.1:8080/ui/?token=<APP_TOKEN>` — 4 abas (Dashboard, Scans, AI Calls, Logs) + cockpit live por scan. Detalhes em [README §4](../README.md#4-dashboard-ui).
+`http://127.0.0.1:8080/ui/?token=<APP_TOKEN>` — 4 abas (Dashboard, Scans, AI Calls, Logs) + cockpit live por scan. A tela nova (a de `web/`, no standalone) fica em `/`; ver [docs/standalone.pt-BR.md](standalone.pt-BR.md).
 
 Pelo Claude Code: `/dashboard` ou `"abre o dashboard"`.
 
@@ -339,7 +343,7 @@ Proxy/firewall corta long-polling. EventSource reconecta automaticamente — cos
 
 ## Skills, commands, agents (Claude Code)
 
-Listagem completa em [README §8](../README.md#8-self-heal-e-debug). Mais usados no dia-a-dia:
+Listagem completa em `.claude/`. Mais usados no dia-a-dia:
 
 - `/dashboard` — abre UI
 - `/status` — diagnóstico stack

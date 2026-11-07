@@ -1,79 +1,98 @@
 # Security Policy
 
-CAI is a defensive security platform. Because it orchestrates active vulnerability scanners, a flaw in CAI can have outsized impact (e.g., scanning out-of-scope targets, leaking findings, bypassing the LLM PII scrubber). We take reports seriously and prioritize coordinated disclosure.
+RoqueShield is a security testing platform: it orchestrates active scanners (nmap, ZAP,
+nuclei and others) against targets you choose. A flaw in it can have outsized impact,
+such as scanning out of scope, reaching the container's own services or a cloud
+metadata endpoint, leaking findings or secrets, or bypassing the PII scrubber before a
+model call. We take reports seriously and prefer coordinated disclosure.
 
 ## Supported versions
 
-CAI is in **alpha** (pre-1.0). Only the `main` branch is supported for security fixes. Pinned-version users are encouraged to upgrade.
+RoqueShield is pre-1.0. Security fixes land on `main` and ship in the next release of
+the image `roqueribeiro1988/roqueos-shield`. Only the latest released minor line gets
+fixes.
 
-| Version | Supported          |
-|---------|--------------------|
-| `main`  | :white_check_mark: |
-| < 1.0   | :x: (use `main`)   |
+| Version | Supported |
+| --- | --- |
+| latest `v0.5.x` (tags `v0.5.x` and `v0.5.x-standalone`) | yes |
+| older tags | no, update with `install.sh --update` or the new tag |
 
 ## Reporting a vulnerability
 
-**Please do NOT open a public GitHub issue for security reports.**
+**Do not open a public issue for a security report.**
 
-Use one of the following private channels:
+Use [GitHub private vulnerability reporting](https://github.com/roqueribeiro/roqueos-shield/security/advisories/new).
+It is private to the maintainers and has a coordinated-disclosure workflow built in.
 
-1. **Preferred** — [GitHub Security Advisories](https://github.com/roqueribeiro/roqueos-shield/security/advisories/new) (private to maintainers; coordinated-disclosure workflow built in)
-2. **Backup** — open a private "Draft Advisory" via the same page, or contact a maintainer listed in [`MAINTAINERS.md`](MAINTAINERS.md) (when present) via the email on their GitHub profile
+Include, when you can:
 
-Include the following whenever possible:
-
-- A description of the issue and the attack scenario it enables
-- The affected component (adapter name, API endpoint, module path)
-- A minimal reproduction (PoC) — ideally against the bundled `lab` profile (Juice Shop / DVWA / WebGoat)
-- Your suggested CVSS v3.1 vector (we will reassess)
-- Whether you would like credit, and under what name/handle
+- what the issue lets an attacker do, and from which position (no account, `viewer`,
+  `operator`, `admin`, a scanned target, the network);
+- the affected component (API route, scanner adapter, the standalone image, `install.sh`,
+  the web UI in `web/`, the CLI or the MCP server);
+- a minimal reproduction, ideally against a local lab target (OWASP Juice Shop in a
+  container is enough);
+- your suggested CVSS v3.1 vector (we will reassess);
+- whether you want credit, and under what name.
 
 ## Scope
 
-**In scope:**
+In scope:
 
-- The `orchestrator/` Python package (API, adapters, AI gateway, audit log, scrubber, persistence, reporting)
-- The Docker images we build in `docker/images/`
-- The default `compose.yml` configuration (RCE/SSRF/auth bypass/etc.)
-- The AI Fix Bundle JSON schema (deserialization risks, prompt-injection vectors)
+- the `orchestrator/` package: API, adapters, the AI agent and its command leash, the
+  scope validator, auth and sessions, audit log, scrubber, reporting;
+- the images built from `docker/images/`, including the standalone image and its
+  supervisor (`orchestrator/standalone/`);
+- `install.sh` (the `curl | sh` installer);
+- the web UI in `web/`, the `roqueshield` CLI and the MCP server (stdio and `POST /mcp`);
+- the default `docker/compose.yml` and `docker/compose.prod.yml`.
 
-**Out of scope:**
+Out of scope:
 
-- Vulnerabilities in upstream scanners (Nmap, ZAP, Nuclei, Trivy, Greenbone, ...) — report those to the upstream project
-- Vulnerabilities in the `lab` profile targets (Juice Shop, DVWA, WebGoat) — these are intentionally vulnerable
-- Findings produced by CAI scans against third-party systems (those belong to those systems' owners)
-- Social-engineering, physical, or DoS attacks against project infrastructure
-- Issues that require a fully privileged local user or a compromised host
+- vulnerabilities in the upstream scanners themselves (nmap, ZAP, nuclei, trivy,
+  semgrep, ...): report those upstream;
+- intentionally vulnerable lab targets (Juice Shop, DVWA, WebGoat);
+- findings that RoqueShield produced against someone else's system: those belong to the
+  system's owner;
+- attacks that need a fully privileged local user or an already compromised host.
+
+## Known limits (not vulnerabilities, but tell us if you find a way around them)
+
+- In the standalone image every process (API, worker, ZAP, scanners) runs as the same
+  user, which can read `/data/secrets`. Secrets are kept out of the worker's
+  environment, but a compromised scanner is not isolated from them.
+- The scope check resolves DNS when a target is created and when a scan is enqueued;
+  the scanner resolves again later. Loopback and link-local are refused even for a name
+  on the allowlist, but a name could still be re-pointed to another private address.
 
 ## Our commitment
 
-| Stage           | SLA                                        |
-|-----------------|--------------------------------------------|
-| Acknowledgement | within 72 hours                            |
-| Triage          | within 7 days                              |
-| Fix or mitigation | within 90 days (extendable by mutual agreement) |
-| Public disclosure | coordinated with the reporter; default 90 days from acknowledgement |
+| Stage | Target |
+| --- | --- |
+| Acknowledgement | within 72 hours |
+| Triage | within 7 days |
+| Fix or mitigation | within 90 days, extendable by mutual agreement |
+| Public disclosure | coordinated with you; by default 90 days after acknowledgement |
 
-We will keep you updated and, unless you prefer otherwise, credit you in the [`CHANGELOG.md`](CHANGELOG.md) and the published advisory.
+Unless you prefer otherwise, we credit you in [`CHANGELOG.md`](CHANGELOG.md) and in the
+advisory.
 
 ## Safe harbor
 
-We will not pursue legal action against researchers who:
-
-- Make a good-faith effort to comply with this policy
-- Avoid privacy violations, destruction of data, and disruption of services
-- Do not exfiltrate data beyond what is necessary to demonstrate impact
-- Give us a reasonable window to remediate before any public disclosure
-
-If in doubt, ask first.
+We will not pursue legal action against researchers who make a good-faith effort to
+follow this policy, avoid privacy violations, data destruction and service disruption,
+do not exfiltrate more than needed to show impact, and give us a reasonable window
+before public disclosure. If in doubt, ask first.
 
 ## Hardening guidance for operators
 
-CAI ships with safe defaults for a lab/dev environment. Before running against real assets, operators should:
-
-- Set `LAB_ONLY=false` only after configuring `TARGET_ALLOWLIST`
-- Set `REQUIRE_AUTH_REF=true` to force an `authorization_ref` on every scan
-- Rotate `APP_TOKEN`, `ZAP_API_KEY`, `POSTGRES_PASSWORD` away from the `changeme-*` defaults
-- Never expose the orchestrator on `0.0.0.0`; keep it bound to `127.0.0.1` behind a TLS reverse proxy
-- Confirm `scrubber.py` is enabled before sending findings to external LLM providers
-- Review the threat model in [`docs/threat-model.md`](docs/threat-model.md)
+- Keep `LAB_ONLY=true` (the default). Put what you are authorized to test in
+  `TARGET_ALLOWLIST` (or the **Scope** section). `LAB_ONLY=false` turns the private
+  network guard off.
+- Set `REQUIRE_AUTH_REF=true` to require an authorization reference on every scan.
+- Do the first run before publishing the port, and never publish port 8080 as plain HTTP
+  outside `127.0.0.1`: put a TLS reverse proxy in front.
+- Treat a backup of `/data` as a secret: it holds the `APP_TOKEN` and the `SECRETS_KEY`.
+- Give `operator` and `viewer` roles to people and CI; keep `admin` for who changes scope
+  and AI settings. Running the AI agent for real (`dry_run=false`) is admin-only.
+- Read the threat model in [`docs/threat-model.md`](docs/threat-model.md).

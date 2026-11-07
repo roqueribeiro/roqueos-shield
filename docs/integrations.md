@@ -18,26 +18,29 @@ second half, labelled, with what is missing to build it.
 
 ## 1. The three surfaces that exist
 
-### CLI — `cai`
+### CLI — `roqueshield`
 
-A Typer application, four commands, running **in-process**: no API to bring up, no
-token to manage. It is the shortest path for an agent that already has a shell.
+A client of the REST API, so it works the same against the container on your laptop
+and a shield on another machine. Inside the standalone container it needs no setup;
+outside, `ROQUESHIELD_URL` and `ROQUESHIELD_TOKEN` (or `roqueshield login`).
 
 ```bash
-cai scan https://staging.example.com --asset-type url --criticality high
-cai scan git@github.com:acme/api.git --asset-type repo
-cai exposure "Acme Corp" --domains acme.com --github-orgs acme
-cai bundle 8f2c1e4a-... --out bundle.json
-cai serve --host 0.0.0.0 --port 8080
+roqueshield scan start https://staging.example.com --auth-ref CHG-123 --wait --fail-on high
+roqueshield scan start https://github.com/acme/api.git --type repo --profile full --wait
+roqueshield scan show <scan_id> --json
+roqueshield findings <scan_id>
+roqueshield report <scan_id> --format bundle -o bundle.json
 ```
 
-`--skip-ai` runs the scan without the triage step, which is what you want when the
-LLM is unavailable and you still need coverage.
+`--wait` exits with the pipeline contract: `0` clean at `--fail-on`, `1` findings at or
+above it, `2` usage or connection error, `3` failed scan or incomplete coverage. Without
+an AI key the scan still runs; findings keep the scanner's own classification.
 
 ### REST — FastAPI
 
-OpenAPI at `/docs`. Authentication is `X-API-Key` + `X-API-Secret`, or OIDC. The
-routes an integration actually needs:
+OpenAPI at `/docs`. Authentication is the `X-API-Token` header (a token created in
+**Users**, or the `APP_TOKEN`), or the session cookie of the web UI. The routes an
+integration actually needs:
 
 | Step | Call |
 | --- | --- |
@@ -49,9 +52,8 @@ routes an integration actually needs:
 | The bundle | `GET /reports/{id}/ai-bundle` |
 
 Live progress is `GET /ui/api/events`, `text/event-stream`, emitting `phase` and
-`log` events. `EventSource` cannot send headers, so this endpoint takes a **short
-session token in the query string** — never the API key, which would then live in
-every proxy log along the path.
+`log` events. It takes the same session cookie or `X-API-Token` header as the rest of
+the API. `EventSource` in a browser cannot send headers, so the web UI uses the cookie.
 
 ### AI Fix Bundle — the contract for machines
 
@@ -64,10 +66,7 @@ suggested remediation. It has a **schema version** because whoever consumes it n
 to know when it changes — the whole point of a contract is that it is not a rendered
 page you scrape.
 
-> Known inconsistency, not hidden: the bundle emits `"generator": {"tool": "cai",
-> "version": "0.3.0"}` while the application declares `0.4.0` and `pyproject.toml`
-> says `0.1.0`. A consumer cannot currently tell which build produced a bundle. The
-> fix is to read one source; it is tracked, not done.
+
 
 ---
 
@@ -109,17 +108,20 @@ regressoes = novo_keys - anterior_keys
 ### A worked example, with the CLI
 
 ```bash
-BEFORE=$(cai scan git@github.com:acme/api.git --asset-type repo --json | jq -r .scan_id)
-cai bundle "$BEFORE" --out bundle.json
+REPO=https://github.com/acme/api.git
+BEFORE=$(roqueshield scan start "$REPO" --type repo | awk '/^scan / {print $2}')
+roqueshield scan watch "$BEFORE"
+roqueshield report "$BEFORE" --format bundle -o bundle.json
 
 # ... the agent patches the repository from bundle.json ...
 
-AFTER=$(cai scan git@github.com:acme/api.git --asset-type repo --json | jq -r .scan_id)
-cai bundle "$AFTER" --out bundle-after.json
+AFTER=$(roqueshield scan start "$REPO" --type repo | awk '/^scan / {print $2}')
+roqueshield scan watch "$AFTER"
+roqueshield report "$AFTER" --format bundle -o bundle-after.json
 
 jq -s '{
-  resolvidos: (.[0].findings - .[1].findings),
-  regressoes: (.[1].findings - .[0].findings)
+  resolved:    ([.[0].vulnerabilities[].deduped_key] - [.[1].vulnerabilities[].deduped_key]),
+  regressions: ([.[1].vulnerabilities[].deduped_key] - [.[0].vulnerabilities[].deduped_key])
 }' bundle.json bundle-after.json
 ```
 
@@ -196,24 +198,23 @@ fail the build when a scanner did not run. A green check on a scan with
 
 Both gaps have a working answer right now, which is why neither is urgent.
 
-**In CI**, one shell step:
+**In CI**, one shell step against a shield you already run (the token is a CI secret
+created in **Users**, with the `operator` role):
 
 ```yaml
 - name: RoqueShield
+  env:
+    ROQUESHIELD_URL: https://shield.example
+    ROQUESHIELD_TOKEN: ${{ secrets.ROQUESHIELD_TOKEN }}
   run: |
-    docker run --rm -v "$PWD:/src" roqueribeiro1988/roqueos-shield:latest \
-      scan /src --asset-type repo --skip-ai > result.json
-    python - <<'PY'
-    import json, sys
-    r = json.load(open("result.json"))
-    if not r.get("coverage_complete"):
-        sys.exit("scanner nao rodou por completo; resultado nao e conclusivo")
-    altos = [f for f in r["findings"] if f["severity"] in ("critical", "high")]
-    if altos:
-        sys.exit(f"{len(altos)} achado(s) de severidade alta ou critica")
-    PY
+    docker run --rm -e ROQUESHIELD_URL -e ROQUESHIELD_TOKEN --entrypoint roqueshield \
+      roqueribeiro1988/roqueos-shield:v0.5.1-standalone \
+      scan start https://staging.example.com --auth-ref "$GITHUB_RUN_ID" --wait --fail-on high
 ```
 
+Exit code `3` (failed or incomplete coverage) fails the step too: a scanner that did
+not run never passes as "clean".
+
 **With an agent**, the CLI is already the interface: a coding agent with shell access
-runs `cai scan` and `cai bundle` directly. The MCP server would make that ergonomic
-for clients without a shell — it would not unlock anything the CLI cannot do.
+runs `roqueshield scan start` and `roqueshield report` directly, and the MCP server
+(section 3) does the same for clients without a shell.

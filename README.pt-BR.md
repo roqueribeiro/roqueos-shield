@@ -13,7 +13,7 @@ higienizada, um agente que confirma o achado dentro de um Kali sob coleira, e um
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/release/python-3130/)
 [![CI](https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml)
-[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#status)
+[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#limitações-conhecidas)
 
 [English](README.md) · [Modelo C4](docs/c4-model.pt-BR.md) · [Integrações](docs/integrations.pt-BR.md) · [Arquitetura](docs/architecture.md)
 
@@ -120,7 +120,7 @@ só escolhe e-mail e senha. Depois é **Novo scan**, o endereço, e o que você 
 autorização para testar. Para testar um app da sua própria máquina, use
 `host.docker.internal` no lugar de `localhost` (a tela explica e troca por você).
 
-Prefere ver antes o que vai rodar? O [install.sh](install.sh) tem 190 linhas, e o
+Prefere ver antes o que vai rodar? O [install.sh](install.sh) é curto e comentado, e o
 caminho à mão (um `docker run`), o Windows sem WSL, segredos, TLS, backup, CLI, MCP e o
 compose de produção estão em **[docs/standalone.pt-BR.md](docs/standalone.pt-BR.md)**.
 
@@ -143,11 +143,9 @@ make migrate     # alembic upgrade head
 make smoke       # ponta a ponta: varre o Juice Shop e produz um relatório HTML
 ```
 
-Quem não quer buildar na mão, a esteira publica a imagem do orchestrator a cada push na
-`main`: `docker pull ghcr.io/roqueribeiro/cai-orchestrator:latest` (ou a tag do commit).
-O `make build` segue valendo para quem vai mexer no código.
-
-Depois, `http://127.0.0.1:8080/ui/` para o dashboard, ou `/docs` para o OpenAPI.
+Depois, `http://127.0.0.1:8080/` para a tela, ou `/docs` para o OpenAPI. A tela das
+capturas é buildada de `web/` (`cd web && yarn install && yarn build`); sem esse build a
+API serve o dashboard antigo de `orchestrator/static/`.
 
 **Soberania de dado é um interruptor, não uma esperança.** Com modelo local (Ollama
 ou LM Studio) e `ALLOW_CLOUD_FALLBACK=false`, um modelo local que falha faz o scan
@@ -277,7 +275,7 @@ O `--config auto` do Semgrep é incompatível com o `--metrics off` que este pro
 usa por soberania de dado, e os pacotes `p/...` são baixados do registro a cada scan
 — o que silenciosamente resulta em **zero regras** numa rede corporativa restrita,
 que é o ambiente normal do alvo desta ferramenta. Por isso a imagem embarca o
-conjunto `semgrep-rules` (LGPL-2.1) em `/opt/semgrep-rules`, pinado por commit e
+conjunto `semgrep-rules` (Semgrep Rules License v1.0, ver o NOTICE) em `/opt/semgrep-rules`, pinado por commit e
 validado no build, e o adapter carrega só os diretórios de linguagem presentes.
 Aponte `SEMGREP_RULES_DIR` para outro lugar se quiser regra própria.
 
@@ -328,13 +326,16 @@ roqueos-shield/
 │   ├── api/routers/             # os routers da API (contrato em docs/openapi.json)
 │   ├── domain/                  # Finding canônico, scrubber, dedup, validador
 │   ├── jobs/                    # workers arq + pipelines + fases
-│   ├── persistence/             # SQLModel, 9 tabelas, 7 migrations
+│   ├── persistence/             # SQLModel e as migrations (alembic)
 │   ├── reporting/               # HTML, compliance, coverage, exporters
-│   └── static/                  # dashboard HTML+CSS+JS, sem build
+│   ├── standalone/              # supervisor e segredos do container único
+│   ├── web_dist/                # a tela buildada de web/ (fora do git)
+│   └── static/                  # dashboard antigo, usado sem o web_dist
 ├── docker/
 │   ├── compose.yml + 6 arquivos de profile
-│   └── images/{orchestrator,kali-toolbox,cai-expert}/Dockerfile
-├── tests/                       # 302 funções de teste; gate de cobertura em 64 %
+│   └── images/{orchestrator,standalone,kali-toolbox,cai-expert}/Dockerfile
+├── web/                         # a tela (Vue 3 + Quasar), yarn
+├── tests/                       # unitários e integração; gate de cobertura no CI
 ├── scripts/
 │   ├── check_no_silence.py      # o gate do contrato do silêncio (AST)
 │   ├── check_docs_fresh.py      # doc x código
@@ -343,30 +344,23 @@ roqueos-shield/
 └── .claude/                     # 10 skills + 13 commands + rules
 ```
 
-*(Esta árvore substitui uma versão anterior que dizia 14 adapters, 8 routers e 3
-migrations. Eram 15, 10 e 7 — a árvore tinha envelhecido calada, que é exatamente o
-problema que o `check_docs_fresh.py` existe para pegar.)*
 
 ---
 
 ## Limitações conhecidas
 
-- **A versão do bundle não é a do build** — o pacote e a API são `0.5.0`, e o AI Fix
-  Bundle ainda emite `"version": "0.3.0"`. Quem consome o bundle não consegue dizer
-  qual build o produziu.
 - **`render_pdf()` não tem chamador** — o extra `[pdf]` instala o WeasyPrint e nada
   o invoca. PDF e CSV que aparecem na tela do RoqueShield são montados no front.
 - **`cai-expert` é legado** — sobrou da fase do `cai-framework`; nada no pipeline
   chama o container, e o laço do agente roda no próprio orchestrator, na rota de
   investigação.
-- **Dashboard sem auth visual** — token por `?token=...` na URL ou localStorage.
-  OIDC segue como TODO.
+- **O dashboard antigo** (`orchestrator/static/`, servido quando a tela de `web/` não foi
+  buildada) usa token na URL ou no localStorage. A tela nova usa login com cookie de
+  sessão.
 - **Log ao vivo reinicia com o processo** — ring buffer em memória; o histórico fica
   no `docker logs`.
 - **Feed inicial do Greenbone** leva de 30 min a 3 h e ocupa ~5 GB.
-- **UI sem tratamento mobile** — funciona em desktop.
 - **Cancelamento de scan** por `DELETE` REST; WebSocket bidirecional não existe.
-- **E2E de UI** — só smoke manual no browser.
 - **Modelos de raciocínio** (Qwen 3.x, DeepSeek-R1) consomem `max_tokens` dentro de
   `<think>`; suba para 8192+ se a saída vier vazia.
 
@@ -404,11 +398,12 @@ impede isso, e ele está no CI.
 
 ## Sobre o nome
 
-O produto é **RoqueShield**. O pacote Python ainda é `cai-orchestrator`, o comando
-ainda é `cai`, e os containers ainda carregam o prefixo `cai-`. Isso é deliberado por
-enquanto: a imagem publicada no Docker Hub e toda instalação existente do RoqueOS
-referenciam os nomes antigos, e renomear sem caminho de migração quebraria a stack no
-próximo `install.sh --update`. A renomeação está registrada, não esquecida.
+O produto é **RoqueShield**, a imagem é `roqueribeiro1988/roqueos-shield` e o cliente é
+`roqueshield`. Algumas partes internas ainda carregam o nome antigo `cai`: o pacote
+Python (`cai-orchestrator`), o comando de desenvolvimento `cai` (roda o pipeline no
+próprio processo) e o prefixo `cai-` dos containers do compose de desenvolvimento.
+Instalações do RoqueOS usam esses nomes, então eles só mudam com caminho de migração.
+A renomeação está registrada, não esquecida.
 
 ## Contribuindo
 

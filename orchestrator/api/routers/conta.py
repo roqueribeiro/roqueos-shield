@@ -128,7 +128,18 @@ async def setup(
 
     if await _total_de_usuarios(session) > 0:
         raise HTTPException(status.HTTP_410_GONE, "o primeiro uso já foi feito")
+    # O POST /setup errado não pedia credencial e gravava uma linha de auditoria a cada
+    # tentativa, sem limite: o mesmo freio do login, por origem.
+    chave = f"setup:{_origem(request)}"
+    espera = freio.espera(chave)
+    if espera > 0:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "muitas tentativas; espere antes de tentar de novo",
+            headers={"Retry-After": str(int(espera) + 1)},
+        )
     if not _pode_fazer_setup(body, request):
+        freio.falhou(chave)
         await log_audit_event(
             session, action="setup.denied", actor=body.email, metadata={"origem": _origem(request)}
         )

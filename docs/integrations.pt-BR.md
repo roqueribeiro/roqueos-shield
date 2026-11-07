@@ -18,26 +18,29 @@ está na segunda, rotulado, com o que falta para construir.
 
 ## 1. As três superfícies que existem
 
-### CLI — `cai`
+### CLI — `roqueshield`
 
-Uma aplicação Typer, quatro comandos, rodando **in-process**: sem API para subir, sem
-token para gerenciar. É o caminho mais curto para um agente que já tem shell.
+Um cliente da API REST, então funciona igual contra o container do seu notebook e contra
+um shield em outra máquina. Dentro do container standalone não precisa de configuração;
+fora, `ROQUESHIELD_URL` e `ROQUESHIELD_TOKEN` (ou `roqueshield login`).
 
 ```bash
-cai scan https://staging.exemplo.com --asset-type url --criticality high
-cai scan git@github.com:acme/api.git --asset-type repo
-cai exposure "Acme Corp" --domains acme.com --github-orgs acme
-cai bundle 8f2c1e4a-... --out bundle.json
-cai serve --host 0.0.0.0 --port 8080
+roqueshield scan start https://staging.example.com --auth-ref CHG-123 --wait --fail-on high
+roqueshield scan start https://github.com/acme/api.git --type repo --profile full --wait
+roqueshield scan show <scan_id> --json
+roqueshield findings <scan_id>
+roqueshield report <scan_id> --format bundle -o bundle.json
 ```
 
-`--skip-ai` roda o scan sem a etapa de triagem, que é o que você quer quando o LLM
-está fora e você ainda precisa de cobertura.
+O `--wait` sai pelo contrato de pipeline: `0` limpo no `--fail-on`, `1` achado nele ou
+acima, `2` erro de uso ou de conexão, `3` scan que falhou ou cobertura incompleta. Sem
+chave de IA o scan roda do mesmo jeito; os achados ficam com a classificação do scanner.
 
 ### REST — FastAPI
 
-OpenAPI em `/docs`. Autenticação por `X-API-Key` + `X-API-Secret`, ou OIDC. As rotas
-que uma integração de fato usa:
+OpenAPI em `/docs`. A autenticação é o cabeçalho `X-API-Token` (um token criado em
+**Usuários**, ou o `APP_TOKEN`), ou o cookie de sessão da tela. As rotas de que uma
+integração precisa:
 
 | Passo | Chamada |
 | --- | --- |
@@ -48,10 +51,9 @@ que uma integração de fato usa:
 | Postura de compliance | `GET /reports/{id}/compliance` |
 | O bundle | `GET /reports/{id}/ai-bundle` |
 
-Progresso ao vivo é `GET /ui/api/events`, `text/event-stream`, emitindo eventos
-`phase` e `log`. `EventSource` não manda header, então esse endpoint recebe um
-**session-token curto na query string** — nunca a apiKey, que aí viveria em todo log
-de proxy do caminho.
+O progresso ao vivo é `GET /ui/api/events`, `text/event-stream`, com eventos `phase` e
+`log`. Ele aceita o mesmo cookie de sessão ou o cabeçalho `X-API-Token` do resto da API.
+O `EventSource` do navegador não manda cabeçalho, então a tela usa o cookie.
 
 ### AI Fix Bundle — o contrato para máquina
 
@@ -63,10 +65,7 @@ um com id estável, prioridade, arquivo e linha, CWE, evidência e remediação 
 Tem **versão de schema** porque quem consome precisa saber quando muda — o sentido de
 um contrato é justamente não ser uma página renderizada que alguém raspa.
 
-> Inconsistência conhecida, não escondida: o bundle emite `"generator": {"tool":
-> "cai", "version": "0.3.0"}` enquanto a aplicação declara `0.4.0` e o
-> `pyproject.toml` diz `0.1.0`. Hoje um consumidor não consegue dizer qual build
-> gerou um bundle. O conserto é ler de uma fonte só; está registrado, não feito.
+
 
 ---
 
@@ -103,21 +102,24 @@ resolvidos = anterior_keys - novo_keys
 regressoes = novo_keys - anterior_keys
 ```
 
-### Um exemplo com a CLI
+### Um exemplo completo, pela CLI
 
 ```bash
-ANTES=$(cai scan git@github.com:acme/api.git --asset-type repo --json | jq -r .scan_id)
-cai bundle "$ANTES" --out bundle.json
+REPO=https://github.com/acme/api.git
+BEFORE=$(roqueshield scan start "$REPO" --type repo | awk '/^scan / {print $2}')
+roqueshield scan watch "$BEFORE"
+roqueshield report "$BEFORE" --format bundle -o bundle.json
 
 # ... o agente corrige o repositório a partir do bundle.json ...
 
-DEPOIS=$(cai scan git@github.com:acme/api.git --asset-type repo --json | jq -r .scan_id)
-cai bundle "$DEPOIS" --out bundle-depois.json
+AFTER=$(roqueshield scan start "$REPO" --type repo | awk '/^scan / {print $2}')
+roqueshield scan watch "$AFTER"
+roqueshield report "$AFTER" --format bundle -o bundle-after.json
 
 jq -s '{
-  resolvidos: (.[0].findings - .[1].findings),
-  regressoes: (.[1].findings - .[0].findings)
-}' bundle.json bundle-depois.json
+  resolved:    ([.[0].vulnerabilities[].deduped_key] - [.[1].vulnerabilities[].deduped_key]),
+  regressions: ([.[1].vulnerabilities[].deduped_key] - [.[0].vulnerabilities[].deduped_key])
+}' bundle.json bundle-after.json
 ```
 
 ---
@@ -193,24 +195,23 @@ do zero silencioso.
 
 As duas lacunas têm resposta funcionando agora, e é por isso que nenhuma é urgente.
 
-**No CI**, um passo de shell:
+**No CI**, um passo de shell contra um shield que você já roda (o token é um segredo do
+CI criado em **Usuários**, com o papel `operator`):
 
 ```yaml
 - name: RoqueShield
+  env:
+    ROQUESHIELD_URL: https://shield.example
+    ROQUESHIELD_TOKEN: ${{ secrets.ROQUESHIELD_TOKEN }}
   run: |
-    docker run --rm -v "$PWD:/src" roqueribeiro1988/roqueos-shield:latest \
-      scan /src --asset-type repo --skip-ai > resultado.json
-    python - <<'PY'
-    import json, sys
-    r = json.load(open("resultado.json"))
-    if not r.get("coverage_complete"):
-        sys.exit("scanner nao rodou por completo; resultado nao e conclusivo")
-    altos = [f for f in r["findings"] if f["severity"] in ("critical", "high")]
-    if altos:
-        sys.exit(f"{len(altos)} achado(s) de severidade alta ou critica")
-    PY
+    docker run --rm -e ROQUESHIELD_URL -e ROQUESHIELD_TOKEN --entrypoint roqueshield \
+      roqueribeiro1988/roqueos-shield:v0.5.1-standalone \
+      scan start https://staging.example.com --auth-ref "$GITHUB_RUN_ID" --wait --fail-on high
 ```
 
-**Com um agente**, a CLI já é a interface: um agente de código com acesso a shell roda
-`cai scan` e `cai bundle` direto. O servidor MCP tornaria isso ergonômico para
-clientes sem shell — não destravaria nada que a CLI já não faça.
+O código `3` (falha ou cobertura incompleta) também reprova o passo: scanner que não
+rodou nunca passa como "limpo".
+
+**Com um agente**, a CLI já é a interface: um agente de código com shell roda
+`roqueshield scan start` e `roqueshield report` direto, e o servidor MCP (seção 3) faz o
+mesmo para cliente sem shell.

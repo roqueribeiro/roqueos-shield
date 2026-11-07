@@ -1,11 +1,12 @@
 # syntax=docker/dockerfile:1.7
 #
-# RoqueShield standalone: o motor (orchestrator + worker + scanners), a tela, o
-# Redis e o ZAP num container só. Decisão do founder em 06/11/2026: um `docker run`
-# faz tudo, inclusive o scan de aplicação web.
+# RoqueShield standalone: the engine (orchestrator + worker + scanners), the web UI,
+# Redis and ZAP in one container. One `docker run` does everything, web scans included.
+# The supported way to install is `install.sh` at the repository root; by hand:
 #
-#   docker run -d --name roqueshield -p 8080:8080 --shm-size=1g \
-#     -v roqueshield:/data roqueribeiro1988/roqueos-shield:<versão>-standalone
+#   docker run -d --name roqueshield -p 127.0.0.1:8080:8080 --shm-size=1g \
+#     --add-host host.docker.internal:host-gateway \
+#     -v roqueshield:/data roqueribeiro1988/roqueos-shield:<version>-standalone
 #
 # Construída POR CIMA da imagem do motor (a mesma que o RoqueOS usa), para as duas
 # nunca divergirem em scanner, regra ou versão. O RoqueOS continua usando o motor
@@ -60,5 +61,5 @@ USER 1000
 VOLUME /data
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ.get('PORT', '8080'), timeout=3)"]
 ENTRYPOINT ["python", "-m", "orchestrator.standalone.supervisor"]

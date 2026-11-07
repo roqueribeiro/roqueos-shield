@@ -78,7 +78,7 @@ def test_nome_que_nao_resolve_diz_isso(
 def test_o_erro_novo_continua_sendo_o_antigo(escopo_fechado: None) -> None:
     # Quem já trata TargetValidationError (POST /targets, scans, MCP) não muda.
     with pytest.raises(tv.TargetValidationError, match="rede privada/loopback/IMDS"):
-        tv.validate_target_value("http://localhost/", asset_type="url")
+        tv.validate_target_value("http://192.168.1.10/", asset_type="url")
 
 
 # ------------------ POST /targets/check ------------------

@@ -273,7 +273,7 @@ vulnerabilities:
     expired_at: 2026-12-23
     statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
 
-# 2026-11-07, release 0.5.0, decisão do founder ("segurança em primeiro lugar"):
+# 2026-11-07, release 0.5.0, decisão do mantenedor ("segurança em primeiro lugar"):
 # - go-jose (DoS por JWK) e x/net/html (DoS por HTML) nos binários do nuclei 3.11.1 e do
 #   trivy 0.76.0. O nuclei não tem release mais nova; o trivy 0.76.2 corrige mas tinha 2
 #   dias, abaixo da idade mínima de 14 dias. Subir o trivy a partir de 2026-11-19.
@@ -298,4 +298,4 @@ vulnerabilities:
     paths:
       - "usr/local/lib/python3.13/site-packages/filelock-3.32.7.dist-info/METADATA"
     expired_at: 2026-12-07
-    statement: "exceção do app decidida pelo founder em 2026-11-07: litellm exige filelock<4; ReadWriteLock não é usado"
+    statement: "exceção do app decidida pelo mantenedor em 2026-11-07: litellm exige filelock<4; ReadWriteLock não é usado"

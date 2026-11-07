@@ -152,7 +152,9 @@ def _to_out(u: UserRow) -> UserOut:
 async def create_user(
     body: UserCreate, session: SessionDep, principal: Principal = _ADMIN
 ) -> UserCreated:
-    existing = (await session.exec(select(UserRow).where(UserRow.email == body.email))).first()
+    # O login normaliza o e-mail; criar sem normalizar fazia "Ana@X.com" nunca entrar.
+    email = body.email.strip().lower()
+    existing = (await session.exec(select(UserRow).where(UserRow.email == email))).first()
     if existing is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "e-mail já cadastrado")
 
@@ -160,7 +162,7 @@ async def create_user(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, motivo)
     token = _new_token()
     user = UserRow(
-        email=body.email,
+        email=email,
         name=body.name,
         role=body.role.value,
         api_token_hash=token_hash(token),

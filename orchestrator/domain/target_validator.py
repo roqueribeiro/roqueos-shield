@@ -55,6 +55,30 @@ _HOSTNAME_RE = re.compile(
 )
 
 
+# Faixas internas que o `is_private` do Python não marca: CGNAT (é a rede do
+# Tailscale, comum em homelab), benchmarking, NAT64 e 6to4 (os dois últimos embrulham
+# um IPv4, inclusive 127.0.0.1).
+_FAIXAS_EXTRAS = tuple(
+    ipaddress.ip_network(n)
+    for n in ("100.64.0.0/10", "198.18.0.0/15", "64:ff9b::/96", "64:ff9b:1::/48", "2002::/16")
+)
+
+
+def _ipv4_embutido(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> ipaddress.IPv4Address | None:
+    """O IPv4 dentro de um IPv6 mapeado, NAT64 ou 6to4."""
+    if not isinstance(ip, ipaddress.IPv6Address):
+        return None
+    if ip.ipv4_mapped:
+        return ip.ipv4_mapped
+    if ip.sixtofour:
+        return ip.sixtofour
+    if ip in ipaddress.ip_network("64:ff9b::/96"):
+        return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return None
+
+
 def _ip_is_blocked(ip_str: str) -> bool:
     """True se o IP cai em range privado/loopback/link-local/reservado."""
     try:
@@ -68,6 +92,58 @@ def _ip_is_blocked(ip_str: str) -> bool:
         or ip.is_reserved
         or ip.is_multicast
         or ip.is_unspecified
+        or any(ip in n for n in _FAIXAS_EXTRAS if n.version == ip.version)
+    )
+
+
+def _classe_sensivel(ip_str: str) -> str | None:
+    """`link_local` (metadata de nuvem), `loopback`, ou None."""
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return None
+    v4 = _ipv4_embutido(ip)
+    if v4 is not None:
+        ip = v4
+    if ip.is_link_local or ip.is_unspecified:
+        return "link_local"
+    if ip.is_loopback:
+        return "loopback"
+    return None
+
+
+def _guarda_dura(host: str, rotulo: str) -> None:
+    """O que nem LAB_ONLY=false nem um NOME na allowlist abrem.
+
+    - Link-local (169.254.169.254, o metadata da nuvem): nunca.
+    - Loopback: só quando a allowlist traz o próprio endereço (`127.0.0.1`,
+      `127.0.0.0/8`, `::1` ou `localhost`), que é decisão explícita de quem roda o
+      shield fora de container. Por NOME liberado, não: a allowlist guarda o nome, e
+      um nome liberado quando resolvia para a rede da casa pode passar a resolver para
+      127.0.0.1 depois (DNS rebinding). Dentro do container, loopback é o próprio
+      shield: API, Redis e ZAP.
+    """
+    nu = host.strip("[]")
+    literal = _is_ip_literal(nu) or nu.lower() == "localhost"
+    ips = (
+        ["127.0.0.1"]
+        if nu.lower() == "localhost"
+        else ([nu] if _is_ip_literal(nu) else _resolve_host_ips(nu))
+    )
+    classes = {c for c in (_classe_sensivel(ip) for ip in ips) if c}
+    if "link_local" in classes:
+        motivo = "é link-local (o metadata da nuvem) e não pode ser alvo"
+    elif "loopback" in classes and not (
+        literal and _host_in_allowlist(nu, settings.target_allowlist)
+    ):
+        motivo = (
+            "é loopback (dentro do container, o próprio RoqueShield) e só vira alvo com o "
+            "próprio endereço na allowlist"
+        )
+    else:
+        return
+    raise AlvoForaDoEscopo(
+        f"{rotulo} {host!r} {motivo}", host=host, motivo="rede_local", loopback=True
     )
 
 
@@ -167,6 +243,15 @@ def validate_target_value(value: str, *, asset_type: str | None = None) -> str:
             "target.value nao pode comecar com '-' (potencial injecao de flag em subprocess)"
         )
 
+    # Barra invertida, espaço e controle: o `urlparse` do Python e o WHATWG (Firefox do
+    # ZAP, Chrome) discordam sobre o host de `http://127.0.0.1:8090\\@exemplo.com/`.
+    # O validador via exemplo.com e o navegador ia ao ZAP. Não existe alvo legítimo
+    # com esses caracteres, então eles não passam.
+    if any(c == "\\" or c.isspace() or ord(c) < 0x20 or ord(c) == 0x7F for c in v):
+        raise TargetValidationError(
+            "target.value com barra invertida, espaço ou caractere de controle"
+        )
+
     # Extrair host conforme tipo. Ordem importa: asset_type ganha de heuristica de URL.
     host: str | None = None
     if asset_type == "repo":
@@ -214,6 +299,16 @@ def validate_target_value(value: str, *, asset_type: str | None = None) -> str:
         if not parsed.hostname:
             raise TargetValidationError("URL sem hostname")
         host = parsed.hostname
+    elif asset_type == "port":
+        # `host:porta/proto`, `[v6]:porta/proto`. Ficava sem host e pulava a guarda
+        # inteira: `127.0.0.1:6379/tcp` mandava o nmap no Redis do próprio container.
+        base = v.split("/", 1)[0]
+        if base.startswith("["):
+            host = base[1 : base.find("]")] if "]" in base else ""
+        else:
+            host = base.rsplit(":", 1)[0] if ":" in base else base
+        if not host or (not _HOSTNAME_RE.match(host) and not _is_ip_literal(host)):
+            raise TargetValidationError(f"porta malformada (use host:porta/proto): {v!r}")
     elif asset_type in {"host", "domain"}:
         # Pode vir com :porta — extrair só hostname
         host = v.split(":", 1)[0] if ":" in v and not v.count(":") > 1 else v
@@ -272,6 +367,7 @@ def _guarda_de_rede(host: str, *, rotulo: str) -> None:
     """
     if not host:
         raise TargetValidationError(f"{rotulo}: nao consegui extrair o host do alvo")
+    _guarda_dura(host, rotulo)
     if not settings.LAB_ONLY:
         return
     if _host_in_allowlist(host, settings.target_allowlist):

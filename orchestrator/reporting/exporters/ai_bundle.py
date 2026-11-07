@@ -18,6 +18,7 @@ from uuid import UUID, uuid5
 import structlog
 from sqlmodel import select
 
+from orchestrator import __version__
 from orchestrator.domain.scrubber import scrub
 from orchestrator.persistence.db import session
 from orchestrator.persistence.models import FindingRow, ScanRow, TargetRow
@@ -92,7 +93,7 @@ async def build_bundle(scan_id: UUID) -> dict[str, Any]:
         "generated_at": datetime.now(UTC).isoformat(),
         "generator": {
             "tool": "cai",
-            "version": "0.3.0",
+            "version": __version__,
             "model_used": _detect_model_used(rows),
         },
         "scan": {

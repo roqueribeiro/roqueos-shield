@@ -95,7 +95,7 @@ class ScannerAdapter(Protocol):
     async def normalize(self, raw) -> list[Finding]: ...
 ```
 
-**15 adapters implementados** — ver tabela em [README §7](../README.md#7-adapters-disponíveis).
+**15 adapters implementados** — ver tabela em [README, Adapters](../README.pt-BR.md#adapters).
 
 **Princípios**:
 
@@ -122,7 +122,7 @@ rede corporativa restrita — que é o caso normal num banco — o semgrep sai c
 0, zero regras e zero achados**. O `_rules_ran` (via `--time`) pega esse silêncio e
 reprova, mas o SAST ficaria inútil justamente onde importa.
 
-Por isso a imagem embarca o **`semgrep-rules`** (LGPL-2.1) em `/opt/semgrep-rules`,
+Por isso a imagem embarca o **`semgrep-rules`** (Semgrep Rules License v1.0, ver o NOTICE) em `/opt/semgrep-rules`,
 pinado por commit no Dockerfile, com `semgrep --validate` como **gate de build** — se
 um diretório quebrar numa atualização do pin, a imagem não sai. São 22 diretórios por
 linguagem, 1894 regras. A raiz do repositório de regras **não** serve: ela contém

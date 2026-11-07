@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+Found by an independent review before the community release (2026-11-07), each one reproduced first and covered by a test that fails when the fix is removed:
+
+- **The AI agent's command leash checked only the finding's target, not the arguments.** With a valid target, `curl file:///data/secrets/APP_TOKEN`, `curl -d @file`, `curl http://127.0.0.1:8080/`, `nmap 169.254.169.254` or `nmap --script` were allowed and, in the standalone image, ran next to the secrets. Every URL, host, IP, path and file in the argv must now be the target itself; `--script`, `-K/--config`, `--resolve`, `--proxy`, `-L`, curl `-T` and other flags that read files or redirect the connection are refused; commands run with a minimal environment. Running an investigation for real (`dry_run=false`) is now admin-only.
+- **Scanner `options` were a free-form dict.** `nmap.nmap_args` became nmap's argv (extra targets out of scope, `-oN` over files, `--script`), `nuclei.templates` and `semgrep.config` took any path. `POST /scans` now accepts a closed list of options per scanner, with types and ranges, and rejects anything else by name (`422`).
+- **`port` targets skipped the scope check** (`127.0.0.1:6379/tcp` reached the container's own Redis). They are validated like hosts now.
+- **`auth.openapi_url` was not validated**, and ZAP fetches it from inside the container. It goes through the same scope check as the target.
+- **Backslash, spaces and control characters in a target are refused**: Python's URL parser and the browser disagree on the host of `http://127.0.0.1:8090\@example.com/`.
+- **Loopback and link-local (cloud metadata) are refused even for a name on the allowlist** (DNS rebinding) and even with `LAB_ONLY=false`. Loopback only with its own address on the allowlist. CGNAT (`100.64.0.0/10`), `198.18.0.0/15`, NAT64 and 6to4 are treated as internal.
+- The ZAP API key goes to ZAP in a `0600` config file instead of its command line, which every process in the container can read.
+- A wrong first-run code is throttled like a wrong password (it wrote an audit row per request with no limit).
+
 ### Added
 
 - **One-command install**: `curl -fsSL https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/install.sh | sh` checks Docker and its memory (6 GB), starts the standalone container on `127.0.0.1`, waits for the healthcheck and opens the browser with the first-run code in the address fragment (never sent to the server). Messages in Portuguese or English by `LANG`. The version in the script is checked against `pyproject.toml` by `scripts/check_docs_fresh.py`.
@@ -16,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scan list marks "Coverage incomplete"** on finished scans where a scanner was skipped (`coverage_state` in `GET /ui/api/scans`).
 
 ### Fixed
+
+- **Every scan profile ran nmap + ZAP** in the standalone UI: it always sent `scanners: ['nmap','zap']`, overriding the profile. The shield now picks by profile (web: ZAP + nuclei; network: nmap; full: all, with ZAP's active scan). The `exposure` profile is no longer offered in the wizard: it is a separate job with no scan or report.
+- `install.sh`: `--update` (recreates the container on the same volume and port), English variable names (`ROQUESHIELD_PORT`, `ROQUESHIELD_VERSION`, `ROQUESHIELD_NAME`, `ROQUESHIELD_NO_BROWSER`), a clear message for "permission denied" on the Docker socket, memory measured in MiB with a margin, the local page outside `/tmp` on Linux (snap browsers cannot see it), WSL via `explorer.exe`, port range check, paused containers, and the whole script runs from `main()` so a cut download runs nothing.
+- `roqueshield reset-password <email>`: the recovery path for a forgotten admin password, from inside the container, with no token on screen.
+- One version everywhere: `orchestrator/__init__.py` drives the API, `/health`, the MCP server and the AI Fix Bundle (`generator.version` was stuck at `0.3.0`), checked against `pyproject.toml`, `web/package.json` and `install.sh` by `check_docs_fresh.py`.
+- `roqueshield status` called SQLite "postgres"; the CLI help showed `python -m orchestrator.cliente.cli`; users created with uppercase letters in the e-mail could not sign in; the standalone healthcheck ignored `PORT`.
+- `scripts/release-docker.sh` pushes `vX.Y.Z-candidato` first and promotes to the final tags only after Trivy passes.
 
 - **Dates in the future on SQLite.** SQLite stores no time zone, so the API returned `started_at` without one and the browser read it as local time: in São Paulo a scan just run showed "in 3 hours". Datetimes read from the database are now always UTC-aware.
 - **Dates in Portuguese on the English UI.** The standalone UI did not publish the active locale for the date helpers.
@@ -27,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/web_e2e.sh` sets `LITELLM_MODE=PRODUCTION`: litellm's import-time `load_dotenv()` loaded the developer's `.env`, and every scope field showed as locked by the environment.
 
 ### Documentation
+
+- `SECURITY.md`, `NOTICE`, `CONTRIBUTING.md` and the issue templates rewritten for RoqueShield: what the images actually bundle and under which license, the standalone image and `install.sh` in scope, and the hardening advice no longer says to turn `LAB_ONLY` off.
+- Standalone guide: update, backup with restore, production compose command, a "When something goes wrong" table, the CLI's Python requirement. `docs/integrations.md` uses the real CLI, header and bundle fields.
 
 - Screenshots of the standalone UI in the guide and the READMEs (`docs/assets/screens/{en-US,pt-BR}`), generated by `web/e2e/capturas.mjs` through `scripts/doc_capturas.sh`, never by hand.
 

@@ -78,4 +78,6 @@ def rodar(cfg: Config) -> None:
         f"roqueshield mcp: {cfg.servidor} (ações {'ligadas' if acoes else 'desligadas'})",
         file=sys.stderr,
     )
-    asyncio.run(_laco(Servidor(ApiHttp(cfg), acoes=acoes)))
+    from orchestrator import __version__
+
+    asyncio.run(_laco(Servidor(ApiHttp(cfg), acoes=acoes, versao=__version__)))

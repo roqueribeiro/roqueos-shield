@@ -156,15 +156,23 @@ def check_versao_do_instalador() -> None:
     nada dá erro: só fica velho. Sobe junto com o `pyproject.toml` ou o gate reprova.
     """
     m = re.search(r'^version = "([^"]+)"', _ler("pyproject.toml"), re.MULTILINE)
-    s = re.search(r'^VERSAO_PADRAO="v([^"]+)"', _ler("install.sh"), re.MULTILINE)
-    if not m or not s:
-        falha("instalador", "não achei a versão no pyproject.toml ou o VERSAO_PADRAO no install.sh")
-    elif m.group(1) != s.group(1):
-        falha(
-            "instalador",
-            f"install.sh sobe v{s.group(1)}, o pyproject está em {m.group(1)}: "
-            "atualize VERSAO_PADRAO",
-        )
+    if not m:
+        falha("versao", "não achei a versão no pyproject.toml")
+        return
+    alvo = m.group(1)
+    # Cada lugar que diz a versão, e o que ele deveria dizer. O /health respondia
+    # 0.5.0 com o __init__ em 0.1.0 e ninguém via (revisão de 07/11/2026).
+    lugares = {
+        "install.sh (VERSAO_PADRAO)": (r'^VERSAO_PADRAO="v([^"]+)"', "install.sh"),
+        "orchestrator/__init__.py": (r'^__version__ = "([^"]+)"', "orchestrator/__init__.py"),
+        "web/package.json": (r'^  "version": "([^"]+)"', "web/package.json"),
+    }
+    for nome, (rx, arq) in lugares.items():
+        achou = re.search(rx, _ler(arq), re.MULTILINE)
+        if not achou:
+            falha("versao", f"não achei a versão em {nome}")
+        elif achou.group(1) != alvo:
+            falha("versao", f"{nome} diz {achou.group(1)}, o pyproject está em {alvo}")
 
 
 def main() -> int:
