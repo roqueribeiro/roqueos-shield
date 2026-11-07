@@ -128,8 +128,8 @@ _BANNED_ARG_RE = re.compile(
       | --script          # --script e --script-args: NSE é Lua com os.execute
       | --upload | --interactive
       | --data-binary=@
-      | --config | -K$    # curl lê opções (e URLs) de arquivo
-      | --resolve | --connect-to | --proxy | -x$ | --socks  # desviam a conexão
+      | --config          # curl lê opções (e URLs) de arquivo (-K: por binário)
+      | --resolve | --connect-to | --proxy | --socks  # desviam a conexão (-x: por binário)
       | -L$ | --location # redirect segue para onde o alvo mandar
       | --unix-socket | --abstract-unix-socket
     )""",
@@ -137,19 +137,38 @@ _BANNED_ARG_RE = re.compile(
 )
 
 # Flags que só são perigosas num binário: `-T` é upload no curl e timing no nmap.
-_BANNED_POR_BINARIO: dict[str, frozenset[str]] = {
-    "curl": frozenset({"-t", "--upload-file", "-k"}),
+# Comparadas com maiúscula e minúscula (`-k` do curl é --insecure, legítimo; `-K` lê
+# opções de arquivo) e por PREFIXO nas curtas, porque o curl aceita o valor colado:
+# `-T/data/x`, `-K/tmp/cfg`, `-xhttp://127.0.0.1:8090` (revisão do PR #20).
+_BANNED_POR_BINARIO: dict[str, tuple[frozenset[str], tuple[str, ...]]] = {
+    "curl": (frozenset({"--upload-file"}), ("-T", "-K", "-x")),
 }
 
 # Esquemas que um argumento pode trazer. Qualquer outro (`file:`, `gopher:`, `dict:`,
 # `ftp:`, `ldap:`) lê disco ou fala protocolo interno.
 _ESQUEMAS_OK = frozenset({"http", "https"})
 
+# Nome com ponto e TLD alfabético, ou localhost. IP literal é conferido à parte (com o
+# ipaddress): um regex de dígitos e pontos confundia o `4` do `-T4` com um host.
 _PARECE_HOST = re.compile(
-    r"^(\[[0-9a-f:.]+\]|[0-9.]+|[0-9a-f]*:[0-9a-f:.]+|localhost"
-    r"|[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*)(:[0-9]+)?$",
+    r"^(localhost|[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*)(:[0-9]+)?$",
     re.IGNORECASE,
 )
+
+
+def _e_ip(texto: str) -> bool:
+    import ipaddress
+
+    t = texto.strip("[]")
+    if t.count(":") == 1 and "." in t:  # 1.2.3.4:80
+        t = t.split(":", 1)[0]
+    elif t.startswith("[") is False and "]:" in texto:
+        t = texto[1 : texto.index("]")]
+    try:
+        ipaddress.ip_address(t)
+        return True
+    except ValueError:
+        return False
 
 
 def _host_do_alvo(target: str) -> str:
@@ -175,9 +194,15 @@ def _argumento_fora_do_alvo(arg: str, host_alvo: str) -> str | None:
     tem que ser o próprio alvo, ou não roda.
     """
     if arg.startswith("-"):
-        if "=" not in arg:
-            return None
-        arg = arg.split("=", 1)[1]
+        # O valor de uma opção vem depois do `=` (`--data=@x`) ou colado na curta
+        # (`-d@x`, `-T/caminho`). Opção longa sem `=` não leva valor no mesmo token,
+        # mas `@` e `://` nela também não têm uso legítimo.
+        if "=" in arg:
+            arg = arg.split("=", 1)[1]
+        elif not arg.startswith("--") and len(arg) > 2:
+            arg = arg[2:]
+        else:
+            return "lê arquivo local (@arquivo)" if "@" in arg or "://" in arg else None
     if not arg:
         return None
     if arg.startswith("@") or "=@" in arg or ",@" in arg or ";@" in arg:
@@ -194,7 +219,15 @@ def _argumento_fora_do_alvo(arg: str, host_alvo: str) -> str | None:
     if ":" in arg and arg.split(":", 1)[0].lower() in {"file", "gopher", "dict", "ftp", "ldap"}:
         return "esquema não permitido"
     base, _, resto = arg.partition("/")
-    if _PARECE_HOST.match(base):
+    # Endereço numérico em forma que o ipaddress não aceita mas o nmap e o curl aceitam:
+    # `127.1`, `2130706433`, `0x7f000001`, `[::1]:8080`. Porta (`80`, `1-1000`,
+    # `80,443`) e o `4` do `-T4` não têm ponto, dois-pontos nem 6+ dígitos.
+    numerico = re.fullmatch(r"[0-9a-fA-FxX.:\[\]]+", base) is not None and (
+        any(c in base for c in ".:[") or base.lower().startswith("0x") or len(base) >= 6
+    )
+    if numerico and _host_do_alvo(base) != host_alvo:
+        return f"endereço numérico {base!r} não é o alvo"
+    if _PARECE_HOST.match(base) or _e_ip(base):
         h = _host_do_alvo(base)
         if h != host_alvo:
             return f"host {h!r} não é o alvo"
@@ -277,14 +310,16 @@ def check_command(
     if not target:
         return d(False, "sem alvo: o agente só roda comando contra o alvo do finding")
     host_alvo = _host_do_alvo(target)
-    proibidas = _BANNED_POR_BINARIO.get(binary, frozenset())
+    proibidas, prefixos = _BANNED_POR_BINARIO.get(binary, (frozenset(), ()))
     for arg in command[1:]:
         if any(ch in arg for ch in _SHELL_METACHARS):
             return d(False, f"argumento com metacaractere de shell: {arg!r}")
         if _BANNED_ARG_RE.match(arg):
             return d(False, f"flag '{arg}' recusada (escrita em disco/leitura local/shell)")
-        if arg.split("=", 1)[0].lower() in proibidas:
-            return d(False, f"flag '{arg}' recusada para {binary} (upload ou leitura de arquivo)")
+        if arg.split("=", 1)[0] in proibidas or (
+            not arg.startswith("--") and any(arg.startswith(x) for x in prefixos)
+        ):
+            return d(False, f"flag '{arg}' recusada para {binary} (upload, arquivo ou proxy)")
         motivo = _argumento_fora_do_alvo(arg, host_alvo)
         if motivo:
             return d(False, f"argumento {arg!r} recusado: {motivo}")
