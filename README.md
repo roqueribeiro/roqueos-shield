@@ -112,13 +112,14 @@ pipeline calls it.
 server, Redis and OWASP ZAP:
 
 ```bash
-docker run -d --name roqueshield -p 8080:8080 --shm-size=1g \
+docker run -d --name roqueshield -p 127.0.0.1:8080:8080 --shm-size=1g \
   -v roqueshield:/data roqueribeiro1988/roqueos-shield:<version>-standalone
+docker exec roqueshield cat /data/secrets/SETUP_CODE   # first-run code
 ```
 
-Open `http://localhost:8080`, create the admin on the first screen, and scan. Secrets,
-memory, the CLI, MCP and the production compose are in
-**[docs/standalone.md](docs/standalone.md)**.
+Open `http://localhost:8080`, create the admin on the first screen with that code, and
+scan what you are authorized to test. Secrets, TLS, backup, memory, the CLI, MCP and
+the production compose are in **[docs/standalone.md](docs/standalone.md)**.
 
 **From source**, to work on the code. Prerequisites: Docker Desktop (WSL2 on Windows) or Docker Engine, 8 GB of free RAM,
 optionally an Anthropic/OpenAI key — or none at all, if you point it at a local
@@ -298,7 +299,7 @@ Known inconsistencies, listed rather than hidden:
 
 | What | Where | Effect |
 | --- | --- | --- |
-| Three different version numbers | `pyproject.toml` says `0.1.0`, `main.py` says `0.4.0`, the AI Fix Bundle emits `"version": "0.3.0"` | a consumer of the bundle cannot tell which build produced it |
+| Bundle version is not the build version | the package and the API are `0.4.1`, the AI Fix Bundle still emits `"version": "0.3.0"` | a consumer of the bundle cannot tell which build produced it |
 | `render_pdf()` has no caller | `orchestrator/reporting/renderer.py` | the `[pdf]` extra installs WeasyPrint and nothing invokes it |
 | `cai-expert` container is legacy | `docker/images/cai-expert/`, `docker/compose.agent.yml` | left from the `cai-framework` period; nothing in the pipeline calls it, the agent loop runs in the orchestrator itself, behind the investigate route |
 | Markdown and CSV reports | not in this repository | the RoqueOS front builds those four formats client-side from the AI Fix Bundle |
@@ -309,6 +310,7 @@ Known inconsistencies, listed rather than hidden:
 
 | Document | Language | What it covers |
 | --- | --- | --- |
+| [docs/standalone.md](docs/standalone.md) | EN | the one-container install: first run, secrets, TLS, backup, CLI, MCP |
 | [docs/c4-model.md](docs/c4-model.md) | EN | the nine architecture diagrams, level by level |
 | [docs/integrations.md](docs/integrations.md) | EN | CLI, REST, AI Fix Bundle, the agent loop, and the MCP/Action roadmap |
 | [docs/architecture.md](docs/architecture.md) | pt-BR | internal layout, flows, security and compliance |

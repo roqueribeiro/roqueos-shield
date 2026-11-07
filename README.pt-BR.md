@@ -111,13 +111,14 @@ termina a instalação com `|| true`, e nada no pipeline chama ele.
 Redis e o OWASP ZAP:
 
 ```bash
-docker run -d --name roqueshield -p 8080:8080 --shm-size=1g \
+docker run -d --name roqueshield -p 127.0.0.1:8080:8080 --shm-size=1g \
   -v roqueshield:/data roqueribeiro1988/roqueos-shield:<versão>-standalone
+docker exec roqueshield cat /data/secrets/SETUP_CODE   # código de primeiro uso
 ```
 
-Abra `http://localhost:8080`, crie o admin na primeira tela e varra. Segredos, memória,
-CLI, MCP e o compose de produção estão em
-**[docs/standalone.pt-BR.md](docs/standalone.pt-BR.md)**.
+Abra `http://localhost:8080`, crie o admin na primeira tela com esse código e varra o
+que você tem autorização para testar. Segredos, TLS, backup, memória, CLI, MCP e o
+compose de produção estão em **[docs/standalone.pt-BR.md](docs/standalone.pt-BR.md)**.
 
 **Do código-fonte**, para mexer no projeto. Pré-requisitos: Docker Desktop (WSL2 no Windows) ou Docker Engine, 8 GB de RAM livre,
 e opcionalmente uma chave Anthropic/OpenAI — ou nenhuma, se apontar para um modelo
@@ -344,9 +345,9 @@ problema que o `check_docs_fresh.py` existe para pegar.)*
 
 ## Limitações conhecidas
 
-- **Três números de versão diferentes** — `pyproject.toml` diz `0.1.0`, o `main.py`
-  diz `0.4.0`, e o AI Fix Bundle emite `"version": "0.3.0"`. Quem consome o bundle
-  não consegue dizer qual build o produziu.
+- **A versão do bundle não é a do build** — o pacote e a API são `0.4.1`, e o AI Fix
+  Bundle ainda emite `"version": "0.3.0"`. Quem consome o bundle não consegue dizer
+  qual build o produziu.
 - **`render_pdf()` não tem chamador** — o extra `[pdf]` instala o WeasyPrint e nada
   o invoca. PDF e CSV que aparecem na tela do RoqueShield são montados no front.
 - **`cai-expert` é legado** — sobrou da fase do `cai-framework`; nada no pipeline
@@ -369,6 +370,7 @@ problema que o `check_docs_fresh.py` existe para pegar.)*
 
 | Documento | Idioma | O que cobre |
 | --- | --- | --- |
+| [docs/standalone.pt-BR.md](docs/standalone.pt-BR.md) | pt-BR | a instalação em um container: primeiro uso, segredos, TLS, backup, CLI, MCP |
 | [docs/c4-model.pt-BR.md](docs/c4-model.pt-BR.md) | pt-BR | os nove diagramas, nível a nível |
 | [docs/integrations.pt-BR.md](docs/integrations.pt-BR.md) | pt-BR | CLI, REST, bundle, laço do agente, roadmap |
 | [docs/architecture.md](docs/architecture.md) | pt-BR | layout interno, fluxos, segurança e compliance |
