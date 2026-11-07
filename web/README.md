@@ -33,3 +33,22 @@ yarn install
 yarn dev     # :9100, repassa a API para o shield em :8080
 yarn build   # saída em ../orchestrator/web_dist, que o FastAPI serve em /
 ```
+
+## Testes e capturas
+
+```bash
+scripts/web_e2e.sh        # e2e em 1440 e 390 contra um shield descartável (o CI roda)
+node scripts/idade-do-lock.mjs   # nenhuma dependência com menos de 14 dias (o CI roda)
+```
+
+As capturas de tela da documentação (`docs/assets/screens/{en-US,pt-BR}`) saem de
+`e2e/capturas.mjs`, nunca de print à mão: quando a tela mudar, refaça com
+
+```bash
+SHIELD_URL=http://127.0.0.1:8080 E2E_EMAIL=… E2E_SENHA=… \
+  SETUP_URL=http://127.0.0.1:8081 ../scripts/doc_capturas.sh
+```
+
+contra um shield com ao menos um scan terminado (`SETUP_URL` é um container novo, para a
+tela de primeiro uso). Nenhum segredo vai para a imagem: o primeiro uso é capturado com o
+código vazio.

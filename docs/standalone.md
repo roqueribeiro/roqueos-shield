@@ -17,6 +17,8 @@ docker run -d --name roqueshield \
 
 The tag is the version with a `v` plus `-standalone`, for example `v0.5.0-standalone`.
 
+![RoqueShield standalone scan list](assets/screens/en-US/02-scans.webp)
+
 ## First run
 
 1. Open `http://localhost:8080`. The first screen creates the administrator account.
@@ -28,9 +30,59 @@ The tag is the version with a `v` plus `-standalone`, for example `v0.5.0-standa
 
    Without the code (or the `APP_TOKEN` in the `X-API-Token` header), `POST /setup`
    is refused. This stops anyone who reaches the port before you from becoming admin.
+
+   <img src="assets/screens/en-US/00-primeiro-uso.webp" alt="First run, with the code field" width="720">
+
 3. After that the UI is a login screen. API and Swagger live at `/docs`.
 
 Do the first run **before** publishing the port beyond `127.0.0.1`.
+
+## The UI
+
+It is the same RoqueShield screen you get inside RoqueOS, with the same sections.
+
+**New scan.** Target type, profile, authentication and review, with a summary on the
+side. The authorization reference goes in here.
+
+![New scan](assets/screens/en-US/07-novo-scan.webp)
+
+**Scan detail, Summary tab.** Findings, severe ones, duration, which tools ran, the risk
+grade, the severity distribution, the top risks and the compliance posture (OWASP, PCI
+DSS, LGPD). "Full coverage" at the top says every requested scanner ran; when one did
+not, the top says so and so does the report.
+
+![Scan detail, Summary](assets/screens/en-US/03-detalhe-resumo.webp)
+
+**Findings.** Grouped by rule, filtered by severity, tool and title, with the evidence
+for each one.
+
+![Findings](assets/screens/en-US/06-detalhe-achados.webp)
+
+**Execution.** Every container process's log (orchestrator, worker, Redis, ZAP) and the
+CPU and memory of each, read from inside the container.
+
+![Execution](assets/screens/en-US/04-detalhe-execucao.webp)
+
+**AI triage.** What the model did with the findings, call by call. In this capture
+there is no provider key configured: the tab says the triage failed and shows each
+call's error, instead of pretending there was nothing to analyze. Findings keep the
+tool's own classification.
+
+![AI triage](assets/screens/en-US/05-detalhe-ia.webp)
+
+**AI.** The provider and model (Anthropic, OpenAI, OpenRouter or a local
+OpenAI-compatible server). The key is stored encrypted in the shield and never comes
+back to the UI.
+
+![AI](assets/screens/en-US/08-ia.webp)
+
+**On a phone.** The same screen, with navigation in a menu.
+
+<p>
+  <img src="assets/screens/en-US/20-celular-scans.webp" alt="Scans on a phone" width="260">
+  <img src="assets/screens/en-US/21-celular-detalhe.webp" alt="Scan detail on a phone" width="260">
+  <img src="assets/screens/en-US/22-celular-menu.webp" alt="Menu on a phone" width="260">
+</p>
 
 ## What runs inside
 
@@ -80,6 +132,9 @@ The AI provider key typed in the UI's **AI** section is stored encrypted with
 
 ## Accounts and sessions
 
+![Users](assets/screens/en-US/10-usuarios.webp)
+
+
 - Only admins create users, in the **Users** section. A user without a password signs
   in only through the API and the CLI, with the token shown **once** at creation.
   With a password, they can also use the UI.
@@ -109,6 +164,8 @@ Never publish port 8080 as plain HTTP on a network that is not yours.
 (`192.168.x`, `10.x`, `localhost`, a container name) is only scanned if it is on the
 authorized target list. To test your lab, add the host in the **Scope** section before
 the first scan.
+
+![Scope](assets/screens/en-US/09-escopo.webp)
 
 ## Memory
 
@@ -157,6 +214,14 @@ docker run --rm -v roqueshield:/data -v "$PWD":/bkp alpine \
 To upgrade, change the tag and recreate the container with the same volume. On boot,
 before the API starts, the supervisor applies the database migrations (SQLite or
 Postgres).
+
+## API and Swagger
+
+Everything the UI does goes through the REST API, documented at `/docs` (Swagger) and
+versioned in [docs/openapi.json](openapi.json). Authentication with the `X-API-Token`
+header.
+
+![Swagger](assets/screens/en-US/11-swagger.webp)
 
 ## CLI
 

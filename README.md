@@ -121,6 +121,8 @@ Open `http://localhost:8080`, create the admin on the first screen with that cod
 scan what you are authorized to test. Secrets, TLS, backup, memory, the CLI, MCP and
 the production compose are in **[docs/standalone.md](docs/standalone.md)**.
 
+![RoqueShield standalone: scan detail](docs/assets/screens/en-US/03-detalhe-resumo.webp)
+
 **From source**, to work on the code. Prerequisites: Docker Desktop (WSL2 on Windows) or Docker Engine, 8 GB of free RAM,
 optionally an Anthropic/OpenAI key — or none at all, if you point it at a local
 model.
