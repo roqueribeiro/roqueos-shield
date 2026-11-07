@@ -1,0 +1,120 @@
+# RoqueShield em produção: a MESMA imagem do standalone, com cada peça no seu serviço.
+#
+#   docker compose -f docker/compose.prod.yml --env-file .env up -d
+#   docker compose -f docker/compose.prod.yml --env-file .env up -d --scale worker=3
+#
+# O --env-file é obrigatório: com -f, o compose procura o .env em docker/, não na raiz.
+#
+# Diferenças para o `docker run` tudo-em-um:
+# - Postgres em vez de SQLite: a trilha de auditoria fica imutável (trigger da
+#   migration 0004) e REQUIRE_IMMUTABLE_AUDIT=true passa a valer. Quem migra é o
+#   serviço `shield` (o supervisor roda `alembic upgrade head` antes da API).
+# - Redis e ZAP em serviços próprios; o supervisor vê REDIS_URL e ZAP_BASE_URL
+#   apontando para fora e não sobe os embutidos.
+# - Workers separados e escaláveis (SHIELD_SERVICES=worker).
+#
+# Obrigatórios no .env: SHIELD_VERSION (a tag da imagem, ex. v0.5.0), POSTGRES_PASSWORD,
+# REDIS_PASSWORD, APP_TOKEN, SESSION_SECRET, SECRETS_KEY, ZAP_API_KEY. Em produção, gere-os
+# no cofre e injete aqui. O código de primeiro uso (SETUP_CODE) é gerado no volume
+# shield_data se não vier no .env:  docker compose ... exec shield cat /data/secrets/SETUP_CODE
+# Opcionais: SHIELD_BIND (padrão 127.0.0.1) e SHIELD_PORT (padrão 8080) para a porta
+# publicada no host.
+
+name: roqueshield
+
+x-shield: &shield
+  image: "roqueribeiro1988/roqueos-shield:${SHIELD_VERSION:?defina SHIELD_VERSION (ex. v0.5.0)}-standalone"
+  # O supervisor dá até 8 s para os processos saírem; a margem evita SIGKILL no meio.
+  stop_grace_period: 30s
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  environment: &env
+    DATABASE_URL: postgresql+asyncpg://roqueshield:${POSTGRES_PASSWORD:?}@postgres:5432/roqueshield
+    REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/0
+    REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+    ZAP_BASE_URL: http://zap:8090
+    ZAP_API_KEY: ${ZAP_API_KEY:?}
+    APP_TOKEN: ${APP_TOKEN:?}
+    SESSION_SECRET: ${SESSION_SECRET:?}
+    SECRETS_KEY: ${SECRETS_KEY:?}
+    REQUIRE_IMMUTABLE_AUDIT: "true"
+    ALLOW_CLOUD_FALLBACK: ${ALLOW_CLOUD_FALLBACK:-false}
+    REQUIRE_AUTH_REF: ${REQUIRE_AUTH_REF:-true}
+  volumes:
+    - shield_data:/data
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_started
+    zap:
+      condition: service_started
+
+services:
+  shield:
+    <<: *shield
+    environment:
+      <<: *env
+      SHIELD_SERVICES: orchestrator
+    ports:
+      - "${SHIELD_BIND:-127.0.0.1}:${SHIELD_PORT:-8080}:8080"
+
+  worker:
+    <<: *shield
+    environment:
+      <<: *env
+      SHIELD_SERVICES: worker
+    healthcheck:
+      disable: true
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: roqueshield
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: roqueshield
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roqueshield"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Senha obrigatória: o ZAP, na mesma rede, processa conteúdo hostil, e o arq
+    # desserializa job com pickle. Redis aberto na rede era RCE no worker.
+    command: ["sh", "-c", 'exec redis-server --save "" --appendonly no --requirepass "$$REDIS_PASSWORD"']
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+
+  zap:
+    image: zaproxy/zap-stable@sha256:781a2bdaea47324e7bab583e2263f21d257b0aee61ed51521a5be45f5f5081ef
+    restart: unless-stopped
+    mem_limit: 6g
+    shm_size: "1gb"
+    environment:
+      ZAP_PORT: "8090"
+    command:
+      - zap.sh
+      - -daemon
+      - -host
+      - 0.0.0.0
+      - -port
+      - "8090"
+      - -config
+      - api.disablekey=false
+      - -config
+      - api.key=${ZAP_API_KEY:?}
+      - -config
+      - api.addrs.addr.name=.*
+      - -config
+      - api.addrs.addr.regex=true
+
+volumes:
+  shield_data:
+  pg_data:

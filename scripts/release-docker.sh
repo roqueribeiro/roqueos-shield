@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #
-# Build e publicação da imagem do RoqueShield (orchestrator + worker), na SUA máquina.
+# Build e publicação das imagens do RoqueShield, na SUA máquina:
+#   vX.Y.Z             o motor (orchestrator + worker), que o roqueos-server usa;
+#   vX.Y.Z-standalone  o container único (motor + tela + Redis + ZAP), feito EM CIMA da
+#                      vX.Y.Z recém-publicada, com as mesmas cinco travas.
 #
 # Até 23/10/2026 não havia caminho oficial: a roqueribeiro1988/roqueos-shield:latest
 # de produção era de 29/08 e ninguém sabia dizer de qual commit. Este script é o
@@ -50,11 +53,13 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 
-# 3. não republica
-if docker buildx imagetools inspect "${IMAGE}:${TAG}" >/dev/null 2>&1; then
-  echo "ERRO: ${IMAGE}:${TAG} já existe no Docker Hub. Suba a versão no pyproject.toml." >&2
-  exit 1
-fi
+# 3. não republica (nenhuma das duas)
+for t in "${TAG}" "${TAG}-standalone"; do
+  if docker buildx imagetools inspect "${IMAGE}:${t}" >/dev/null 2>&1; then
+    echo "ERRO: ${IMAGE}:${t} já existe no Docker Hub. Suba a versão no pyproject.toml." >&2
+    exit 1
+  fi
+done
 
 echo "==> builder buildx"
 docker buildx inspect "${BUILDER}" >/dev/null 2>&1 ||
@@ -71,19 +76,23 @@ docker buildx build --builder "${BUILDER}" \
   --push .
 
 # 4. as duas arquiteturas
-ARCHS=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" --raw | python3 -c "
+conferir_archs() {
+ARCHS=$(docker buildx imagetools inspect "$1" --raw | python3 -c "
 import json, sys
 m = json.load(sys.stdin).get('manifests', [])
 print(','.join(sorted({x['platform']['architecture'] for x in m
                        if x.get('platform', {}).get('architecture') not in (None, 'unknown')})))")
-echo "    arquiteturas: ${ARCHS}"
+echo "    arquiteturas de $1: ${ARCHS}"
 if [ "${ARCHS}" != "amd64,arm64" ]; then
-  echo "ERRO: manifesto sem as duas arquiteturas (${ARCHS})." >&2
+  echo "ERRO: manifesto de $1 sem as duas arquiteturas (${ARCHS})." >&2
   exit 1
 fi
+}
+conferir_archs "${IMAGE}:${TAG}"
 
 # 5. Trivy, hard fail
-echo "==> Trivy (CRITICAL/HIGH com correção) em ${IMAGE}:${TAG}"
+trivy_hard() {
+echo "==> Trivy (CRITICAL/HIGH com correção) em $1"
 # As regras do semgrep e os templates do nuclei TÊM chave de exemplo (é assim que eles
 # detectam segredo): o scanner de segredo fica fora só desses dois diretórios.
 # .trivyignore.yaml: aceites com prazo, só para binário de scanner de terceiro.
@@ -91,18 +100,32 @@ TRIVY_ARGS=(--scanners vuln,secret --severity CRITICAL,HIGH --ignore-unfixed --e
   --skip-dirs /opt/nuclei-templates --skip-dirs /opt/semgrep-rules)
 TRIVY_RC=0
 if command -v trivy >/dev/null 2>&1; then
-  trivy image "${TRIVY_ARGS[@]}" --ignorefile .trivyignore.yaml "${IMAGE}:${TAG}" || TRIVY_RC=$?
+  trivy image "${TRIVY_ARGS[@]}" --ignorefile .trivyignore.yaml "$1" || TRIVY_RC=$?
 else
   docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
     -v "${HOME}/.cache/trivy:/root/.cache/trivy" -v "$PWD/.trivyignore.yaml:/.trivyignore.yaml:ro" \
     aquasec/trivy:0.74.0 image "${TRIVY_ARGS[@]}" --ignorefile /.trivyignore.yaml \
-    "${IMAGE}:${TAG}" || TRIVY_RC=$?
+    "$1" || TRIVY_RC=$?
 fi
 if [ "${TRIVY_RC}" != "0" ]; then
-  echo "ERRO: Trivy reprovou ${IMAGE}:${TAG}. A tag fica no Hub para diagnóstico;" >&2
-  echo "  não aponte o roqueos-server para ela." >&2
+  echo "ERRO: Trivy reprovou $1. A tag fica no Hub para diagnóstico;" >&2
+  echo "  não aponte o roqueos-server para ela nem a documente." >&2
   exit 1
 fi
+}
+trivy_hard "${IMAGE}:${TAG}"
+
+echo "==> build multi-arch e push de ${IMAGE}:${TAG}-standalone (em cima de ${TAG})"
+docker buildx build --builder "${BUILDER}" \
+  --platform linux/amd64,linux/arm64 \
+  -f docker/images/standalone/Dockerfile \
+  --build-arg "ENGINE=${IMAGE}:${TAG}" \
+  --label "org.opencontainers.image.version=${VERSAO}" \
+  --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" \
+  -t "${IMAGE}:${TAG}-standalone" \
+  --push .
+conferir_archs "${IMAGE}:${TAG}-standalone"
+trivy_hard "${IMAGE}:${TAG}-standalone"
 
 if [ "${MOVER_LATEST}" = "1" ]; then
   docker buildx imagetools create -t "${IMAGE}:latest" "${IMAGE}:${TAG}"
@@ -110,5 +133,5 @@ if [ "${MOVER_LATEST}" = "1" ]; then
 fi
 
 echo
-echo "==> publicado: ${IMAGE}:${TAG} (amd64 + arm64)"
+echo "==> publicado: ${IMAGE}:${TAG} e ${IMAGE}:${TAG}-standalone (amd64 + arm64)"
 echo "A frota recebe isto quando o roqueos-server fixar ${TAG} e cada servidor atualizar."

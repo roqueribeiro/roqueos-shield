@@ -12,6 +12,7 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 import structlog
 from fastapi import FastAPI
@@ -21,6 +22,9 @@ from fastapi.staticfiles import StaticFiles
 from orchestrator.ai.observability import log_processor
 from orchestrator.api.routers import (
     auth as auth_router,
+)
+from orchestrator.api.routers import (
+    conta as conta_router,
 )
 from orchestrator.api.routers import (
     exposure as exposure_router,
@@ -35,10 +39,19 @@ from orchestrator.api.routers import (
     investigate as investigate_router,
 )
 from orchestrator.api.routers import (
+    mcp as mcp_router,
+)
+from orchestrator.api.routers import (
     reports as reports_router,
 )
 from orchestrator.api.routers import (
     scans as scans_router,
+)
+from orchestrator.api.routers import (
+    settings as settings_router,
+)
+from orchestrator.api.routers import (
+    system as system_router,
 )
 from orchestrator.api.routers import (
     targets as targets_router,
@@ -106,6 +119,19 @@ async def lifespan(app: FastAPI):
         await init_db()
         log.info("db.sqlite_init_done")
 
+    # Configuração gravada pela tela (IA e escopo) por cima do ambiente. O que veio
+    # no ambiente continua valendo; ver `orchestrator.runtime_settings`.
+    try:
+        from orchestrator.persistence.db import session as _db_session
+        from orchestrator.runtime_settings import aplicar
+
+        async with _db_session() as s:
+            aplicadas = await aplicar(s)
+        if aplicadas:
+            log.info("settings.runtime_aplicadas", campos=aplicadas)
+    except Exception as e:  # noqa: BLE001  banco sem a migration 0008 ainda
+        log.warning("settings.runtime_indisponivel", error=str(e))
+
     # phoenix tracing opt-in
     if settings.PHOENIX_ENABLED and settings.PHOENIX_COLLECTOR_ENDPOINT:
         try:
@@ -119,11 +145,44 @@ async def lifespan(app: FastAPI):
     yield
 
 
+_DESCRICAO = """
+API do **RoqueShield**: teste contínuo de segurança com triagem de IA.
+
+**Como autenticar.** Clique em *Authorize* e cole um token no `ApiToken`. Um admin cria
+tokens por usuário em `POST /users` (ou na tela, em Usuários); o token aparece uma vez
+só. A tela web usa um cookie de sessão próprio e não precisa disto.
+
+**O contrato do silêncio.** Zero achado só quer dizer "limpo" quando
+`coverage_complete` é `true`. Scanner que não rodou aparece em `scanners_skipped` com o
+motivo, nunca como lista vazia.
+
+Também: CLI `roqueshield`, servidor MCP em `/mcp` e o AI Fix Bundle em
+`GET /reports/{scan_id}/ai-bundle`.
+"""
+
+_TAGS = [
+    {"name": "conta", "description": "Primeiro uso e login por senha da tela."},
+    {"name": "targets", "description": "Alvos autorizados."},
+    {"name": "scans", "description": "Disparar, acompanhar e apagar scans."},
+    {"name": "findings", "description": "Achados, fila de triagem e resolução."},
+    {"name": "reports", "description": "Relatórios, conformidade e o AI Fix Bundle."},
+    {"name": "investigate", "description": "Investigação de um achado pelo agente, sob a coleira."},
+    {"name": "exposure", "description": "Exposição externa (OSINT)."},
+    {"name": "settings", "description": "Configuração de IA e de escopo, sem reiniciar."},
+    {"name": "system", "description": "Serviços, logs e uso do container."},
+    {"name": "users", "description": "Usuários, papéis e tokens."},
+    {"name": "auth", "description": "Login OIDC (SSO)."},
+    {"name": "ui", "description": "Leituras agregadas que a tela usa, e o SSE de progresso."},
+    {"name": "health", "description": "Saúde do serviço e de cada dependência."},
+    {"name": "mcp", "description": "Servidor MCP (JSON-RPC) para agentes."},
+]
+
 app = FastAPI(
-    title="CAI Orchestrator",
-    description="Continuous AI Security testing platform",
-    version="0.4.1",
+    title="RoqueShield API",
+    description=_DESCRICAO,
+    version="0.5.0",
     lifespan=lifespan,
+    openapi_tags=_TAGS,
 )
 
 app.include_router(targets_router.router)
@@ -136,6 +195,10 @@ app.include_router(health_router.router)  # /health/full
 app.include_router(ui_router.router)  # /ui/api/*
 app.include_router(users_router.router)  # /users (admin-only, RBAC)
 app.include_router(auth_router.router)  # /auth (OIDC SSO)
+app.include_router(conta_router.router)  # /setup, /auth/session (senha, standalone)
+app.include_router(settings_router.router)  # /settings/ai, /settings/scope
+app.include_router(system_router.router)  # /system/services, /system/logs, /system/usage
+app.include_router(mcp_router.router)  # /mcp (MCP por HTTP)
 
 # Session cookie pro state/nonce do fluxo OIDC (authlib usa request.session).
 # Só montamos o SessionMiddleware quando o OIDC está realmente configurado — assim
@@ -151,10 +214,58 @@ if settings.OIDC_ISSUER and settings.OIDC_CLIENT_ID and settings.OIDC_CLIENT_SEC
         https_only=False,
     )
 
-# Static files servindo o dashboard em /ui
+# Cabeçalhos de segurança da tela e da API. A CSP vale para a tela (tudo do mesmo
+# endereço, nada de CDN). Ficam sem CSP o /docs e o /redoc do FastAPI e o dashboard
+# antigo em /ui (só servido sem o build da tela), que carregam script de CDN.
+# `frame-ancestors 'none'` + X-Frame-Options valem para tudo: ninguém embute o shield.
+_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; "
+    "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+)
+_SEM_CSP = ("/docs", "/redoc", "/ui")
+
+
+class CabecalhosDeSeguranca:
+    """ASGI puro (não `BaseHTTPMiddleware`): só acrescenta cabeçalhos no início da
+    resposta e deixa o corpo passar como veio, sem bufferizar o SSE do progresso."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        com_csp = not str(scope.get("path", "")).startswith(_SEM_CSP)
+
+        async def enviar(msg: Any) -> None:
+            if msg["type"] == "http.response.start":
+                nomes = {k.lower() for k, _ in msg.get("headers", [])}
+                extra = [
+                    (b"x-content-type-options", b"nosniff"),
+                    (b"x-frame-options", b"DENY"),
+                    (b"referrer-policy", b"no-referrer"),
+                ]
+                if com_csp:
+                    extra.append((b"content-security-policy", _CSP.encode()))
+                msg["headers"] = list(msg.get("headers", [])) + [
+                    (k, v) for k, v in extra if k not in nomes
+                ]
+            await send(msg)
+
+        await self.app(scope, receive, enviar)
+
+
+app.add_middleware(CabecalhosDeSeguranca)
+
+
+# A tela. Com o build da tela standalone (`web/`, saída em `orchestrator/web_dist`),
+# ela é servida na raiz e o `/ui` antigo redireciona para lá. Sem o build (clone
+# novo, imagem do RoqueOS antiga), fica o dashboard simples de antes em `/ui`.
+# O mount na raiz vai por último: as rotas da API, registradas antes, casam primeiro.
 _STATIC_DIR = Path(__file__).parent / "static"
-if _STATIC_DIR.exists():
-    app.mount("/ui", StaticFiles(directory=str(_STATIC_DIR), html=True), name="ui")
+_WEB_DIST = Path(__file__).parent / "web_dist"
 
 
 @app.get("/health")
@@ -163,7 +274,21 @@ async def health() -> dict:
     return {"status": "ok", "version": app.version}
 
 
-@app.get("/")
-async def root() -> RedirectResponse:
-    """Raiz redireciona pro dashboard."""
-    return RedirectResponse(url="/ui/", status_code=302)
+if (_WEB_DIST / "index.html").exists():
+
+    @app.get("/ui", include_in_schema=False)
+    @app.get("/ui/", include_in_schema=False)
+    async def ui_antiga() -> RedirectResponse:
+        return RedirectResponse(url="/", status_code=301)
+
+    app.mount("/", StaticFiles(directory=str(_WEB_DIST), html=True), name="web")
+else:
+    if _STATIC_DIR.exists():
+        app.mount("/ui", StaticFiles(directory=str(_STATIC_DIR), html=True), name="ui")
+
+    # Fora do schema nos dois ramos: a fotografia do contrato (docs/openapi.json) não
+    # pode depender de a tela ter sido buildada na máquina de quem gerou.
+    @app.get("/", include_in_schema=False)
+    async def root() -> RedirectResponse:
+        """Raiz redireciona pro dashboard."""
+        return RedirectResponse(url="/ui/", status_code=302)

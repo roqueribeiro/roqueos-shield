@@ -226,6 +226,85 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # A tela standalone (web/) contra um shield de verdade: builda com o lockfile, sobe o
+  # uvicorn com SQLite novo e roda o e2e em 1440 e 390 (primeiro uso, seções sem
+  # transbordo, fluxo de Usuários). Teste de mutação: sem o ROSConfirmHost montado o
+  # e2e reprova no "desativar" (medido em 2026-11-06).
+  web:
+    name: Tela standalone (build + e2e)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.20.0"
+          cache: yarn
+          cache-dependency-path: web/yarn.lock
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Nenhuma versão do lock com menos de 14 dias
+        working-directory: web
+        run: node scripts/idade-do-lock.mjs
+      - name: yarn install (lockfile congelado)
+        working-directory: web
+        run: yarn install --frozen-lockfile
+      - name: quasar build
+        working-directory: web
+        run: yarn build
+      - name: Chromium do Playwright
+        working-directory: web
+        run: yarn playwright install --with-deps chromium
+      - name: e2e da tela
+        env:
+          PYTHON: python
+        run: scripts/web_e2e.sh
+      - name: Prints do e2e
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-shots
+          path: web/e2e/shots
+          if-no-files-found: ignore
+
+  # A imagem do container único (engine + ZAP + Redis + tela) builda e fica saudável.
+  # Só em PR: são ~4 GB. Sobe o container, espera o HEALTHCHECK, e confere o primeiro
+  # uso pela API, o CLI dentro da imagem e os templates do nuclei legíveis como UID 1000.
+  standalone-image:
+    name: Imagem standalone (build + saúde)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Libera disco do runner
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: Build do engine
+        run: docker build -f docker/images/orchestrator/Dockerfile -t roqueos-shield-engine:ci .
+      - name: Build do standalone
+        run: >
+          docker build -f docker/images/standalone/Dockerfile
+          --build-arg ENGINE=roqueos-shield-engine:ci -t roqueos-shield-standalone:ci .
+      - name: Sobe e espera ficar saudável
+        run: |
+          docker run -d --name rs -p 127.0.0.1:8080:8080 -v rs-data:/data roqueos-shield-standalone:ci
+          for i in $(seq 1 60); do
+            s="$(docker inspect -f '{{.State.Health.Status}}' rs)"
+            [ "$s" = healthy ] && break
+            sleep 5
+          done
+          docker inspect -f '{{.State.Health.Status}}' rs | grep -qx healthy || { docker logs rs | tail -80; exit 1; }
+          curl -fsS http://127.0.0.1:8080/setup | grep -q '"needs_setup":true'
+          docker exec rs roqueshield --help >/dev/null
+          docker exec rs nuclei -duc -tl | wc -l | awk '{ if ($1 < 1000) { print "nuclei com " $1 " templates"; exit 1 } }'
+      - name: Logs do container
+        if: failure()
+        run: docker logs rs | tail -200
+
   # Publica a imagem do orchestrator no ghcr quando a main anda (em PR o job acima so
   # valida que builda). A esteira entrega a imagem pronta pra quem nao quer buildar na
   # mao: `docker pull ghcr.io/<owner>/cai-orchestrator:latest`. Usa o GITHUB_TOKEN
@@ -237,6 +316,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - lint
+      - web
       - typecheck
       - test
       - silencio

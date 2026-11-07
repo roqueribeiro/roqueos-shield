@@ -272,3 +272,30 @@ vulnerabilities:
       - "usr/local/bin/nuclei"
     expired_at: 2026-12-23
     statement: "binário oficial de scanner de terceiro, sem release corrigida em 2026-10-23"
+
+# 2026-11-07, release 0.5.0, decisão do founder ("segurança em primeiro lugar"):
+# - go-jose (DoS por JWK) e x/net/html (DoS por HTML) nos binários do nuclei 3.11.1 e do
+#   trivy 0.76.0. O nuclei não tem release mais nova; o trivy 0.76.2 corrige mas tinha 2
+#   dias, abaixo da idade mínima de 14 dias. Subir o trivy a partir de 2026-11-19.
+# - filelock 3.32.7 (CVE-2026-112940): ÚNICA exceção no app, contra a regra acima. Só
+#   corrige na 4.2.1, e o litellm (até 1.108.2) exige filelock < 4. O ataque pede quem
+#   renomeie arquivos num diretório pai sem sticky bit durante o ReadWriteLock do SQLite;
+#   nada no RoqueShield usa ReadWriteLock, e o container roda sem root nem capability.
+#   Sai assim que o litellm aceitar filelock 4. Prazo curto de propósito.
+  - id: CVE-2026-116587
+    paths:
+      - "usr/local/bin/nuclei"
+      - "usr/local/bin/trivy"
+    expired_at: 2026-12-07
+    statement: "binário oficial de scanner de terceiro; nuclei sem release corrigida, trivy corrigido há menos de 14 dias"
+  - id: CVE-2026-78661
+    paths:
+      - "usr/local/bin/nuclei"
+      - "usr/local/bin/trivy"
+    expired_at: 2026-12-07
+    statement: "binário oficial de scanner de terceiro; nuclei sem release corrigida, trivy corrigido há menos de 14 dias"
+  - id: CVE-2026-112940
+    paths:
+      - "usr/local/lib/python3.13/site-packages/filelock-3.32.7.dist-info/METADATA"
+    expired_at: 2026-12-07
+    statement: "exceção do app decidida pelo founder em 2026-11-07: litellm exige filelock<4; ReadWriteLock não é usado"

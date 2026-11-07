@@ -91,7 +91,9 @@ async def callback(request: Request, session: SessionDep) -> JSONResponse:
     await session.commit()
     await session.refresh(user)
 
-    jwt_token = issue_session(user_id=user.id, email=user.email, role=user.role)
+    jwt_token = issue_session(
+        user_id=user.id, email=user.email, role=user.role, versao=user.session_version
+    )
     ttl = settings.SESSION_TTL_HOURS * 3600
     resp = JSONResponse(
         {

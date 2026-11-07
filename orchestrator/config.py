@@ -96,6 +96,15 @@ class Settings(BaseSettings):
     PHOENIX_COLLECTOR_ENDPOINT: str = "http://phoenix:6006/v1/traces"
 
     # API auth (token simples; pentester comercial num engagement)
+    # Chave Fernet (base64 urlsafe, 32 bytes) que cifra os segredos guardados pela
+    # tela (chave de API de IA). No standalone o primeiro boot gera; vazio = a tela
+    # não aceita gravar segredo (o RoqueOS injeta os dele por ambiente).
+    SECRETS_KEY: str = ""
+    # MCP por HTTP (`/mcp`): liga as ferramentas que AGEM (disparar scan). Desligado,
+    # o agente só lê. Disparar scan contra terceiro tem peso legal.
+    MCP_ALLOW_ACTIONS: bool = False
+    # Pasta de dados do standalone (segredos gerados, SQLite, cache do trivy).
+    DATA_DIR: Path = Path("./data")
     APP_TOKEN: str = "dev-changeme"  # token simples API; trocar em prod
     # SEC-01: o APP_TOKEN mapeia para um principal de serviço ADMIN e é a chave de
     # sessão no fallback. Subir com o token de exemplo entrega admin a quem lê o
@@ -127,6 +136,12 @@ class Settings(BaseSettings):
     # Chave HMAC pra assinar a sessão (JWT HS256). Vazio → cai no APP_TOKEN.
     SESSION_SECRET: str = ""
     SESSION_TTL_HOURS: int = 12
+    # Código de primeiro uso da tela standalone: o POST /setup só cria o primeiro admin
+    # com ele (ou com o APP_TOKEN). O container gera em $DATA_DIR/secrets/SETUP_CODE.
+    SETUP_CODE: str = ""
+    # Força o atributo Secure no cookie de sessão. Use atrás de proxy TLS quando o
+    # uvicorn não confia no X-Forwarded-Proto (ver FORWARDED_ALLOW_IPS).
+    COOKIE_SECURE: bool = False
 
     # Logging
     LOG_LEVEL: str = "INFO"

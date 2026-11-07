@@ -1,0 +1,640 @@
+// =============================================================================
+// TOKENS DE RUNTIME — as custom properties do RoqueOS
+//
+// ⚠️ ESTE ARQUIVO É IMPORTADO UMA VEZ SÓ, POR `index.scss`. NÃO IMPORTE ELE
+//    DENTRO DE UM `<style scoped>`.
+//
+// Por que ele existe separado de `tokens.scss`:
+//
+// `tokens.scss` só tem VARIÁVEIS SASS (`$ros-*`). Variável Sass some na
+// compilação: ela vira o valor onde foi usada e não emite regra nenhuma. Por
+// isso um `<style scoped>` pode importar `tokens.scss` de graça.
+//
+// Este arquivo é o oposto: ele EMITE REGRA (`:root`, `html[data-low-end]`).
+// Importado dentro de um bloco escopado, o Vue carimba o hash do componente no
+// seletor e o resultado é `[data-v-abc123]:root` — que não casa com nada,
+// porque `:root` é o `<html>` e o `<html>` não tem atributo de escopo de
+// componente nenhum. Cada componente que importasse este arquivo levaria ~130
+// regras mortas para o bundle.
+//
+// Isso não é teoria: quando os dois blocos moravam no mesmo arquivo, o CSS
+// compilado tinha 330 regras `[data-v-*]:root` — todas mortas, todas pagas
+// pelo usuário no download. A separação zerou as 330.
+//
+// A regra prática: variável Sass em `tokens.scss`, custom property aqui.
+// =============================================================================
+
+:root {
+  // =======================================================================
+  // CORES DO SISTEMA
+  //
+  // ⚠️ ESTAS SAO AS CORES DE VERDADE. `tokens.scss` so faz apontar para ca:
+  // la cada `$ros-*` de cor vale `var(--ros-*)`, e por isso os 3.900 usos
+  // que ja existem nos componentes viraram temaveis sem ninguem edita-los.
+  //
+  // Trocar de tema e redefinir estas linhas sob outro seletor. Enquanto a
+  // cor morava em variavel Sass isso era impossivel: ela some no build.
+  // =======================================================================
+  // ⚠️ ACENTO, VIDRO, SUPERFÍCIE E BORDA NÃO MORAM MAIS AQUI.
+  // Os 19 tokens que um tema redefine foram para `temas.scss`, onde o padrão
+  // é um bloco como os outros três. Não é gosto de organização: a amostra do
+  // seletor de tema precisa que o PADRÃO também tenha seletor, senão ela lê o
+  // tema vigente e as quatro bolinhas ficam iguais.
+  --ros-bg-light: rgba(var(--ros-fill-rgb), 0.85);
+  --ros-red: #ff5f57;
+  --ros-yellow: #febc2e;
+  --ros-green: #28c840;
+  --ros-danger: #ff3b30;
+  --ros-success: #34c759;
+  --ros-success-bright: #4cd964;
+  --ros-warning: #f59e0b;
+  --ros-brand-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --ros-danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  --ros-warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  --ros-success-gradient: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+  --ros-fill-04: rgba(var(--ros-fill-rgb), 0.04);
+  --ros-fill-05: rgba(var(--ros-fill-rgb), 0.05);
+  --ros-fill-06: rgba(var(--ros-fill-rgb), 0.06);
+  --ros-fill-08: rgba(var(--ros-fill-rgb), 0.08);
+  --ros-fill-10: rgba(var(--ros-fill-rgb), 0.1);
+  --ros-fill-12: rgba(var(--ros-fill-rgb), 0.12);
+  --ros-border-faint: rgba(var(--ros-line-rgb), 0.05);
+  --ros-border-dim: rgba(var(--ros-line-rgb), 0.06);
+  --ros-border-soft: rgba(var(--ros-line-rgb), 0.1);
+  --ros-text: rgba(var(--ros-text-rgb), 0.95);
+  --ros-text-muted: rgba(var(--ros-text-rgb), 0.72);
+  --ros-text-subtle: rgba(var(--ros-text-rgb), 0.62);
+  --ros-shadow-xl: 0 20px 60px rgba(var(--ros-shadow-rgb), 0.5);
+  --ros-shadow-lg: 0 8px 32px rgba(var(--ros-shadow-rgb), 0.4);
+  // O botão do sistema é tonal desde o Goal 63 (10/10/2026): o cinza chapado #3a3a3a
+  // não acompanhava tema nenhum e lia como desabilitado ao lado do modal novo.
+  --ros-btn-bg: var(--ros-fill-10);
+  --ros-btn-bg-hover: var(--ros-fill-16);
+  --ros-btn-text: rgb(var(--ros-text-rgb));
+  --ros-btn-ghost-bg-hover: rgba(var(--ros-fill-rgb), 0.1);
+  --ros-btn-ghost-text: rgba(var(--ros-text-rgb), 0.72);
+  --ros-btn-ghost-text-hover: rgb(var(--ros-text-rgb));
+  --ros-btn-danger-bg: rgb(var(--ros-danger-strong-rgb));
+  --ros-btn-danger-bg-hover: rgba(var(--ros-danger-strong-rgb), 0.85);
+  --ros-btn-danger-text: #fff;
+  // Os botões do ROSModal (revisão visual de 09/10/2026). O primário é claro com texto
+  // escuro: branco sobre o azul padrão dá 4,0:1 e reprova no AA, claro sobre escuro dá
+  // 17:1. O perigo é o vermelho fechado (#dc2626): o `--ros-btn-danger-bg` acima, a 90%
+  // sobre o vidro do modal, dá 4,1:1 com texto branco, e este dá 4,8:1. Todos derivam
+  // das bases de `temas.scss`, para um tema alcançá-los (`alcance-do-tema.spec.js`).
+  --ros-modal-btn-primary-bg: rgb(var(--ros-text-rgb));
+  --ros-modal-btn-primary-text: rgb(var(--ros-scrim-rgb));
+  --ros-modal-btn-danger-bg: rgb(var(--ros-danger-strong-rgb));
+  --ros-modal-btn-danger-bg-hover: rgba(var(--ros-danger-strong-rgb), 0.85);
+  --ros-modal-btn-warning-bg: rgb(var(--ros-warning-rgb));
+  --ros-modal-btn-warning-text: rgb(var(--ros-scrim-rgb));
+  --ros-text-strong: rgba(var(--ros-text-rgb), 0.9);
+  --ros-window-shadow: 0 20px 60px rgba(var(--ros-shadow-rgb), 0.4);
+  --ros-window-shadow-active: 0 25px 80px rgba(var(--ros-shadow-rgb), 0.5);
+  --ros-window-border: rgba(var(--ros-line-rgb), 0.1);
+  --ros-window-border-active: rgba(var(--ros-line-rgb), 0.15);
+  --ros-window-header-bg: rgba(60, 60, 60, 0.35);
+  --ros-window-header-border: rgba(var(--ros-line-rgb), 0.1);
+  --ros-window-control-hover-color: rgba(0, 0, 0, 0.6);
+  --ros-red-hover: #cc3b3b;
+  --ros-yellow-hover: #cc9d00;
+  --ros-green-hover: #23a13e;
+  --ros-scrollbar-track: rgba(var(--ros-scrim-rgb), 0.1);
+  --ros-scrollbar-thumb: rgba(var(--ros-fill-rgb), 0.2);
+  --ros-scrollbar-thumb-hover-soft: rgba(var(--ros-fill-rgb), 0.3);
+  --ros-scrollbar-thumb-hover: rgba(var(--ros-fill-rgb), 0.35);
+  --ros-scrollbar-thumb-active: rgba(var(--ros-fill-rgb), 0.5);
+  --ros-scrollbar-window-track: rgba(var(--ros-scrim-rgb), 0.05);
+  --ros-scrollbar-window-thumb: rgba(100, 100, 100, 0.3);
+  --ros-scrollbar-window-thumb-hover: rgba(100, 100, 100, 0.5);
+  --ros-scrollbar-window-thumb-active: rgba(100, 100, 100, 0.7);
+  --ros-scrollbar-dark-track: rgba(var(--ros-fill-rgb), 0.05);
+  --ros-scrollbar-dark-thumb: rgba(var(--ros-fill-rgb), 0.15);
+  --ros-scrollbar-dark-thumb-hover: rgba(var(--ros-fill-rgb), 0.25);
+  --ros-scrollbar-dark-thumb-active: rgba(var(--ros-fill-rgb), 0.35);
+  --ros-scrollbar-light-track: rgba(var(--ros-scrim-rgb), 0.05);
+  --ros-scrollbar-light-thumb: rgba(var(--ros-scrim-rgb), 0.2);
+  --ros-scrollbar-light-thumb-hover: rgba(var(--ros-scrim-rgb), 0.3);
+  --ros-scrollbar-light-thumb-active: rgba(var(--ros-scrim-rgb), 0.4);
+  --ros-overlay-dim: rgba(var(--ros-scrim-rgb), 0.1);
+  --ros-menubar-bg: var(--ros-bg-dark);
+  --ros-selection-bg: rgba(var(--ros-accent-rgb), 0.4);
+  --ros-shadow-sm: 0 2px 8px rgba(var(--ros-shadow-rgb), 0.25);
+  --ros-shadow-context: 0 8px 32px rgba(var(--ros-shadow-rgb), 0.5);
+  --ros-shadow-login: 0 8px 32px rgba(var(--ros-shadow-rgb), 0.3);
+  --ros-text-shadow-strong: 0 1px 3px rgba(var(--ros-shadow-rgb), 0.8);
+  --ros-text-shadow-soft: 0 1px 10px rgba(var(--ros-shadow-rgb), 0.3);
+  --ros-text-shadow-glow: 0 2px 20px rgba(var(--ros-shadow-rgb), 0.3);
+  --ros-boot-bg: rgb(var(--ros-scrim-rgb));
+  --ros-progress-track: rgba(var(--ros-fill-rgb), 0.2);
+  --ros-input-bg: rgba(var(--ros-fill-rgb), 0.2);
+  --ros-input-bg-focus: rgba(var(--ros-fill-rgb), 0.3);
+  --ros-input-placeholder: rgba(var(--ros-text-rgb), 0.65);
+  --ros-hint-text: rgba(var(--ros-text-rgb), 0.7);
+  --ros-btn-glass-bg: rgba(var(--ros-fill-rgb), 0.2);
+  --ros-btn-glass-bg-hover: rgba(var(--ros-fill-rgb), 0.3);
+
+  // ⚠️ A PONTE COM O QUASAR, E ELA E DE UMA LINHA SO.
+  //
+  // O CSS do Quasar le `var(--q-primary)` em 24 regras: slider, spinner,
+  // toggle, aba, foco de campo. Enquanto esse token vinha do `$primary` do
+  // `quasar.variables.scss`, ele era #1976d2 cravado no build — o slider da
+  // Transparencia da Barra de Menus continuava AZUL com o tema ambar ligado, e
+  // isso apareceu no QA visual, nao em teste nenhum.
+  //
+  // Uma declaracao basta para os quatro temas: propriedade customizada resolve
+  // por elemento, e como as duas moram no `<html>`, quando o tema redefine
+  // `--ros-accent` ali, `--q-primary` resolve junto.
+  //
+  // ⚠️ ISTO MUDA PIXEL NO TEMA PADRAO, de proposito: #1976d2 era o azul de
+  // fabrica do Quasar, nunca uma escolha deste produto, e o acento do RoqueOS
+  // sempre foi #007aff. Eram duas cores de destaque na mesma tela.
+  --q-primary: var(--ros-accent);
+
+  // Triplete r,g,b para quem precisa de alpha em tempo de execução:
+  // `rgba(var(--ros-success-rgb), .2)` é o que `rgba($ros-success, .2)` fazia
+  // enquanto a cor era Sass. Função de cor do Sass não engole `var()`, então o
+  // triplete é o único caminho -- e o gate de `tokens.scss` cobra isso.
+  // O do acento mora em `temas.scss`, junto com o resto do que o tema troca.
+  --ros-success-rgb: 52, 199, 89;
+  --ros-danger-rgb: 255, 59, 48;
+  --ros-yellow-rgb: 254, 188, 46;
+  --ros-warning-rgb: 245, 158, 11;
+  // Texto vermelho sobre a própria tinta (selo, aviso): o vermelho puro dá 4,3:1 sobre
+  // o vidro, este dá 4,8 nos quatro temas. E o branco do texto sobre o vermelho fechado.
+  --ros-danger-text-rgb: 255, 98, 89;
+  --ros-on-danger-rgb: 255, 255, 255;
+  // O branco do texto sobre o accent cheio (`--ros-app-accent-fill-rgb`, escurecido em
+  // temas.scss e no ROSWindow até este branco dar 4,5:1).
+  --ros-on-accent-rgb: 255, 255, 255;
+  // Azul de informação (selo `info`): 6,3:1 sobre a própria tinta.
+  --ros-info-rgb: 90, 200, 250;
+  // ⚠️ A MATIZ DA SUPERFICIE MORA EM `temas.scss`, um valor por tema. Aqui
+  // ficaria um numero fixo que tema nenhum alcanca.
+
+  // Tons derivados: eram `lighten()`/`color.adjust()`, que so existem no
+  // build. O valor aqui e o que o Sass produzia, digito por digito.
+  --ros-accent-dark-10: rgb(0, 97.6, 204);
+  --ros-yellow-light-12: rgb(254.2914285714, 207.5257142857, 106.9085714286);
+  --ros-accent-light-22: rgb(112.2, 180.52, 255);
+  --ros-success-light-12: rgb(98.1784860558, 214.0215139442, 127.3362549801);
+
+  // ⚠️ DEGRAUS DE TEXTO NOMEADOS PELO VALOR, E ISSO É PROPOSITAL.
+  //
+  // São 31 alphas diferentes de branco em `color:` pelos componentes. Isso não
+  // é uma rampa: é um catálogo de acidentes, cada um escolhido por alguém num
+  // dia diferente. Nomear de `--ros-text-70` diz o que a coisa É sem inventar
+  // uma semântica que ninguém acordou — e, principalmente, TIRA A COR DE
+  // DENTRO DO COMPONENTE, que é o que um tema precisa para alcançá-la.
+  //
+  // Colapsar estes doze em quatro ou cinco degraus com nome de intenção
+  // (primário, secundário, apagado, dica) é a próxima decisão. Ela MUDA PIXEL
+  // de propósito e entra pelo QA visual, não por script. Depois disso, estes
+  // nomes numéricos somem.
+  --ros-text-100: rgb(var(--ros-text-rgb));
+  --ros-text-95: rgba(var(--ros-text-rgb), 0.95);
+  --ros-text-90: rgba(var(--ros-text-rgb), 0.9);
+  --ros-text-85: rgba(var(--ros-text-rgb), 0.85);
+  --ros-text-80: rgba(var(--ros-text-rgb), 0.8);
+  --ros-text-70: rgba(var(--ros-text-rgb), 0.7);
+  --ros-text-60: rgba(var(--ros-text-rgb), 0.6);
+  --ros-text-55: rgba(var(--ros-text-rgb), 0.55);
+  --ros-text-50: rgba(var(--ros-text-rgb), 0.5);
+  --ros-text-45: rgba(var(--ros-text-rgb), 0.45);
+  --ros-text-40: rgba(var(--ros-text-rgb), 0.4);
+  --ros-text-30: rgba(var(--ros-text-rgb), 0.3);
+
+  // ⚠️ A COR BASE DE BRANCO E PRETO, EM TRIPLETE.
+  //
+  // Existem 166 pares (papel, alpha) de branco ou preto pelos componentes.
+  // Nomear os 166 seria trocar um catálogo de acidentes por outro com nome
+  // melhor. Os que se repetem ganham degrau logo abaixo; o resto usa
+  // `rgba(var(--ros-white-rgb), .42)`, onde o alpha continua inline porque ELE
+  // é a decisão daquele lugar, e a COR sai de dentro do componente.
+  //
+  // Um tema que troque o branco por um branco quente move os dois grupos junto.
+
+  // ⚠️ OS DEGRAUS NEUTROS SAEM DE UMA BASE, e é isso que faz um tema chegar
+  // na tela. Enquanto `--ros-fill-08` valia `rgba(255,255,255,.08)` cravado,
+  // um tema podia redefinir o acento e mudar quinze elementos de 687: o resto
+  // da tela é preenchimento, borda e texto neutros. Com a base em variável,
+  // seis linhas retingem o sistema inteiro -- 157 de 687, medido.
+  //
+  // As cinco bases (`--ros-fill-rgb`, `--ros-line-rgb`, `--ros-text-rgb`,
+  // `--ros-scrim-rgb`, `--ros-shadow-rgb`) moram em
+  // `temas.scss`. As duas de baixo ficam: nenhum tema mexe nelas.
+  --ros-line-dark-rgb: 0, 0, 0;
+  --ros-text-dark-rgb: 0, 0, 0;
+
+  --ros-white-rgb: 255, 255, 255;
+  --ros-black-rgb: 0, 0, 0;
+
+  // =======================================================================
+  // DEGRAUS DE BRANCO E PRETO QUE SE REPETEM
+  //
+  // Cada um apareceu 15 vezes ou mais com o MESMO papel. `fill` e
+  // preenchimento, `scrim` e veu escuro, `line` e borda, `shadow` e sombra,
+  // `glow` e brilho claro. O mesmo valor com papel diferente vira token
+  // diferente de proposito: um tema quer mexer no preenchimento sem mexer
+  // na sombra, e um token que diz "fill" numa sombra mente sobre a intencao.
+  // =======================================================================
+  --ros-fill-02: rgba(var(--ros-fill-rgb), 0.02);
+  --ros-fill-03: rgba(var(--ros-fill-rgb), 0.03);
+  --ros-fill-07: rgba(var(--ros-fill-rgb), 0.07);
+  --ros-fill-100: rgba(var(--ros-fill-rgb), 1);
+  --ros-fill-14: rgba(var(--ros-fill-rgb), 0.14);
+  --ros-fill-15: rgba(var(--ros-fill-rgb), 0.15);
+  --ros-fill-16: rgba(var(--ros-fill-rgb), 0.16);
+  --ros-fill-20: rgba(var(--ros-fill-rgb), 0.2);
+  --ros-line-14: rgba(var(--ros-line-rgb), 0.14);
+  --ros-line-15: rgba(var(--ros-line-rgb), 0.15);
+  --ros-line-18: rgba(var(--ros-line-rgb), 0.18);
+  --ros-line-20: rgba(var(--ros-line-rgb), 0.2);
+  --ros-line-30: rgba(var(--ros-line-rgb), 0.3);
+  --ros-scrim-100: rgba(var(--ros-scrim-rgb), 1);
+  --ros-scrim-20: rgba(var(--ros-scrim-rgb), 0.2);
+  --ros-scrim-25: rgba(var(--ros-scrim-rgb), 0.25);
+  --ros-scrim-30: rgba(var(--ros-scrim-rgb), 0.3);
+  --ros-scrim-40: rgba(var(--ros-scrim-rgb), 0.4);
+  --ros-scrim-50: rgba(var(--ros-scrim-rgb), 0.5);
+  --ros-scrim-55: rgba(var(--ros-scrim-rgb), 0.55);
+  --ros-scrim-70: rgba(var(--ros-scrim-rgb), 0.7);
+  --ros-shadow-30: rgba(var(--ros-shadow-rgb), 0.3);
+  --ros-shadow-35: rgba(var(--ros-shadow-rgb), 0.35);
+  --ros-shadow-40: rgba(var(--ros-shadow-rgb), 0.4);
+  --ros-shadow-45: rgba(var(--ros-shadow-rgb), 0.45);
+  --ros-shadow-50: rgba(var(--ros-shadow-rgb), 0.5);
+  --ros-shadow-60: rgba(var(--ros-shadow-rgb), 0.6);
+  --ros-text-35: rgba(var(--ros-text-rgb), 0.35);
+  --ros-text-65: rgba(var(--ros-text-rgb), 0.65);
+  --ros-text-72: rgba(var(--ros-text-rgb), 0.72);
+  --ros-text-75: rgba(var(--ros-text-rgb), 0.75);
+  --ros-text-92: rgba(var(--ros-text-rgb), 0.92);
+
+  // =======================================================================
+  // CORES DE APP QUE VINHAM DE VARIÁVEL SASS LOCAL
+  //
+  // Ficam aqui, e não na raiz do componente, porque variável Sass é usada
+  // em `:deep()`, em `@media` e em markup teleportado — lugares onde uma
+  // custom property declarada na raiz do componente não chega.
+  // =======================================================================
+  --ros-landing-header-primary-gradient: #667eea;
+  --ros-landing-header-primary-gradient-2: #764ba2;
+  --ros-compose-stacks-rcs-accent: #10b981;
+  --ros-roque-code-bg-primary: #1e1e1e;
+  --ros-text-editor-bg-primary: #1e1e1e;
+  --ros-finder-select-mode-bar-bg-bar: rgba(0, 122, 204, 0.2);
+  --ros-finder-select-mode-bar-bg-bar-2: rgba(0, 150, 230, 0.15);
+  --ros-finder-select-mode-bar-border-color-3: rgba(0, 150, 230, 0.4);
+  --ros-finder-select-mode-bar-icon-bg-4: rgba(0, 150, 230, 0.25);
+  --ros-roque-code-file-tree-text-primary: #cccccc;
+  --ros-roque-code-file-tree-text-secondary-2: #858585;
+  --ros-roque-code-file-tree-bg-hover-3: #2a2d2e;
+  --ros-roque-code-file-tree-bg-active-4: #37373d;
+  --ros-roque-code-output-bg-output: #1e1e1e;
+  --ros-roque-code-output-bg-header-2: #252526;
+  --ros-roque-code-output-text-primary-5: #cccccc;
+  --ros-roque-code-output-text-secondary-6: #858585;
+  --ros-roque-code-output-border-8: #3c3c3c;
+  --ros-roque-code-output-error-color-9: #f44336;
+  --ros-roque-code-output-warning-color-10: #ff9800;
+  --ros-roque-code-output-info-color-11: #2196f3;
+  --ros-roque-code-sidebar-bg-sidebar: #252526;
+  --ros-roque-code-sidebar-bg-hover-2: #2a2d2e;
+  --ros-roque-code-sidebar-text-primary-4: #cccccc;
+  --ros-roque-code-sidebar-text-secondary-5: #858585;
+  --ros-roque-code-sidebar-accent-6: #0078d4;
+  --ros-roque-code-sidebar-border-7: #3c3c3c;
+  --ros-roque-code-toolbar-bg-toolbar: #252526;
+  --ros-roque-code-toolbar-border-7: #3c3c3c;
+  --ros-terminal-tabs-bg-tabs: #252526;
+  --ros-terminal-tabs-border-4: #3c3c3c;
+  --ros-editor-breadcrumbs-bg-breadcrumbs: #1e1e1e;
+  --ros-editor-breadcrumbs-text-primary-2: #cccccc;
+  --ros-editor-breadcrumbs-text-secondary-3: #858585;
+  --ros-editor-breadcrumbs-accent-4: #007acc;
+  --ros-editor-breadcrumbs-border-5: #3c3c3c;
+  --ros-editor-status-bar-bg-status: #007acc;
+  // ⚠️ O AZUL DA BARRA NAO SEGUE O TEMA, ENTAO O TEXTO DELA TAMBEM NAO PODE.
+  // Enquanto o texto vinha de --ros-btn-text e --ros-hint-text (tokens de
+  // sistema), trocar para o tema oceano derrubava estes 11 rotulos de 4,51:1
+  // para 3,91:1 — branco virava #e2f1fa sobre um azul fixo. Fundo cravado pede
+  // frente cravada; quem anda com o tema anda inteiro.
+  --ros-editor-status-bar-fg: #fff;
+  --ros-editor-status-bar-fg-muted: rgba(255, 255, 255, 0.7);
+  --ros-editor-tabs-bg-tabs: #252526;
+  --ros-editor-tabs-bg-tab-active-2: #1e1e1e;
+  --ros-editor-tabs-bg-tab-hover-3: #2d2d30;
+  --ros-editor-tabs-text-primary-4: #cccccc;
+  --ros-editor-tabs-text-secondary-5: #858585;
+  --ros-editor-tabs-accent-6: #007acc;
+  --ros-editor-tabs-border-7: #3c3c3c;
+  --ros-editor-toolbar-bg-toolbar: #252526;
+  --ros-editor-toolbar-border-6: #3c3c3c;
+  --ros-virtual-keyboard-kb-bg: #2c2c2e;
+  --ros-virtual-keyboard-kb-text-muted-2: #aeaeb2;
+  // =======================================================================
+  // CORES DE APP QUE VINHAM DE VARIÁVEL SASS LOCAL
+  //
+  // Ficam aqui, e não na raiz do componente, porque variável Sass é usada
+  // em `:deep()`, em `@media` e em markup teleportado — lugares onde uma
+  // custom property declarada na raiz do componente não chega.
+  // =======================================================================
+  --ros-slide02-problem-bg-1: rgba(255, 59, 48, 0.14);
+  --ros-slide02-problem-fg-1: #ff6b5f;
+  --ros-slide03-vision-fg-1: rgba(0, 122, 255, 0.5);
+  --ros-slide04-what-bg-1: rgba(0, 122, 255, 0.15);
+  --ros-slide04-what-fg-1: #47a3ff;
+  --ros-slide05-demo-bg-1: rgba(0, 122, 255, 0.15);
+  --ros-slide05-demo-bg-2: #0b0e16;
+  --ros-slide05-demo-bg-3: #1a1f2e;
+  --ros-slide05-demo-shadow-1: rgba(0, 0, 0, 0.3);
+  --ros-slide05-demo-shadow-2: rgba(0, 0, 0, 0.2);
+  --ros-slide05-demo-bg-4: #ff5f57;
+  --ros-slide05-demo-bg-5: #febc2e;
+  --ros-slide05-demo-bg-6: #28c840;
+  --ros-slide06-server-line-1: rgba(0, 122, 255, 0.35);
+  --ros-slide06-server-fg-1: #47a3ff;
+  --ros-slide07-ecosystem-bg-1: rgba(0, 122, 255, 0.2);
+  --ros-slide07-ecosystem-bg-2: rgba(88, 86, 214, 0.2);
+  --ros-slide07-ecosystem-fg-1: #7da6ff;
+  --ros-slide08-tech-bg-1: rgba(0, 122, 255, 0.08);
+  --ros-slide08-tech-bg-2: #7da6ff;
+  --ros-slide08-tech-fg-1: #47a3ff;
+  --ros-slide09-traction-line-1: #5856d6;
+  --ros-slide10-team-line-1: rgba(0, 122, 255, 0.6);
+  --ros-slide10-team-bg-1: rgba(0, 122, 255, 0.1);
+  --ros-slide10-team-bg-2: rgba(0, 122, 255, 0.2);
+  --ros-slide10-team-bg-3: rgba(255, 255, 255, 0.03);
+  --ros-slide10-team-bg-4: #5856d6;
+  --ros-slide10-team-fg-1: rgba(125, 166, 255, 0.9);
+  --ros-slide10-team-line-2: rgba(0, 122, 255, 0.35);
+  --ros-slide11-roadmap-bg-1: #5856d6;
+  --ros-slide11-roadmap-bg-2: rgba(88, 86, 214, 0.2);
+  --ros-slide11-roadmap-bg-3: #05060a;
+  --ros-slide11-roadmap-shadow-1: rgba(0, 122, 255, 0.2);
+  --ros-slide11-roadmap-fg-1: #47a3ff;
+  --ros-slide11-roadmap-bg-4: rgba(0, 122, 255, 0.1);
+  --ros-slide12-ask-bg-1: rgba(52, 199, 89, 0.08);
+  --ros-slide12-ask-bg-2: #6dd58c;
+  --ros-slide12-ask-fg-1: #6dd58c;
+  --ros-slide12-ask-bg-3: rgba(0, 122, 255, 0.04);
+  --ros-slide12-ask-line-1: rgba(0, 122, 255, 0.18);
+  --ros-slide12-ask-fg-2: #47a3ff;
+  --ros-drawer-bg-1: rgba(22, 23, 28, 0.82);
+  --ros-drawer-shadow-1: rgba(var(--ros-line-rgb), 0.06);
+  --ros-drawer-shadow-2: rgba(var(--ros-shadow-rgb), 0.35);
+  --ros-drawer-bg-2: rgba(28, 28, 32, 0.98);
+  --ros-upload-dialog-line-1: rgba(76, 175, 80, 0.3);
+  --ros-upload-dialog-bg-2: rgba(76, 175, 80, 0.08);
+  --ros-upload-dialog-fg-2: #4caf50;
+  --ros-upload-dialog-line-2: rgba(244, 67, 54, 0.3);
+  --ros-upload-dialog-bg-3: rgba(244, 67, 54, 0.08);
+  --ros-upload-dialog-fg-3: #f44336;
+  --ros-upload-dialog-bg-4: #667eea;
+  --ros-upload-dialog-bg-5: #764ba2;
+  --ros-upload-dialog-bg-6: #4caf50;
+  --ros-upload-dialog-bg-7: #f44336;
+  --ros-upload-dialog-bg-8: rgba(102, 126, 234, 0.08);
+  --ros-upload-dialog-line-3: rgba(102, 126, 234, 0.25);
+  --ros-upload-dialog-fg-4: #818cf8;
+  --ros-upload-dialog-bg-9: #667eea;
+  --ros-upload-dialog-bg-10: #764ba2;
+  --ros-upload-dialog-fg-5: #4caf50;
+  --ros-add-city-modal-shadow-1: rgba(0, 0, 0, 0.18);
+  --ros-add-city-modal-shadow-2: rgba(0, 0, 0, 0.25);
+  --ros-music-player-mobile-drawer-fg-1: #ff8a8a;
+  --ros-music-player-mobile-drawer-fg-2: #ff5252;
+  --ros-music-stems-sheet-fg-1: #9aa0a6;
+  --ros-music-stems-sheet-bg-1: #2bd9c4;
+  --ros-music-stems-sheet-fg-2: #2bd9c4;
+  --ros-music-stems-sheet-fg-3: #cfd3d6;
+  --ros-music-stems-sheet-fg-4: #e8eaed;
+  --ros-music-stems-sheet-fg-9: #9aa0a6;
+  --ros-music-stems-sheet-fg-10: #e8eaed;
+  --ros-server-admin-network-section-fg-1: #ff5f57;
+  --ros-video-player-mobile-drawer-bg-1: rgba(255, 71, 87, 0.12);
+  --ros-video-player-mobile-drawer-line-1: rgba(255, 71, 87, 0.18);
+  --ros-video-player-mobile-drawer-fg-1: #ff6b81;
+  --ros-video-player-mobile-drawer-fg-2: #ff6b78;
+  --ros-video-player-mobile-drawer-fg-3: #ff4757;
+
+  // Últimas cores que ainda moravam em variável Sass consumida por função de
+  // cor. `rgba($x, .2)` e `color.scale($x, ...)` exigem uma COR em tempo de
+  // compilação, então a variável não podia virar `var()` -- o que ela podia
+  // era passar a LER daqui, e as derivadas viram token com o valor exato que
+  // o Sass produzia.
+  --ros-virtual-keyboard-key-bg: #4a4a4c;
+  --ros-virtual-keyboard-key-bg-rgb: 74, 74, 76;
+  --ros-virtual-keyboard-key-bg-claro-18: rgb(105.968, 105.968, 108.832);
+  --ros-virtual-keyboard-key-special: #3a3a3c;
+  --ros-virtual-keyboard-key-special-rgb: 58, 58, 60;
+  --ros-virtual-keyboard-key-special-claro-15: rgb(86.9016949153, 86.9016949153, 89.8983050847);
+  // UI Scale (set dynamically via JS)
+  --ros-ui-scale: 1;
+
+  // =========================================================================
+  // ELEVATION SYSTEM
+  // 6 levels: flat → active/dragging. Use semantic levels, not raw shadows.
+  // =========================================================================
+  --ros-elevation-0: none;
+  --ros-elevation-1:
+    0 1px 3px rgba(var(--ros-shadow-rgb), 0.12), 0 1px 2px rgba(var(--ros-shadow-rgb), 0.24);
+  --ros-elevation-2:
+    0 3px 6px rgba(var(--ros-shadow-rgb), 0.16), 0 3px 6px rgba(var(--ros-shadow-rgb), 0.23);
+  --ros-elevation-3:
+    0 10px 20px rgba(var(--ros-shadow-rgb), 0.19), 0 6px 6px rgba(var(--ros-shadow-rgb), 0.23);
+  --ros-elevation-4:
+    0 14px 28px rgba(var(--ros-shadow-rgb), 0.25), 0 10px 10px rgba(var(--ros-shadow-rgb), 0.22);
+  --ros-elevation-5:
+    0 19px 38px rgba(var(--ros-shadow-rgb), 0.3), 0 15px 12px rgba(var(--ros-shadow-rgb), 0.22);
+
+  // =========================================================================
+  // BORDER-RADIUS
+  // xs (marca, check), sm (chip, item de menu), md (botão, campo, card),
+  // lg (painel, modal, folha) e pill (cápsula). Círculo continua 50%.
+  //
+  // Goal 62 (10/10/2026): a escala era 6/12/18 e o código usava 8px 314 vezes e
+  // 10px 289 vezes, fora dela. O sm subiu para 8 e o 10 foi para o md (12), na
+  // linha do modal novo; `scripts/escala.mjs --corrige` trocou o número solto.
+  // =========================================================================
+  --ros-radius-xs: 4px;
+  --ros-radius-sm: 8px;
+  --ros-radius-md: 12px;
+  --ros-radius-lg: 18px;
+  --ros-radius-pill: 999px;
+
+  // =========================================================================
+  // TYPOGRAPHY SCALE
+  // Semantic sizes from icon labels to display headings
+  // =========================================================================
+  // Fonte mínima do sistema: 11px (Goal 62). Era 10, e 10px no celular não se lê.
+  --ros-text-xs: 11px;
+  --ros-text-sm: 12px;
+  --ros-text-base: 13px;
+  --ros-text-md: 14px;
+  --ros-text-lg: 16px;
+  --ros-text-xl: 18px;
+  --ros-text-2xl: 22px;
+  --ros-text-3xl: 28px;
+  --ros-text-display: 56px;
+
+  // Familia dos numeros que contam tempo: relogio, cronometro, timer, alarme.
+  // Existe como token porque antes cada tela do Relogio escolhia a sua — o
+  // alarme em 'SF Mono' 28px, o timer em 'SF Mono' 22px e a cidade em SF Pro —
+  // e as tres apareciam na mesma janela.
+  --ros-font-numeros: 'SF Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --ros-font-normal: 400;
+  --ros-font-medium: 500;
+  --ros-font-semibold: 600;
+  --ros-font-bold: 700;
+
+  // =========================================================================
+  // SPACING SCALE
+  // Base unit: 4px. Use for padding, margins, gaps.
+  // =========================================================================
+  --ros-space-1: 4px;
+  --ros-space-2: 8px;
+  --ros-space-3: 12px;
+  --ros-space-4: 16px;
+  --ros-space-5: 20px;
+  --ros-space-6: 24px;
+  --ros-space-7: 28px;
+  --ros-space-8: 32px;
+  --ros-space-10: 40px;
+  --ros-space-12: 48px;
+
+  // =========================================================================
+  // BLUR EFFECTS
+  // =========================================================================
+  // xs é o véu de 4px atrás do modal: barato de propósito (overlays.scss).
+  --ros-blur-xs: 4px;
+  --ros-blur-sm: 8px;
+  --ros-blur-md: 12px;
+  --ros-blur-lg: 20px;
+  --ros-blur-xl: 30px;
+
+  // =========================================================================
+  // CAMADAS (z-index) que precisam passar por cima dos modais (9999)
+  // =========================================================================
+  // A dica é passageira e vai acima de tudo o que ela pode apontar: o Quasar a põe em
+  // 9000, abaixo do fundo de todo modal. A confirmação do sistema (10002, no
+  // ROSConfirmHost) fica abaixo dela e acima dos menus (10001).
+  --ros-camada-dica: 10050;
+
+  // Backdrop filter
+  --ros-backdrop-blur: blur(var(--ros-blur-lg));
+  --ros-backdrop-blur-light: blur(var(--ros-blur-sm));
+
+  // =========================================================================
+  // LIQUID GLASS (iOS 26 / macOS Tahoe-inspired surfaces)
+  // Tier 1 (Chromium) = SVG feDisplacementMap + light blur (refraction).
+  // Tier 2 (Safari, Firefox) = stronger blur + saturate, no refraction.
+  // Low-end mode flattens everything to an opaque tint.
+  // Consumed by the `@mixin liquid-glass-surface` in liquid-glass.scss.
+  // =========================================================================
+  --ros-liquid-glass-tint: rgba(var(--ros-fill-rgb), 0.04);
+  --ros-liquid-glass-blur-tier1: blur(8px) saturate(160%);
+  --ros-liquid-glass-blur-tier2: blur(20px) saturate(160%);
+  // Edge bezel ring — kept very subtle so it reads as glass thickness,
+  // not a UI border. Top brighter (light from above), bottom darker.
+  --ros-liquid-glass-edge:
+    inset 0 0 0 1px rgba(var(--ros-fill-rgb), 0.1), inset 0 1px 0 rgba(var(--ros-fill-rgb), 0.15),
+    inset 0 -1px 0 rgba(var(--ros-shadow-rgb), 0.06);
+  // Drop shadow — minimal float depth, not a halo. Was previously too
+  // strong (0 8px 24px rgba 0.25) which made dock + chips look
+  // detached and "tilted".
+  --ros-liquid-glass-drop-shadow: 0 2px 6px rgba(var(--ros-shadow-rgb), 0.12);
+  // Specular highlight — soft and small, hint of light on top-left
+  // corner. Was 0.18; reduced to 0.08 so it doesn't read as a "halo".
+  --ros-liquid-glass-specular: radial-gradient(
+    ellipse 70% 50% at 30% 15%,
+    rgba(var(--ros-fill-rgb), 0.08) 0%,
+    rgba(var(--ros-fill-rgb), 0) 70%
+  );
+
+  // =========================================================================
+  // SHADOWS (legacy named shadows, mapped to elevation where appropriate)
+  // =========================================================================
+  --ros-shadow-window: 0 20px 60px rgba(var(--ros-shadow-rgb), 0.4);
+  --ros-shadow-window-active: 0 25px 80px rgba(var(--ros-shadow-rgb), 0.5);
+  --ros-shadow-dock: 0 0 30px rgba(var(--ros-shadow-rgb), 0.3);
+  --ros-shadow-menu: 0 8px 32px rgba(var(--ros-shadow-rgb), 0.5);
+  --ros-shadow-modal: 0 25px 80px rgba(var(--ros-shadow-rgb), 0.6);
+
+  // =========================================================================
+  // ANIMATION DURATIONS
+  // =========================================================================
+  --ros-duration-fast: 150ms;
+  --ros-duration-normal: 200ms;
+  --ros-duration-slow: 300ms;
+  --ros-duration-slower: 400ms;
+
+  // =========================================================================
+  // EASING PRESETS
+  // Named curves for consistent motion across the system
+  // =========================================================================
+  --ros-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ros-ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --ros-ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+  --ros-ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ros-ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ros-ease-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  // =========================================================================
+  // TRANSITION PRESETS
+  // =========================================================================
+  --ros-transition-fast: var(--ros-duration-fast) var(--ros-ease-default);
+  --ros-transition-normal: var(--ros-duration-normal) var(--ros-ease-default);
+  --ros-transition-slow: var(--ros-duration-slow) var(--ros-ease-default);
+}
+
+// Low-end mode overrides
+html[data-low-end='1'] {
+  // Disable blur effects
+  --ros-blur-xs: 0px;
+  --ros-blur-sm: 0px;
+  --ros-blur-md: 0px;
+  --ros-blur-lg: 0px;
+  --ros-blur-xl: 0px;
+
+  // Disable backdrop filter
+  --ros-backdrop-blur: none;
+  --ros-backdrop-blur-light: none;
+
+  // Liquid glass collapses to opaque tint — refraction + specular off
+  --ros-liquid-glass-tint: rgba(30, 30, 30, 0.85);
+  --ros-liquid-glass-blur-tier1: none;
+  --ros-liquid-glass-blur-tier2: none;
+  --ros-liquid-glass-edge: none;
+  --ros-liquid-glass-drop-shadow: 0 2px 6px rgba(var(--ros-shadow-rgb), 0.3);
+  --ros-liquid-glass-specular: none;
+
+  // Simplified shadows
+  --ros-shadow-window: 0 4px 16px rgba(var(--ros-shadow-rgb), 0.3);
+  --ros-shadow-window-active: 0 6px 24px rgba(var(--ros-shadow-rgb), 0.4);
+  --ros-shadow-dock: 0 0 8px rgba(var(--ros-shadow-rgb), 0.2);
+  --ros-shadow-menu: 0 4px 12px rgba(var(--ros-shadow-rgb), 0.3);
+  --ros-shadow-modal: 0 8px 32px rgba(var(--ros-shadow-rgb), 0.4);
+
+  // Simplified elevation
+  --ros-elevation-1: 0 1px 2px rgba(var(--ros-shadow-rgb), 0.15);
+  --ros-elevation-2: 0 2px 4px rgba(var(--ros-shadow-rgb), 0.2);
+  --ros-elevation-3: 0 4px 8px rgba(var(--ros-shadow-rgb), 0.25);
+  --ros-elevation-4: 0 4px 16px rgba(var(--ros-shadow-rgb), 0.3);
+  --ros-elevation-5: 0 6px 24px rgba(var(--ros-shadow-rgb), 0.35);
+
+  // Faster animations
+  --ros-duration-fast: 50ms;
+  --ros-duration-normal: 100ms;
+  --ros-duration-slow: 150ms;
+  --ros-duration-slower: 200ms;
+
+  // Simpler easing (all presets simplified)
+  --ros-ease-default: ease-out;
+  --ros-ease-decelerate: ease-out;
+  --ros-ease-accelerate: ease-out;
+  --ros-ease-bounce: ease-out;
+  --ros-ease-spring: ease-out;
+  --ros-ease-smooth: ease-out;
+}

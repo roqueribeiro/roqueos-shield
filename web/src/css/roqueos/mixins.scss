@@ -1,0 +1,60 @@
+// =============================================================================
+// MIXINS DO SISTEMA
+//
+// Comportamento de CSS que se repete em muitos componentes e precisa ser IGUAL em
+// todos. Chega a qualquer folha que importa `tokens.scss` (ele importa este
+// arquivo no fim), então quem já usa os tokens não precisa de mais nada.
+//
+// Mixin não emite CSS sozinho: importar este arquivo em mil folhas não custa um
+// byte no bundle. O CSS sai só onde alguém faz `@include`.
+// =============================================================================
+
+// Barra de rolagem escondida: o conteúdo continua rolando (toque, roda, trackpad,
+// arrasto), mas a trilha nunca é pintada. É o padrão das faixas horizontais de
+// abas e de ferramentas, e dos overlays (regra 21).
+//
+// ⚠️ Era escrito à mão em vinte arquivos como `&::-webkit-scrollbar { display: none }`,
+// que só vale no Chromium e no Safari: no Firefox a barra aparecia. A classe
+// `.ros-scrollbar-hidden` (scrollbars.scss) e este mixin são a mesma regra; use a
+// classe no template quando der, e o mixin quando o elemento é de outra folha.
+@mixin ros-scrollbar-hidden {
+  scrollbar-width: none; // Firefox
+  -ms-overflow-style: none; // Edge antigo
+
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+}
+
+// Faixa de etiquetas, comandos ou abas feitas à mão que rola de lado sem barra pintada
+// (regra 21). No dedo o arrasto alcança tudo; no mouse a roda é vertical e a barra não
+// existe, e o que ficava de fora não tinha como ser alcançado (Goal 71, a varredura do
+// inalcançável: o Placar a 720 mostrava 668px de 1.369). No mouse ela quebra em linhas.
+// Fileira de abas do sistema é o ROSTabs, que no mouse ganha setas.
+@mixin ros-faixa-alcancavel {
+  overflow-x: auto;
+  @include ros-scrollbar-hidden;
+
+  @media (pointer: fine) {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
+
+// Os dois pontos de quebra do sistema (regra 10): celular abaixo de 600px, tablet
+// abaixo de 768px. Antes deles, o código tinha 32 larguras diferentes em `@media`
+// (600, 599, 500, 480, 720, 767...), e cada app virava celular numa largura sua.
+// Use `@include ros-celular { ... }` no lugar do `@media` escrito à mão.
+@mixin ros-celular {
+  @media (max-width: 600px) {
+    @content;
+  }
+}
+
+@mixin ros-tablet {
+  @media (max-width: 768px) {
+    @content;
+  }
+}

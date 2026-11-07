@@ -1,0 +1,780 @@
+// ==================== QUASAR OVERRIDES FOR ROQUEOS ====================
+.ros-layout {
+  // Remove white shadow from all dialogs
+  .q-dialog {
+    .q-card {
+      box-shadow: var(--ros-elevation-3) !important;
+    }
+  }
+}
+
+// ==================== ROS MODAL (Global) ====================
+.ros-modal-overlay {
+  position: fixed;
+  inset: 0;
+  // Revisão visual de 09/10/2026: o escuro do fundo cai de 0,6 para 0,45 e o card ganha
+  // separação pela sombra larga, não por apagar a tela. O blur fica em 4px de propósito:
+  // subir o raio custa GPU num overlay de tela cheia, e isso não se faz sem medir no
+  // aparelho-alvo.
+  background: rgba(var(--ros-scrim-rgb), 0.45);
+  backdrop-filter: blur(var(--ros-blur-xs));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  // The OS keyboard covers the bottom of the screen without shrinking the
+  // layout viewport, so a vertically centred card keeps its footer (Cancel /
+  // Confirm) behind the keyboard on almost every form modal. Padding the
+  // overlay shrinks the box the card centres in, lifting it into what is
+  // actually visible. Driven by `useKeyboardInset`, 0 when no keyboard is up.
+  padding-bottom: calc(20px + var(--ros-keyboard-inset, 0px));
+  // Scroll chaining guard: if the user swipes on the backdrop (which
+  // doesn't scroll), don't let that gesture leak through to anything
+  // beneath the overlay. Pair with the body-lock CSS (core.scss).
+  overscroll-behavior: contain;
+
+  // Capacitor: respeitar safe-area (notch, home indicator)
+  .capacitor-app & {
+    padding-top: max(20px, var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+    padding-bottom: max(20px, var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+    padding-left: max(20px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
+    padding-right: max(20px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px)));
+  }
+}
+
+.ros-modal {
+  // Frosted glass forte — o blur do modal é o que separa visualmente
+  // o painel do resto da tela. saturate(180%) recupera a cor depois do
+  // blur, dando o efeito "frosted" típico de macOS/iOS em vez de "lavado".
+  // Opacidade sobe pra 0.78 (de 0.65) pra garantir leitura sobre fundos
+  // coloridos/movimentados (wallpapers, apps com canvas, etc.). Aplica
+  // a TODAS as variantes (sm/md/lg/xl/fullscreen) e tipos de modal.
+  // A superfície do tema (30, 30, 30 no padrão): o vidro do modal acompanha o tema (Goal 70).
+  background: rgba(var(--ros-surface-0-rgb), 0.78);
+  backdrop-filter: blur(60px) saturate(180%);
+  -webkit-backdrop-filter: blur(60px) saturate(180%);
+  // A borda é um anel de vidro (claro no topo, a luz vem de cima) e a sombra é larga e
+  // suave. No modo economia o anel some pelo token e o low-end-mode.scss devolve uma
+  // borda de 1px, senão o card opaco não se separa do fundo escuro.
+  border: none;
+  border-radius: var(--ros-radius-lg);
+  box-shadow: var(--ros-liquid-glass-edge), var(--ros-shadow-modal);
+  max-width: 420px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  // The keyboard inset comes off the card's OWN height, not just the overlay
+  // padding. Padding alone shrinks the box the card centres in, but a card
+  // taller than that box overflows it in both directions and puts the footer
+  // back under the keyboard. Measured on an Android emulator with a real 360px
+  // keyboard: the inset and the padding were both correct and the footer was
+  // still hidden, because the card was still ~770px tall in a 411px space.
+  max-height: calc(100dvh - 40px - var(--ros-keyboard-inset, 0px));
+
+  // Capacitor: descontar safe-area do max-height
+  .capacitor-app & {
+    max-height: calc(
+      100dvh - max(20px, var(--safe-area-inset-top, 0px)) - max(
+          20px,
+          var(--safe-area-inset-bottom, 0px)
+        ) - var(--ros-keyboard-inset, 0px)
+    );
+  }
+  overflow: hidden;
+  animation: modal-slide-up var(--ros-duration-normal) var(--ros-ease-decelerate);
+
+  // O card recebe foco quando não tem nada focável dentro (um progresso), só para o Esc
+  // e o leitor de tela; ele não é um controle, então o anel do foco não diz nada ali.
+  &:focus-visible {
+    outline: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+
+  &--sm {
+    max-width: 360px;
+  }
+
+  &--md {
+    max-width: 420px;
+  }
+
+  &--lg {
+    max-width: 720px;
+  }
+
+  &--xl {
+    max-width: 980px;
+  }
+
+  &--fullscreen {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    border-radius: 0 !important;
+  }
+
+  &__header {
+    display: flex;
+    // Top-align so the icon sits beside the title's FIRST line. With `center`,
+    // a tall header block (a wrapping title and/or a long subtitle) pushed the
+    // icon to the block's vertical middle, leaving the title's first line
+    // floating ABOVE the icon — reported on the permanent-delete modal
+    // ("Excluir arquivo permanentemente" + a long "Tem certeza…" subtitle).
+    // The title block below carries a min-height so single-line titles still
+    // read as optically centered against the icon (no regression).
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 14px;
+    // Sem divisória: o espaço separa o cabeçalho do corpo. A linha volta só quando o
+    // corpo rola (`--rolando`, ligado pelo ROSModal), para o que some por baixo ter onde
+    // sumir.
+    padding: var(--ros-space-6) var(--ros-space-6) 0;
+    border-bottom: 1px solid transparent;
+    flex-shrink: 0;
+  }
+
+  &--rolando &__header {
+    padding-bottom: 16px;
+    border-bottom-color: rgba(var(--ros-line-rgb), 0.08);
+  }
+
+  &__icon,
+  &__header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    // Ladrilho neutro com anel, no lugar do gradiente da marca: o ícone informa, quem
+    // chama atenção é o título. As variantes tingem o fundo a 16% com a cor do estado.
+    background: var(--ros-fill-08);
+    box-shadow: inset 0 0 0 1px var(--ros-fill-10);
+    border-radius: var(--ros-radius-md);
+    color: var(--ros-text-100);
+    flex-shrink: 0;
+
+    &--image {
+      background: var(--ros-fill-08);
+      overflow: hidden;
+
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+    }
+
+    &--danger {
+      background: rgba(var(--ros-danger-rgb), 0.16);
+      box-shadow: none;
+      color: var(--ros-danger);
+    }
+
+    &--warning {
+      background: rgba(var(--ros-warning-rgb), 0.16);
+      box-shadow: none;
+      color: var(--ros-warning);
+    }
+
+    &--success {
+      background: rgba(var(--ros-success-rgb), 0.16);
+      box-shadow: none;
+      color: var(--ros-success);
+    }
+
+    &--info {
+      background: rgba(var(--ros-accent-rgb), 0.16);
+      box-shadow: none;
+      color: var(--ros-accent);
+    }
+  }
+
+  &__title,
+  &__header-text {
+    flex: 1;
+    min-width: 0;
+    // Match the icon box height and center title+subtitle as a group: a
+    // single-line title stays optically centered against the icon, while a
+    // taller block keeps its first line aligned to the icon top (the header
+    // is align-items: flex-start).
+    min-height: 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+
+    h3 {
+      margin: 0;
+      font-size: var(--ros-text-xl);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      // Tight, explicit line-height: a bare <h3> otherwise inherits the global
+      // heading line-height (~50px for this 15px size), which blew the gap
+      // between a wrapping title's lines wide open ("Excluir arquivo" /
+      // "permanentemente"). 1.3 keeps a 1-line title inside the 40px icon box.
+      line-height: 1.3;
+      color: $ros-text;
+      // Palavra sem espaço maior que a linha (um nome de arquivo, um composto alemão)
+      // quebra em vez de passar por baixo do botão de fechar, com hífen onde o idioma
+      // deixa. No celular de 320px o título desce para 16px: com ícone, fechar e uma ação
+      // no cabeçalho sobram uns 90px, e "Downloaded" partia ao meio.
+      // `word-break` e o prefixo cobrem o Safari 14 do build target, que não tem
+      // `overflow-wrap: anywhere` (15.4) nem `hyphens` sem prefixo (17).
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      -webkit-hyphens: auto;
+      hyphens: auto;
+
+      @media (max-width: 360px) {
+        font-size: var(--ros-text-lg);
+      }
+    }
+
+    p {
+      margin: 3px 0 0;
+      font-size: var(--ros-text-base);
+      line-height: 1.4;
+      color: $ros-text-subtle;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+  }
+
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  &__action-btn,
+  &__close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: var(--ros-radius-sm);
+    cursor: pointer;
+    color: var(--ros-text-72);
+    transition:
+      background-color var(--ros-duration-fast) var(--ros-ease-default),
+      color var(--ros-duration-fast) var(--ros-ease-default);
+    flex-shrink: 0;
+
+    &:hover {
+      background: var(--ros-fill-10);
+      color: var(--ros-text-100);
+    }
+
+    // O fechar é um círculo neutro: fechar não destrói nada, então o vermelho no hover
+    // anunciava um perigo que não existe.
+    &--close {
+      border-radius: 50%;
+      background: var(--ros-fill-08);
+
+      &:hover {
+        background: var(--ros-fill-14);
+      }
+    }
+
+    // No dedo o alvo cresce para 44px num `::after` e o botão fica com 28: a
+    // receita do ROSRowActionsMenu (21/09/2026). O `gap` do cabeçalho sobe
+    // para 16 no mesmo toque, senão o alvo do "fechar" invadia o do vizinho.
+    @media (pointer: coarse) {
+      position: relative;
+
+      &::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 44px;
+        height: 44px;
+      }
+    }
+  }
+
+  @media (pointer: coarse) {
+    &__header-actions {
+      gap: 16px;
+    }
+  }
+
+  &__content {
+    padding: 20px var(--ros-space-6);
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    // Scroll chaining guard: when the user hits the bottom/top of the
+    // modal content and keeps swiping, stop the gesture here instead
+    // of bubbling up to the document. Pairs with `overscroll-behavior`
+    // on the overlay and the body-lock in core.scss.
+    overscroll-behavior: contain;
+  }
+
+  &__input-group {
+    // Fora de modal (um formulário em linha, com o botão ao lado) quem usa zera pela custom
+    // property, sem :deep() no grupo do kit.
+    margin-bottom: var(--ros-input-group-gap, 16px);
+
+    // Rótulo em frase normal: MAIÚSCULAS de 12px liam como formulário de repartição.
+    label {
+      display: block;
+      font-size: var(--ros-text-base);
+      font-weight: 500;
+      color: var(--ros-text-72);
+      margin-bottom: 8px;
+    }
+  }
+
+  &__input {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 14px;
+    background: var(--ros-fill-05);
+    border: 1px solid var(--ros-line-15);
+    border-radius: var(--ros-radius-md);
+    color: var(--ros-text-100);
+    font-size: var(--ros-text-md);
+    outline: none;
+    transition:
+      border-color var(--ros-duration-fast) var(--ros-ease-default),
+      box-shadow var(--ros-duration-fast) var(--ros-ease-default);
+
+    &::placeholder {
+      color: var(--ros-text-50);
+    }
+
+    // O foco é um anel de 3px no accent: a borda clara de antes mal se via no vidro.
+    &:focus {
+      border-color: var(--ros-accent);
+      background: var(--ros-fill-08);
+      box-shadow: 0 0 0 3px rgba(var(--ros-accent-rgb), 0.3);
+    }
+  }
+
+  &__select {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 14px;
+    background: var(--ros-fill-05);
+    border: 1px solid var(--ros-line-15);
+    border-radius: var(--ros-radius-md);
+    color: var(--ros-text-100);
+    font-size: var(--ros-text-md);
+    outline: none;
+    cursor: pointer;
+    transition: all var(--ros-duration-normal);
+
+    option {
+      background: #2d2d2d;
+      color: var(--ros-text-100);
+    }
+
+    &:focus {
+      border-color: var(--ros-accent);
+      box-shadow: 0 0 0 3px rgba(var(--ros-accent-rgb), 0.3);
+    }
+  }
+
+  &__checkbox-group {
+    margin-top: 16px;
+
+    label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: var(--ros-text-md);
+      color: var(--ros-text-80);
+      cursor: pointer;
+
+      input[type='checkbox'] {
+        width: 18px;
+        height: 18px;
+        accent-color: $ros-accent;
+      }
+    }
+  }
+
+  // Rodapé sem faixa escura e sem linha: os botões ficam no mesmo vidro do resto.
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 4px var(--ros-space-6) var(--ros-space-6);
+    border-top: 1px solid transparent;
+    flex-shrink: 0;
+  }
+
+  &__footer--no-content {
+    padding-top: 20px;
+  }
+
+  &--rolando &__footer {
+    padding-top: 16px;
+    border-top-color: rgba(var(--ros-line-rgb), 0.08);
+  }
+
+  &__btn {
+    @extend .ros-btn;
+    // Do tamanho de um botão de verdade: 40px no mouse, 44px no dedo (o mínimo da Apple),
+    // com o mesmo canto do campo. O `.ros-btn` global continua como está.
+    min-height: 40px;
+    padding: 0 18px;
+    border-radius: var(--ros-radius-md);
+
+    @media (pointer: coarse) {
+      min-height: 44px;
+    }
+
+    // Action buttons MUST carry short labels (see the "Botões: rótulo curto"
+    // rule in 10-ui-patterns.md). This is a safety net: a longer-than-expected
+    // label degrades to a single ellipsised line instead of wrapping into an
+    // ugly multi-line / cramped button (reported on the Add Link modal, where
+    // "Adicionar à Área de Trabalho" wrapped to two lines on a phone).
+    max-width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    // Cancelar é tonal: o ghost transparente sumia no vidro e parecia texto solto.
+    &--cancel,
+    &--secondary {
+      background: var(--ros-fill-10);
+      color: var(--ros-text-100);
+
+      &:hover {
+        background: var(--ros-fill-16);
+        color: var(--ros-text-100);
+      }
+    }
+
+    // Primário claro com texto escuro. O cinza #3a3a3a de antes não parecia o principal.
+    &--confirm,
+    &--primary {
+      background: var(--ros-modal-btn-primary-bg);
+      color: var(--ros-modal-btn-primary-text);
+      font-weight: 600;
+
+      &:hover {
+        background: var(--ros-modal-btn-primary-bg);
+        opacity: 0.88;
+      }
+    }
+
+    &--danger {
+      background: var(--ros-modal-btn-danger-bg);
+      color: var(--ros-btn-danger-text);
+      font-weight: 600;
+
+      &:hover {
+        background: var(--ros-modal-btn-danger-bg-hover);
+      }
+    }
+
+    &--warning {
+      background: var(--ros-modal-btn-warning-bg);
+      color: var(--ros-modal-btn-warning-text);
+      font-weight: 600;
+
+      &:hover {
+        background: var(--ros-modal-btn-warning-bg);
+        opacity: 0.88;
+      }
+    }
+
+    &:disabled,
+    &[disabled] {
+      background: var(--ros-fill-10);
+      color: var(--ros-text-50);
+      opacity: 1;
+      cursor: not-allowed;
+    }
+  }
+}
+
+@keyframes modal-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity var(--ros-duration-normal) ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+// ==================== ROS MODAL — MOBILE SHEET (OPT-IN) ====================
+// On phones, a modal becomes a full-screen bottom sheet ONLY when it opts in
+// via `:mobile-sheet="true"` (e.g. ServerOnboardingModal's hero). By default
+// every modal — including lg/xl forms and pickers — stays a CENTERED CARD on
+// mobile (the "Nova Pasta" standard): the base `.ros-modal` already constrains
+// width to the viewport and scrolls __content internally. The flex-column panel
+// pins header + footer (no position:sticky needed, sidestepping the 100dvh-vs-
+// position:fixed iOS mismeasure). Canonical breakpoint: 768px (responsive.scss).
+//
+// ⚠️ AS DUAS PRIMEIRAS REGRAS PRECISAM DO `.capacitor-app` JUNTO, E ISSO NÃO É
+// ENFEITE. Lá em cima, `.capacitor-app .ros-modal-overlay` põe o padding de
+// safe-area e `.capacitor-app .ros-modal` corta o `max-height`. São dois
+// seletores de classe (0,2,0) contra um (0,1,0) daqui — então DENTRO DO APP a
+// folha nunca foi folha: ela nascia com 62px de padding no topo e a altura
+// capada, e sobrava uma faixa de papel de parede entre o rodapé dela e o fundo
+// da tela (ou o topo do teclado). Medido no simulador do iPhone 17 Pro contra
+// produção, com uma folha de verdade:
+//
+//     sem teclado  padT=62 padB=34  folha 62..840 num viewport de 874  → 34px
+//     com teclado  padT=62 padB=20  folha 62..519 num viewport de 539  → 20px
+//     com estes seletores            folha  0..539                     →  0
+//
+// E o double-count era duplo: o header e o rodapé da folha (logo abaixo) JÁ
+// somam a safe-area no próprio padding. O overlay somava de novo.
+@include ros-tablet {
+  .ros-modal-overlay--mobile-sheet,
+  .capacitor-app .ros-modal-overlay--mobile-sheet {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .ros-modal--mobile-sheet,
+  .capacitor-app .ros-modal--mobile-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    border: none;
+    animation: ros-modal-sheet-up 0.3s var(--ros-ease-decelerate);
+  }
+
+  // Tighter header: smaller icon, room for a long wrapping title, notch-safe top.
+  .ros-modal--mobile-sheet .ros-modal__header {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: calc(14px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) 16px 14px;
+  }
+
+  .ros-modal--mobile-sheet .ros-modal__icon,
+  .ros-modal--mobile-sheet .ros-modal__header-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .ros-modal--mobile-sheet .ros-modal__title h3 {
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .ros-modal--mobile-sheet .ros-modal__content {
+    padding: 16px;
+  }
+
+  // Footer hugs the bottom edge, clear of the home indicator.
+  .ros-modal--mobile-sheet .ros-modal__footer {
+    padding: 12px 16px calc(12px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  }
+}
+
+@keyframes ros-modal-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ==================== GLOBAL CONTEXT MENU STYLES ====================
+// Apply to all q-menu in the system for consistent visual appearance
+.q-menu {
+  background: rgba(var(--ros-surface-1-rgb), 0.98) !important;
+  backdrop-filter: blur(var(--ros-blur-lg));
+  -webkit-backdrop-filter: blur(var(--ros-blur-lg));
+  border-radius: var(--ros-radius-md) !important;
+  border: 1px solid rgba(var(--ros-line-rgb), 0.1) !important;
+  box-shadow: var(--ros-elevation-3) !important;
+  padding: 6px !important;
+  min-width: 160px;
+
+  // Override default Quasar menu styles
+  .q-list {
+    padding: 0;
+    color: var(--ros-text-90);
+  }
+
+  .q-item {
+    min-height: 36px;
+    border-radius: var(--ros-radius-sm);
+    padding: 8px 12px;
+    color: var(--ros-text-90);
+    transition: background var(--ros-duration-fast) ease;
+
+    &:hover,
+    &:focus {
+      background: var(--ros-fill-10);
+    }
+
+    &--active,
+    &.q-item--active {
+      background: rgba(var(--ros-accent-rgb), 0.3);
+      color: var(--ros-text-100);
+    }
+  }
+
+  .q-item__section--avatar {
+    min-width: 32px;
+    padding-right: 8px;
+
+    .q-icon {
+      color: var(--ros-text-70);
+    }
+  }
+
+  .q-item__section--side {
+    color: rgba(var(--ros-text-rgb), 0.62);
+    font-size: var(--ros-text-sm);
+  }
+
+  .q-separator {
+    background: var(--ros-fill-10);
+    margin: 4px 0;
+  }
+
+  // Submenu arrow
+  .q-item__section--side .q-icon {
+    color: var(--ros-text-40);
+  }
+}
+
+body.ros-modal-open {
+  .q-menu {
+    z-index: 10001 !important;
+  }
+}
+
+// Menu item label styling
+.q-menu .q-item__label {
+  color: var(--ros-text-90);
+  font-size: var(--ros-text-base);
+}
+
+// Keyboard shortcut styling in menus
+.q-menu .q-item__section--side:not(.q-item__section--avatar) {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  font-size: var(--ros-text-sm);
+  color: var(--ros-text-55);
+}
+
+// ==================== ROS MODAL: CONFIRMAÇÃO CENTRALIZADA ====================
+// `type="confirm"` e `type="alert"` (até `md`) leem como uma pergunta: ícone em cima,
+// título e subtítulo centralizados, botões dividindo a largura. O ROSModal liga a classe;
+// o fechar e o `#header-right` vão para o canto. Corpo com lista ou campo continua
+// alinhado no início: só o parágrafo direto do corpo centraliza.
+.ros-modal--centrado {
+  .ros-modal__header {
+    position: relative;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+    padding-top: 28px;
+  }
+
+  .ros-modal__icon,
+  .ros-modal__header-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+  }
+
+  .ros-modal__title,
+  .ros-modal__header-text {
+    min-height: 0;
+    width: 100%;
+
+    p {
+      margin-top: 6px;
+    }
+  }
+
+  .ros-modal__header-actions {
+    position: absolute;
+    top: 12px;
+    // Lado físico, não `inset-inline-end`: o Safari 14.0 do build target não tem a
+    // propriedade lógica, e `right` mais ela no RTL esticaria o bloco de ponta a ponta.
+    right: 12px;
+
+    html[dir='rtl'] & {
+      right: auto;
+      left: 12px;
+    }
+  }
+
+  .ros-modal__content {
+    padding-top: 12px;
+
+    > p {
+      text-align: center;
+    }
+  }
+
+  .ros-modal__footer {
+    padding-top: 8px;
+  }
+}
+
+// Na confirmação e no celular os botões diretos do rodapé dividem a largura: alvo maior
+// e nenhum botão sobrando sozinho no canto. Cada um tem no mínimo metade da linha e
+// cresce com o rótulo; um rótulo que não cabe na metade desce para a linha de baixo,
+// inteiro, em vez de virar reticências. Rodapé com wrapper próprio (checkbox,
+// espaçador) fica como o componente desenhou.
+@mixin ros-modal-rodape-dividido {
+  flex-wrap: wrap;
+
+  > .ros-modal__btn {
+    flex: 1 0 auto;
+    min-width: calc(50% - 5px);
+  }
+}
+
+.ros-modal--centrado .ros-modal__footer {
+  @include ros-modal-rodape-dividido;
+}
+
+@include ros-celular {
+  .ros-modal__footer {
+    @include ros-modal-rodape-dividido;
+  }
+}

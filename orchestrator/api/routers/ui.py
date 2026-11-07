@@ -8,7 +8,7 @@ Rotas (prefixo `/ui/api`):
   GET  /ai-runs/stats     — agregações: count by model, p50/p95 latency, fallback rate
   GET  /events            — SSE: live logs + phase updates
 
-Auth: `X-API-Token` ou `?token=...` na query (UI mesmo origem).
+Auth: qualquer credencial da API (ver `_ui_token`); `?token=` só no SSE.
 """
 
 from __future__ import annotations
@@ -19,45 +19,72 @@ from collections import Counter
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Security, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, func
 from sqlmodel import col, select
 
 from orchestrator.ai.observability import sse_stream
+from orchestrator.api import deps
 from orchestrator.api.deps import SessionDep
 from orchestrator.config import settings
+from orchestrator.domain.roles import Permission, has_permission
 from orchestrator.persistence.models import AIRun, FindingRow, ScanRow, TargetRow
 
 router = APIRouter(prefix="/ui/api", tags=["ui"])
 
 
+async def _principal_ou_nada(
+    session: SessionDep,
+    x_api_token: Annotated[str | None, Security(deps._ESQUEMA_TOKEN)] = None,
+    bearer: Annotated[object | None, Security(deps._ESQUEMA_BEARER)] = None,
+    rs_session: Annotated[
+        str | None, Cookie(alias=deps.COOKIE_SESSAO, include_in_schema=False)
+    ] = None,
+    request: Request = None,  # type: ignore[assignment]
+) -> deps.Principal | None:
+    if not (x_api_token or bearer or rs_session):
+        return None
+    return await deps.get_principal(
+        session=session,
+        x_api_token=x_api_token,
+        bearer=bearer,
+        rs_session=rs_session,
+        request=request,
+    )
+
+
 async def _ui_token(
     request: Request,
-    x_api_token: Annotated[str | None, Header(alias="X-API-Token")] = None,
-    token: Annotated[str | None, Query()] = None,
+    token: Annotated[str | None, Query(include_in_schema=False)] = None,
+    principal: Annotated[deps.Principal | None, Depends(_principal_ou_nada)] = None,
 ) -> str:
-    """Auth UI.
+    """Auth das leituras da tela.
 
-    Aceita o header `X-API-Token` em qualquer endpoint. Aceita `?token=...` SOMENTE
-    em `/ui/api/events` — SSE não suporta headers customizados, então a query é
-    inevitável. Em todos os outros endpoints, o `?token=` é rejeitado pra evitar
-    que o token vaze em logs, Referer e cache de browser.
+    Qualquer credencial que o resto da API aceita vale aqui (token de serviço, token
+    de usuário, sessão OIDC, cookie da tela standalone), com a permissão de ler scans.
+    Até o standalone só o `APP_TOKEN` entrava, porque o único cliente era o proxy do
+    RoqueOS, que injeta esse token.
 
-    Compara com `hmac.compare_digest` pra mitigar timing attack.
+    `?token=` continua aceito SOMENTE em `/ui/api/events` e só com o `APP_TOKEN`: é o
+    caminho legado do SSE (EventSource não manda cabeçalho). A tela standalone não usa,
+    porque o cookie vai sozinho no mesmo endereço. Em qualquer outra rota o `?token=` é
+    recusado, para o token não vazar em log, Referer e cache.
     """
-    if token is not None and not request.url.path.endswith("/events"):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="?token= permitido apenas em /ui/api/events; use X-API-Token header",
-        )
-    provided = x_api_token or token
-    if not provided or not hmac.compare_digest(provided, settings.APP_TOKEN):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="X-API-Token inválido",
-        )
-    return provided
+    if token is not None:
+        if not request.url.path.endswith("/events"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="?token= permitido apenas em /ui/api/events; use X-API-Token header",
+            )
+        if not hmac.compare_digest(token, settings.APP_TOKEN):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="token inválido")
+        return "service"
+    if principal is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="credenciais ausentes")
+    if not has_permission(principal.role, Permission.SCANS_READ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="permissão insuficiente")
+    return principal.email
 
 
 UIToken = Annotated[str, Depends(_ui_token)]

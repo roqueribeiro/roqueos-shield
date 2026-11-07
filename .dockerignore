@@ -1,0 +1,15 @@
+# O contexto do build não leva o que é da máquina de quem builda.
+.git
+.venv
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.qa-tmp
+**/__pycache__
+data
+reports
+web/node_modules
+web/.quasar
+# A tela entra pela imagem standalone, buildada lá dentro a partir de web/; um
+# build local esquecido aqui não pode vazar para a imagem do motor.
+orchestrator/web_dist

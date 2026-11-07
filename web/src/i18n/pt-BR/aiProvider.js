@@ -1,0 +1,106 @@
+// Sistema unificado de configuração de IA (provedores, modelos, LLM local, túnel).
+// Usado por AIProviderSheet, AILocalConnections, useAIProvider e o hub em Settings.
+export default {
+  imageGen: {
+    section: 'Geração de imagem',
+    intro: 'Escolha o motor que cria as imagens dos seus agentes.',
+    title: 'Motor de imagem',
+    desc: 'Provedor e modelo que o agente usa para gerar imagens. OpenAI e Google usam a mesma chave dos seus modelos de IA; Stability e FLUX usam uma chave própria.',
+    providerLabel: 'Provedor',
+    modelLabel: 'Modelo',
+    keyLabel: 'Chave de API',
+    keyPlaceholder: 'Cole a chave de API',
+    keyShared: 'Usa a mesma chave dos seus modelos de IA.',
+    keyOwn: 'Chave usada só para gerar imagens.',
+    saved: 'Configuração de imagem salva.',
+    removeKey: 'Remover chave',
+  },
+  toolKeys: {
+    title: 'Chaves de ferramentas',
+    intro:
+      'Acima ficam as chaves dos modelos. Aqui ficam as chaves do que o agente CONSEGUE FAZER. Cada uma vale para os seus agentes, fluxos e automações.',
+    on: 'Configurada',
+    off: 'Não configurada',
+    keyLabel: 'Chave',
+    stored: 'Chave guardada. Digite uma nova para substituir.',
+    test: 'Testar',
+    getKey: 'Obter uma chave',
+    saved: 'Chave salva.',
+    removed: 'Chave removida.',
+    removeTitle: 'Remover a chave?',
+    removeSubtitle: '{name} volta a ficar indisponível para os seus agentes.',
+    tavily: {
+      title: 'Busca na web',
+      desc: 'Deixa o agente pesquisar na internet e citar as fontes. Sem ela, ele avisa que não consegue buscar em vez de inventar.',
+      hint: 'Usamos o Tavily. O plano gratuito dá 1.000 buscas por mês.',
+      placeholder: 'tvly-...',
+    },
+  },
+  title: 'Provedores de IA',
+  hubSubtitle: 'Configure suas chaves e modelos uma vez',
+  pickerSubtitle: 'Escolha o modelo de IA',
+  serverRequired: 'Conecte um servidor RoqueOS para listar os modelos automaticamente.', // Chaves dos provedores
+  providerKeys: 'Chaves dos provedores',
+  configuredPlaceholder: '•••••••• Configurada',
+  notConfigured: 'Não configurada',
+  getKey: 'Obter chave',
+  moreProviders: 'Mais provedores',
+  fewerProviders: 'Menos provedores', // LLM local + túnel
+  localTitle: 'LLM local (LM Studio / Ollama)',
+  localDesc:
+    'Conecte um modelo rodando na sua máquina ou rede. Gere um túnel Cloudflare para acessá-lo de qualquer lugar do mundo.',
+  connectionName: 'Nome da conexão',
+  connectionNamePlaceholder: 'Ex.: Meu LM Studio',
+  endpoint: 'Endereço (OpenAI-compatible)',
+  endpointPlaceholder: 'http://192.168.0.10:1234/v1',
+  optionalKey: 'Chave (opcional)',
+  optionalKeyPlaceholder: 'Deixe em branco para "local"',
+  apiKey: 'Chave de API',
+  apiKeyPlaceholder: 'Cole a chave deste provedor',
+  addConnection: 'Adicionar conexão',
+  noConnections: 'Nenhuma conexão local ainda.',
+  generateTunnel: 'Gerar túnel',
+  stopTunnel: 'Parar túnel',
+  tunnelRunning: 'No ar',
+  tunnelStarting: 'Iniciando',
+  tunnelError: 'Erro',
+  tunnelOff: 'Desligado',
+  copyUrl: 'Copiar URL',
+  tunnelHint:
+    'O túnel expõe o endpoint local via Cloudflare, o servidor precisa alcançar a máquina do LLM.',
+  tunnelFailed: 'Não foi possível gerar o túnel. Verifique se o servidor alcança o endpoint.', // Modelos
+  chooseModel: 'Escolha o modelo',
+  listModels: 'Listar modelos disponíveis',
+  listing: 'Buscando modelos…',
+  fetchPartial: 'Não consegui listar de: {providers}. Mostrando modelos conhecidos.',
+  model: 'Modelo principal',
+  fallbackModel: 'Modelo de fallback',
+  modelsFound: '{n} modelos disponíveis',
+  modelPlaceholder: 'Ex.: openai/gpt-4o-mini',
+  fallbackPlaceholder: 'Opcional',
+  noFallback: 'Sem fallback', // Campo de modelo (AIModelField), usado por Chat, Automações, Fluxos, Pentest
+  chooseModelCta: 'Escolher modelo de IA',
+  fallbackShort: 'reserva',
+  ownShort: 'chave própria', // Override por superfície (picker)
+  ownCredentials: 'Usar credenciais próprias',
+  ownCredentialsHint:
+    'Este item usa uma chave/endpoint específicos, em vez dos provedores configurados no hub.',
+  provider: 'Provedor',
+  localOption: 'Endpoint local', // Ações / feedback
+  save: 'Salvar',
+  apply: 'Aplicar',
+  saved: 'Configuração de IA salva.',
+  connectionAdded: 'Conexão adicionada.',
+  connectionRemoved: 'Conexão removida.',
+  deleteConnection: 'Remover conexão?', // Hub (Settings → Provedores de IA)
+  hubDesc:
+    'Configure suas chaves de IA e conexões locais uma vez. Todos os apps (Chat, Fluxos, Automações…) usam esses provedores.',
+  manage: 'Configurar provedores de IA',
+  manageShort: 'Gerenciar',
+  connectServerHint:
+    'Conecte um servidor RoqueOS (na aba Servidor) para configurar provedores e listar modelos.',
+  summaryConfigured: '{n} provedor(es) com chave',
+  summaryNone: 'Nenhum provedor configurado ainda',
+  summaryConnections: '{n} conexão(ões) local(is)',
+  summaryDefault: 'Modelo padrão',
+}

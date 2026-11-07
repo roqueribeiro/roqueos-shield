@@ -1,0 +1,80 @@
+// =============================================================================
+// PREMIUM APP-ICON SURFACE
+// The elevated look for coloured app/link icons across the three icon surfaces:
+// the DOCK (ROSDockItem), the LAUNCHPAD (ROSLaunchpad) and the DESKTOP / mobile
+// grid tiles (ROSFileTile --surface). ONE mixin so the three stay identical as
+// we keep polishing the system's visuals.
+//
+// Layers — all SUBTLE ("refinado, não extravagante"):
+//   1. base colour gradient   → set inline per icon by the caller (kept as-is)
+//   2. specular highlight      → light catching the TOP of the squircle (::before)
+//   3. glass edge ring         → crisp lit-from-above border (inset shadows)
+//   4. depth + COLOURED glow   → grounded on the surface + a soft halo of the
+//                                icon's own hue (the "brilho")
+//   5. glyph drop-shadow       → the white glyph lifts off the coloured surface
+//
+// Colour-driven bits read a CSS var the caller sets from the icon colour:
+//   --app-icon-glow-rgb : "r, g, b" (via hexToRgbTriplet) → the coloured glow
+//
+// NO `overflow: hidden` here on purpose — the dock icon carries an absolutely
+// positioned badge that must not be clipped. The specular `::before` clips
+// itself with `border-radius: inherit`; the glow is a box-shadow (never clipped
+// by overflow). Low-end mode flattens everything (handled inside the mixin).
+// =============================================================================
+
+@mixin ros-app-icon-surface {
+  position: relative;
+  // Depth scales per surface (dock 52px keeps the defaults; the bigger Launchpad
+  // 72px tile bumps the vars). Glow alpha is a var so callers can "light up" the
+  // icon on hover/magnify without re-declaring the whole shadow stack.
+  box-shadow:
+    0 var(--app-icon-depth-y, 4px) var(--app-icon-depth-blur, 10px)
+      rgba(var(--ros-shadow-rgb), var(--app-icon-depth-a, 0.3)),
+    0 2px 16px rgba(var(--app-icon-glow-rgb, 0, 0, 0), var(--app-icon-glow-a, 0.32)),
+    inset 0 1px 0 rgba(var(--ros-fill-rgb), 0.28),
+    inset 0 -2px 5px rgba(var(--ros-shadow-rgb), 0.15);
+  transition: box-shadow var(--ros-duration-normal) var(--ros-ease-default);
+
+  // Specular highlight — soft light on the top of the squircle. Clips itself to
+  // the parent's radius so no `overflow: hidden` is needed (keeps the badge).
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 1;
+    background: linear-gradient(
+      to bottom,
+      rgba(var(--ros-fill-rgb), 0.22) 0%,
+      var(--ros-fill-05) 32%,
+      rgba(var(--ros-fill-rgb), 0) 60%
+    );
+  }
+
+  // Content sits above the sheen.
+  > .q-icon,
+  > img,
+  > svg {
+    position: relative;
+    z-index: 2;
+  }
+
+  // Only the glyph gets the depth shadow — favicons / photos keep their own look.
+  > .q-icon {
+    filter: drop-shadow(0 1px 1.5px rgba(var(--ros-shadow-rgb), 0.28));
+  }
+
+  // Low-end: flatten to one soft shadow — no specular, glow, ring or filter.
+  html[data-low-end='1'] & {
+    box-shadow: var(--ros-elevation-1);
+
+    &::before {
+      display: none;
+    }
+
+    > .q-icon {
+      filter: none;
+    }
+  }
+}

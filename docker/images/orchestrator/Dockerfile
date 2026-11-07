@@ -123,7 +123,11 @@ RUN set -eux; \
              "falhou em silencio -- o nuclei sairia sem verificar nada."; \
         exit 1; \
     fi; \
-    echo "${total}" > /opt/nuclei-templates/TEMPLATE_COUNT
+    echo "${total}" > /opt/nuclei-templates/TEMPLATE_COUNT; \
+    # O `-update-templates` cria as pastas com 0700. O build contava os templates como
+    # root e passava, mas o worker roda como UID 1000 e não lia nenhuma: o nuclei saía
+    # com "no templates provided" em todo scan desde a 0.4 (medido em 06/11/2026).
+    chmod -R a+rX /opt/nuclei-templates
 
 # ---- orchestrator -----------------------------------------------------------
 FROM python:3.13-slim AS base
@@ -218,6 +222,16 @@ RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin roqueos \
     && mkdir -p /app/reports /app/data \
     && chown -R 1000:1000 /app
 USER 1000
+# A conta que vale é a do usuário que roda o scan, não a do build. Abaixo do piso, o
+# build falha aqui, em vez de o nuclei sair "sem template" em produção.
+ARG NUCLEI_TEMPLATES_MIN=2000
+RUN set -eu; \
+    total="$(nuclei -duc -tl -t /opt/nuclei-templates -silent 2>/dev/null | wc -l)"; \
+    echo "templates do nuclei visíveis para o UID 1000: ${total}"; \
+    if [ "${total}" -lt "${NUCLEI_TEMPLATES_MIN}" ]; then \
+        echo "FALHA: o worker (UID 1000) enxerga só ${total} templates. Permissão de /opt/nuclei-templates?"; \
+        exit 1; \
+    fi
 
 EXPOSE 8080
 

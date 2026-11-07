@@ -1,0 +1,172 @@
+// =============================================================================
+// TOKENS DO ROQUEOS — A CAMADA DE APELIDO
+//
+// ⚠️ AQUI NÃO MORA COR NENHUMA. Cada `$ros-*` de cor é um apelido para a custom
+//    property de mesmo nome, e o VALOR mora em `tokens-root.scss`.
+//
+// Por quê: variável Sass some no build. `color: $ros-accent` vira
+// `color: #007aff` no CSS entregue, e nada em tempo de execução consegue
+// mudá-la — nem um tema, nem o usuário, nem o sistema operacional. Uma custom
+// property continua lá, e redefinir `--ros-accent` sob outro seletor troca o
+// produto inteiro.
+//
+// Esta camada existe para que os ~3.900 usos de `$ros-*` que já estavam
+// escritos nos componentes virassem temáveis SEM ninguém editar componente.
+//
+// ⚠️ FUNÇÃO DE COR DO SASS NÃO ACEITA `var()`. `rgba($ros-accent, .2)` não
+//    compila mais, de propósito: use `rgba(var(--ros-accent-rgb), .2)`. Os
+//    tripletes estão em `tokens-root.scss`, e o teste de arquitetura
+//    `tokens-scss.spec.js` reprova quem voltar a chamar.
+//
+// O que continua sendo valor de verdade aqui: tamanho, que não é tema.
+// =============================================================================
+
+$ros-dock-height: 70px;
+$ros-dock-height-mobile: 60px;
+$ros-menubar-height: 28px;
+$ros-window-header-height: 38px;
+$ros-window-border-radius: 10px;
+$ros-icon-size: 48px;
+$ros-icon-size-mobile: 44px;
+
+$ros-bg-dark: var(--ros-bg-dark);
+$ros-bg-light: var(--ros-bg-light);
+$ros-glass: var(--ros-glass);
+$ros-glass-border: var(--ros-glass-border);
+
+$ros-accent: var(--ros-accent);
+$ros-red: var(--ros-red);
+$ros-yellow: var(--ros-yellow);
+$ros-green: var(--ros-green);
+
+$ros-danger: var(--ros-danger);
+$ros-success: var(--ros-success);
+$ros-success-bright: var(--ros-success-bright);
+$ros-warning: var(--ros-warning);
+
+$ros-brand-gradient: var(--ros-brand-gradient);
+$ros-accent-gradient: var(--ros-accent-gradient);
+
+$ros-danger-gradient: var(--ros-danger-gradient);
+$ros-warning-gradient: var(--ros-warning-gradient);
+$ros-success-gradient: var(--ros-success-gradient);
+
+$ros-surface-0: var(--ros-surface-0);
+$ros-surface-1: var(--ros-surface-1);
+$ros-border-subtle: var(--ros-border-subtle);
+$ros-border-muted: var(--ros-border-muted);
+
+// ── PREENCHIMENTO SOBRE VIDRO ───────────────────────────────────────────────
+//
+// A escala de superfície: quanto maior o número, mais o elemento "sobe" do
+// fundo. Fundo de linha em repouso é 04; hover de item de lista é 08; chip
+// selecionado é 12.
+//
+// ⚠️ ESTES SEIS DEGRAUS NÃO FORAM PROJETADOS, ELES SE ACUMULARAM. Estavam
+// escritos à mão nos componentes — `rgba(255,255,255,0.08)` sozinho aparecia
+// 411 vezes. Nomeá-los é o primeiro passo e é o que este bloco faz; o segundo
+// é decidir quantos degraus a interface REALMENTE precisa, porque 04, 05 e 06
+// quase certamente são a mesma intenção escrita por três pessoas diferentes.
+//
+// Os valores são idênticos aos que já estavam no código, de propósito: esta
+// rodada renomeia, não redesenha. Colapsar a escala muda pixel e é decisão de
+// produto, não de refatoração.
+$ros-fill-04: var(--ros-fill-04);
+$ros-fill-05: var(--ros-fill-05);
+$ros-fill-06: var(--ros-fill-06);
+$ros-fill-08: var(--ros-fill-08);
+$ros-fill-10: var(--ros-fill-10);
+$ros-fill-12: var(--ros-fill-12);
+
+// ── BORDA ───────────────────────────────────────────────────────────────────
+//
+// `$ros-border-muted` (0.08) e `$ros-border-subtle` (0.12) já existiam e
+// continuam sendo os nomes canônicos. Estes dois preenchem os degraus que os
+// componentes usavam à mão e que não tinham nome nenhum.
+$ros-border-faint: var(--ros-border-faint);
+$ros-border-dim: var(--ros-border-dim);
+$ros-border-soft: var(--ros-border-soft);
+$ros-text: var(--ros-text);
+$ros-text-muted: var(--ros-text-muted);
+$ros-text-subtle: var(--ros-text-subtle);
+
+$ros-shadow-xl: var(--ros-shadow-xl);
+$ros-shadow-lg: var(--ros-shadow-lg);
+
+$ros-btn-bg: var(--ros-btn-bg);
+$ros-btn-bg-hover: var(--ros-btn-bg-hover);
+$ros-btn-text: var(--ros-btn-text);
+
+$ros-btn-ghost-bg-hover: var(--ros-btn-ghost-bg-hover);
+$ros-btn-ghost-text: var(--ros-btn-ghost-text);
+$ros-btn-ghost-text-hover: var(--ros-btn-ghost-text-hover);
+
+$ros-btn-danger-bg: var(--ros-btn-danger-bg);
+$ros-btn-danger-bg-hover: var(--ros-btn-danger-bg-hover);
+$ros-btn-danger-text: var(--ros-btn-danger-text);
+
+$ros-text-strong: var(--ros-text-strong);
+
+$ros-window-shadow: var(--ros-window-shadow);
+$ros-window-shadow-active: var(--ros-window-shadow-active);
+$ros-window-border: var(--ros-window-border);
+$ros-window-border-active: var(--ros-window-border-active);
+$ros-window-header-bg: var(--ros-window-header-bg);
+$ros-window-header-border: var(--ros-window-header-border);
+$ros-window-control-hover-color: var(--ros-window-control-hover-color);
+$ros-red-hover: var(--ros-red-hover);
+$ros-yellow-hover: var(--ros-yellow-hover);
+$ros-green-hover: var(--ros-green-hover);
+
+$ros-scrollbar-track: var(--ros-scrollbar-track);
+$ros-scrollbar-thumb: var(--ros-scrollbar-thumb);
+$ros-scrollbar-thumb-hover-soft: var(--ros-scrollbar-thumb-hover-soft);
+$ros-scrollbar-thumb-hover: var(--ros-scrollbar-thumb-hover);
+$ros-scrollbar-thumb-active: var(--ros-scrollbar-thumb-active);
+
+$ros-scrollbar-window-track: var(--ros-scrollbar-window-track);
+$ros-scrollbar-window-thumb: var(--ros-scrollbar-window-thumb);
+$ros-scrollbar-window-thumb-hover: var(--ros-scrollbar-window-thumb-hover);
+$ros-scrollbar-window-thumb-active: var(--ros-scrollbar-window-thumb-active);
+
+$ros-scrollbar-dark-track: var(--ros-scrollbar-dark-track);
+$ros-scrollbar-dark-thumb: var(--ros-scrollbar-dark-thumb);
+$ros-scrollbar-dark-thumb-hover: var(--ros-scrollbar-dark-thumb-hover);
+$ros-scrollbar-dark-thumb-active: var(--ros-scrollbar-dark-thumb-active);
+
+$ros-scrollbar-light-track: var(--ros-scrollbar-light-track);
+$ros-scrollbar-light-thumb: var(--ros-scrollbar-light-thumb);
+$ros-scrollbar-light-thumb-hover: var(--ros-scrollbar-light-thumb-hover);
+$ros-scrollbar-light-thumb-active: var(--ros-scrollbar-light-thumb-active);
+
+$ros-overlay-dim: var(--ros-overlay-dim);
+$ros-menubar-bg: var(--ros-menubar-bg);
+$ros-hover-bg: var(--ros-hover-bg);
+$ros-selection-bg: var(--ros-selection-bg);
+
+$ros-shadow-sm: var(--ros-shadow-sm);
+$ros-shadow-context: var(--ros-shadow-context);
+$ros-shadow-login: var(--ros-shadow-login);
+
+$ros-text-shadow-strong: var(--ros-text-shadow-strong);
+$ros-text-shadow-soft: var(--ros-text-shadow-soft);
+$ros-text-shadow-glow: var(--ros-text-shadow-glow);
+
+$ros-boot-bg: var(--ros-boot-bg);
+$ros-progress-track: var(--ros-progress-track);
+
+$ros-input-bg: var(--ros-input-bg);
+$ros-input-bg-focus: var(--ros-input-bg-focus);
+$ros-input-placeholder: var(--ros-input-placeholder);
+$ros-hint-text: var(--ros-hint-text);
+
+$ros-btn-glass-bg: var(--ros-btn-glass-bg);
+$ros-btn-glass-bg-hover: var(--ros-btn-glass-bg-hover);
+$ros-accent-hover: var(--ros-accent-hover);
+
+$ros-divider: var(--ros-divider);
+
+// Os mixins do sistema (mixins.scss) chegam junto: quem importa os tokens já tem
+// `@include ros-scrollbar-hidden` e os outros sem mais um import. Mixin não emite
+// CSS sozinho, então isto não custa nada no bundle.
+@import 'mixins.scss';

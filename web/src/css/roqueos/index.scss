@@ -1,0 +1,31 @@
+// fonts-override MUST come first so our stable-URL @font-face for Material
+// Icons is parsed before any other stylesheet that might ship its own.
+@import './fonts-override.scss';
+// Só os ícones MDI que o código usa (gerada por scripts/icones-mdi.mjs).
+@import './icones-mdi.scss';
+
+@import './tokens.scss';
+// ⚠️ tokens-root vem SÓ daqui. Ele emite `:root` e `html[data-low-end]`,
+//    e dentro de um `<style scoped>` isso vira regra morta. Ver o cabeçalho
+//    do arquivo.
+@import './tokens-root.scss';
+// Temas: so redefinem custom property, e por isso vem logo depois delas.
+@import './temas.scss';
+// Tokens que vestem superficie TELEPORTADA (q-menu e companhia). Globais
+// por necessidade: o menu vai para o <body>, fora da arvore do app.
+@import './tokens-popover.scss';
+@import './liquid-glass.scss';
+@import './app-icon.scss';
+@import './core.scss';
+@import './botoes.scss';
+@import './kit.scss';
+@import './kit-conteudo.scss';
+@import './components.scss';
+@import './dock.scss';
+@import './window.scss';
+@import './overlays.scss';
+@import './upload.scss';
+@import './scrollbars.scss';
+@import './responsive.scss';
+@import './low-end-mode.scss';
+@import './ui-scale.scss';

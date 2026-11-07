@@ -29,24 +29,24 @@ def draw(theme):
         [584, 584, 596],
         [
             dict(
-                title="CLI  cai",
-                tech="Typer · mesma imagem do orchestrator",
+                title="CLI  roqueshield · cai",
+                tech="Typer · cliente da API, e o cai in-process",
                 color=P["cyan"],
-                desc="cai scan <alvo> --asset-type url --criticality high\n"
-                'cai exposure "Empresa" --domains ex.com --github-orgs ex\n'
-                "cai bundle <scan_id> --out bundle.json\n\n"
-                "Roda in-process, sem subir API. É o caminho mais curto para um agente que "
-                "já tem shell — Claude Code, Cursor, um passo de CI.",
+                desc="roqueshield scan start <alvo> --wait --fail-on high\n"
+                "roqueshield report <scan_id> --format bundle -o bundle.json\n"
+                "cai scan <alvo>  (in-process, dentro da imagem)\n\n"
+                "Saída para CI: 0 ok, 1 achado no limite, 3 cobertura incompleta. "
+                "Zero achado com scanner que não rodou nunca sai 0.",
             ),
             dict(
                 title="API REST",
-                tech="FastAPI · 33 rotas · OpenAPI em /docs",
+                tech="FastAPI · OpenAPI em /docs · fotografia no repo",
                 color=P["accent"],
                 desc="POST /targets → POST /scans → 202\n"
                 "GET /scans/{id} · GET /findings?scan_id=…\n"
                 "GET /ui/api/events (SSE, fase e log ao vivo)\n\n"
-                "Autenticação por X-API-Key + X-API-Secret ou OIDC. É o que o RoqueOS "
-                "consome por trás do proxy, e é o que um serviço externo consome direto.",
+                "Token por usuário (X-API-Token), OIDC ou a sessão da tela. É o que o "
+                "RoqueOS consome por trás do proxy, e o que um serviço externo consome direto.",
             ),
             dict(
                 title="AI Fix Bundle",
@@ -58,6 +58,24 @@ def draw(theme):
                 "deduplicados. docs/ai-fix-bundle-spec.md é o contrato, e ele tem "
                 "número de versão porque quem consome precisa saber quando muda.",
             ),
+        ],
+        gap=24,
+    )
+    (s4,), y = row(
+        c,
+        X,
+        y + 20,
+        [W],
+        [
+            dict(
+                title="Servidor MCP",
+                tech="JSON-RPC · stdio (roqueshield mcp) e HTTP (POST /mcp)",
+                color=P["green"],
+                desc="list_scans · get_scan · get_findings · get_ai_bundle · list_targets, e "
+                "start_scan só com as ações ligadas e authorization_ref obrigatória.\n"
+                "Achado e bundle de scan que falhou ou veio com cobertura incompleta voltam com "
+                "isError e o motivo, nunca lista vazia: o silêncio não volta pela porta do protocolo.",
+            )
         ],
         gap=24,
     )
@@ -146,35 +164,21 @@ def draw(theme):
     c.para(
         X + 24,
         y + 74,
-        "As duas peças abaixo NÃO existem no repositório hoje. Estão desenhadas aqui como "
-        "proposta, não como funcionalidade: quem chegar procurando por elas no código não "
-        "vai encontrar. Medido em 2026-08-30: zero ocorrência de MCP em orchestrator/, e "
-        ".github/workflows/ tem um arquivo só, o ci.yml, sem workflow_call e sem action.yml.",
+        "A peça abaixo NÃO existe no repositório hoje. Está desenhada aqui como proposta, "
+        "não como funcionalidade: quem chegar procurando por ela no código não vai "
+        "encontrar. .github/workflows/ não tem workflow_call nem action.yml.",
         size=12,
         fill=t["ink_soft"],
         max_w=W - 48,
     )
 
     ry = y + 152
-    (m1, m2), _ = row(
+    (m1,), _ = row(
         c,
         X + 24,
         ry,
-        [860, 856],
+        [W - 48],
         [
-            dict(
-                title="Servidor MCP",
-                tech="proposta",
-                color=P["gray"],
-                desc="Tools que fariam sentido, uma por caso de uso real que hoje exige shell: "
-                "shield_scan(alvo, perfil), shield_status(scan_id), "
-                "shield_findings(scan_id, severidade), shield_bundle(scan_id) e "
-                "shield_compare(scan_a, scan_b).\n\n"
-                "O que falta: o servidor em si, o transporte, a autenticação por token de "
-                "serviço e um teste que prove que a tool devolve erro quando o scan falhou "
-                "— em vez de lista vazia, que é justamente o silêncio que o resto do "
-                "projeto combate.",
-            ),
             dict(
                 title="GitHub Action reutilizável",
                 tech="proposta",
@@ -206,7 +210,7 @@ def draw(theme):
 
     footer(
         c,
-        "fonte: orchestrator/cli.py · orchestrator/main.py · "
+        "fonte: orchestrator/cli.py · orchestrator/cliente/ · orchestrator/main.py · "
         "orchestrator/reporting/exporters/ai_bundle.py · docs/ai-fix-bundle-spec.md · "
         ".github/workflows/ci.yml",
         "github.com/roqueribeiro/roqueos-shield",

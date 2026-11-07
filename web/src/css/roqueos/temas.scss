@@ -1,0 +1,210 @@
+// =============================================================================
+// TEMAS DO ROQUEOS
+//
+// Um tema é ISTO: redefinir custom property. Nada mais.
+//
+// Foi para chegar aqui que 6.873 cores saíram de dentro das regras dos
+// componentes. Enquanto `color: $ros-accent` virava `color: #007aff` no CSS
+// entregue, nenhum arquivo como este podia existir: variável Sass some no
+// build e não há o que redefinir em tempo de execução.
+//
+// ⚠️ ESTE ARQUIVO É A SUPERFÍCIE TEMÁVEL, E O PADRÃO É UM TEMA COMO OS OUTROS.
+//
+// Os 19 tokens abaixo saíram de `tokens-root.scss` e vieram morar aqui, um
+// bloco por tema. Não é organização: é o que permite a AMOSTRA do seletor de
+// tema existir. Custom property tem escopo de DOM, então um elemento que
+// carregue `data-ros-tema="oceano"` é pintado pelo oceano mesmo com outro tema
+// ligado -- e a amostra do padrão só consegue fazer o mesmo se o padrão também
+// tiver um bloco com seletor. Por isso cada regra casa nos dois níveis:
+// `html[...]` para trocar o produto inteiro, `[...]` sozinho para pintar um
+// pedaço. A amostra deixa de ser uma cópia das cores do tema e passa a ser o
+// tema, renderizado pequeno.
+//
+// Quem responder "que cor um tema pode mudar?" lê a tabela daqui. O resto das
+// cores (rungs derivadas, cores de estado, os ~2.800 tokens de app) continua
+// em `tokens-root.scss`, porque tema nenhum mexe nelas.
+//
+// ⚠️ TEMA MEXE NA CAMADA DO SISTEMA, NÃO NA IDENTIDADE DOS APPS.
+//
+// O verde do terminal e o roxo do App Maker são token do app
+// (`--ros-app-maker-*`), e continuam onde estão. Um tema que quisesse mexer
+// neles também pode, pelo mesmo mecanismo -- mas não é o que estes fazem, e
+// dizer isso em voz alta evita a expectativa errada.
+//
+// ⚠️ UM TEMA CLARO NÃO CABE AQUI AINDA, e o motivo é medido: os ~2.800 tokens
+// de app nasceram com valores escolhidos para fundo escuro. Trocar a base para
+// clara sem revisar cada um deles entrega texto branco em fundo branco. Isso é
+// trabalho de design, app por app, e tem que ser feito com QA visual.
+// =============================================================================
+
+// ── PADRÃO -- o azul de sempre. Vem primeiro porque é a linha de base ────────
+// `:root` é o que o produto usa quando não há atributo nenhum no `<html>`;
+// `[data-ros-tema='padrao']` é o que faz a amostra dele funcionar por dentro
+// de outro tema. Os dois seletores empatam em especificidade, e é por isso que
+// este bloco vem antes dos outros três: no `<html>` temático quem casa é
+// `html[data-ros-tema='...']`, que tem um tipo a mais e ganha de qualquer jeito.
+:root,
+[data-ros-tema='padrao'] {
+  --ros-accent: #007aff;
+  --ros-accent-hover: #0066cc;
+  --ros-accent-rgb: 0, 122, 255;
+  // O accent legível como TEXTO sobre o vidro escuro (4,5:1 ou mais), e o accent do app
+  // que a janela sobrescreve com a cor dele (ROSWindow). Fora de uma janela, vale o do tema.
+  --ros-accent-text-rgb: 108, 178, 255;
+  --ros-app-accent-rgb: var(--ros-accent-rgb);
+  --ros-app-accent-text-rgb: var(--ros-accent-text-rgb);
+  // O accent como FUNDO CHEIO com texto branco por cima (a aba ativa da pílula): o
+  // accent escurecido até o branco dar 4,5:1. A janela troca pelo do app (ROSWindow).
+  --ros-accent-fill-rgb: 0, 110, 230;
+  --ros-app-accent-fill-rgb: var(--ros-accent-fill-rgb);
+  --ros-accent-gradient: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
+  --ros-surface-0: rgba(30, 30, 30, 0.65);
+  // A MATIZ sozinha, para quem precisa da superficie do tema num alfa
+  // proprio -- popover teleportado precisa ser opaco para ser legivel.
+  --ros-surface-0-rgb: 30, 30, 30;
+  --ros-surface-1: rgba(40, 40, 40, 0.55);
+  // A matiz da superfície 1 sozinha, como a da 0: o menu e o painel opacos da casca (o
+  // menu do sistema, a central de controle) usam a cor do tema num alfa próprio.
+  --ros-surface-1-rgb: 40, 40, 40;
+  --ros-bg-dark: rgba(30, 30, 30, 0.75);
+  --ros-glass: rgba(255, 255, 255, 0.1);
+  --ros-glass-border: rgba(255, 255, 255, 0.2);
+  --ros-border-subtle: rgba(255, 255, 255, 0.12);
+  --ros-border-muted: rgba(255, 255, 255, 0.08);
+  --ros-divider: rgba(255, 255, 255, 0.1);
+  --ros-hover-bg: rgba(255, 255, 255, 0.15);
+  // As bases neutras: é aqui que o tema deixa de ser detalhe e vira sistema.
+  // As 65 rungs de `tokens-root.scss` (`--ros-fill-08`, `--ros-text-60`, ...)
+  // derivam destes seis tripletes, e é isso que faz um tema alcançar 157 dos
+  // 687 elementos da tela em vez dos 15 que alcançava mexendo só no acento.
+  --ros-fill-rgb: 255, 255, 255;
+  --ros-line-rgb: 255, 255, 255;
+  --ros-text-rgb: 255, 255, 255;
+  --ros-scrim-rgb: 0, 0, 0;
+  --ros-shadow-rgb: 0, 0, 0;
+  // Vermelho de acao destrutiva. Igual nos quatro temas hoje; esta aqui
+  // para que um tema CONSIGA mudar, que e o ponto do alcance.
+  --ros-danger-rgb: 255, 59, 48;
+  // Os botões de ação do modal (revisão visual de 09/10/2026). O vermelho é mais
+  // escuro que o de cima porque leva texto branco: 4,8:1 contra 3,5:1. O âmbar leva
+  // texto escuro. Iguais nos quatro temas hoje, aqui para que um tema consiga mudar.
+  --ros-danger-strong-rgb: 220, 38, 38;
+  --ros-warning-rgb: 245, 158, 11;
+}
+
+// ── OCEANO -- o mesmo vidro, com a luz vindo de baixo d'água ─────────────────
+html[data-ros-tema='oceano'],
+[data-ros-tema='oceano'] {
+  --ros-accent: #2ba3d4;
+  --ros-accent-hover: #1f88b3;
+  --ros-accent-rgb: 43, 163, 212;
+  // O accent legível como TEXTO sobre o vidro escuro (4,5:1 ou mais), e o accent do app
+  // que a janela sobrescreve com a cor dele (ROSWindow). Fora de uma janela, vale o do tema.
+  --ros-accent-text-rgb: 124, 201, 234;
+  --ros-app-accent-rgb: var(--ros-accent-rgb);
+  --ros-app-accent-text-rgb: var(--ros-accent-text-rgb);
+  --ros-accent-fill-rgb: 32, 122, 159;
+  --ros-app-accent-fill-rgb: var(--ros-accent-fill-rgb);
+  --ros-accent-gradient: linear-gradient(135deg, #2ba3d4 0%, #2f6fb5 100%);
+  --ros-surface-0: rgba(16, 28, 38, 0.68);
+  // A MATIZ sozinha, para quem precisa da superficie do tema num alfa
+  // proprio -- popover teleportado precisa ser opaco para ser legivel.
+  --ros-surface-0-rgb: 16, 28, 38;
+  --ros-surface-1: rgba(22, 38, 51, 0.58);
+  --ros-surface-1-rgb: 22, 38, 51;
+  --ros-bg-dark: rgba(14, 26, 35, 0.78);
+  --ros-glass: rgba(150, 210, 240, 0.1);
+  --ros-glass-border: rgba(150, 210, 240, 0.2);
+  --ros-border-subtle: rgba(160, 215, 245, 0.14);
+  --ros-border-muted: rgba(160, 215, 245, 0.09);
+  --ros-divider: rgba(160, 215, 245, 0.12);
+  --ros-hover-bg: rgba(150, 210, 240, 0.08);
+  --ros-fill-rgb: 168, 214, 240;
+  --ros-line-rgb: 168, 214, 240;
+  --ros-text-rgb: 226, 241, 250;
+  --ros-scrim-rgb: 4, 14, 22;
+  --ros-shadow-rgb: 3, 12, 20;
+  // Vermelho de acao destrutiva. Igual nos quatro temas hoje; esta aqui
+  // para que um tema CONSIGA mudar, que e o ponto do alcance.
+  --ros-danger-rgb: 255, 59, 48;
+  --ros-danger-strong-rgb: 220, 38, 38;
+  --ros-warning-rgb: 245, 158, 11;
+}
+
+// ── ÂMBAR -- luz quente, para quem usa o computador de madrugada ─────────────
+html[data-ros-tema='ambar'],
+[data-ros-tema='ambar'] {
+  --ros-accent: #e8873a;
+  --ros-accent-hover: #c96f28;
+  --ros-accent-rgb: 232, 135, 58;
+  // O accent legível como TEXTO sobre o vidro escuro (4,5:1 ou mais), e o accent do app
+  // que a janela sobrescreve com a cor dele (ROSWindow). Fora de uma janela, vale o do tema.
+  --ros-accent-text-rgb: 243, 176, 122;
+  --ros-app-accent-rgb: var(--ros-accent-rgb);
+  --ros-app-accent-text-rgb: var(--ros-accent-text-rgb);
+  --ros-accent-fill-rgb: 162, 95, 41;
+  --ros-app-accent-fill-rgb: var(--ros-accent-fill-rgb);
+  --ros-accent-gradient: linear-gradient(135deg, #e8873a 0%, #b8502e 100%);
+  --ros-surface-0: rgba(34, 27, 22, 0.68);
+  // A MATIZ sozinha, para quem precisa da superficie do tema num alfa
+  // proprio -- popover teleportado precisa ser opaco para ser legivel.
+  --ros-surface-0-rgb: 34, 27, 22;
+  --ros-surface-1: rgba(46, 36, 29, 0.58);
+  --ros-surface-1-rgb: 46, 36, 29;
+  --ros-bg-dark: rgba(30, 23, 18, 0.78);
+  --ros-glass: rgba(255, 224, 190, 0.09);
+  --ros-glass-border: rgba(255, 224, 190, 0.2);
+  --ros-border-subtle: rgba(255, 220, 185, 0.14);
+  --ros-border-muted: rgba(255, 220, 185, 0.09);
+  --ros-divider: rgba(255, 220, 185, 0.12);
+  --ros-hover-bg: rgba(255, 224, 190, 0.08);
+  --ros-fill-rgb: 255, 224, 190;
+  --ros-line-rgb: 255, 224, 190;
+  --ros-text-rgb: 253, 243, 232;
+  --ros-scrim-rgb: 22, 14, 8;
+  --ros-shadow-rgb: 18, 11, 6;
+  // Vermelho de acao destrutiva. Igual nos quatro temas hoje; esta aqui
+  // para que um tema CONSIGA mudar, que e o ponto do alcance.
+  --ros-danger-rgb: 255, 59, 48;
+  --ros-danger-strong-rgb: 220, 38, 38;
+  --ros-warning-rgb: 245, 158, 11;
+}
+
+// ── GRAFITE -- sem cor nenhuma, para quem quer a interface calada ────────────
+html[data-ros-tema='grafite'],
+[data-ros-tema='grafite'] {
+  --ros-accent: #8a8f98;
+  --ros-accent-hover: #6f747c;
+  --ros-accent-rgb: 138, 143, 152;
+  // O accent legível como TEXTO sobre o vidro escuro (4,5:1 ou mais), e o accent do app
+  // que a janela sobrescreve com a cor dele (ROSWindow). Fora de uma janela, vale o do tema.
+  --ros-accent-text-rgb: 195, 199, 206;
+  --ros-app-accent-rgb: var(--ros-accent-rgb);
+  --ros-app-accent-text-rgb: var(--ros-accent-text-rgb);
+  --ros-accent-fill-rgb: 110, 114, 122;
+  --ros-app-accent-fill-rgb: var(--ros-accent-fill-rgb);
+  --ros-accent-gradient: linear-gradient(135deg, #8a8f98 0%, #5c6069 100%);
+  --ros-surface-0: rgba(26, 26, 28, 0.7);
+  // A MATIZ sozinha, para quem precisa da superficie do tema num alfa
+  // proprio -- popover teleportado precisa ser opaco para ser legivel.
+  --ros-surface-0-rgb: 26, 26, 28;
+  --ros-surface-1: rgba(36, 36, 39, 0.6);
+  --ros-surface-1-rgb: 36, 36, 39;
+  --ros-bg-dark: rgba(22, 22, 24, 0.8);
+  --ros-glass: rgba(255, 255, 255, 0.07);
+  --ros-glass-border: rgba(255, 255, 255, 0.16);
+  --ros-border-subtle: rgba(255, 255, 255, 0.1);
+  --ros-border-muted: rgba(255, 255, 255, 0.07);
+  --ros-divider: rgba(255, 255, 255, 0.1);
+  --ros-hover-bg: rgba(255, 255, 255, 0.06);
+  --ros-fill-rgb: 255, 255, 255;
+  --ros-line-rgb: 255, 255, 255;
+  --ros-text-rgb: 244, 245, 247;
+  --ros-scrim-rgb: 0, 0, 0;
+  --ros-shadow-rgb: 0, 0, 0;
+  // Vermelho de acao destrutiva. Igual nos quatro temas hoje; esta aqui
+  // para que um tema CONSIGA mudar, que e o ponto do alcance.
+  --ros-danger-rgb: 255, 59, 48;
+  --ros-danger-strong-rgb: 220, 38, 38;
+  --ros-warning-rgb: 245, 158, 11;
+}

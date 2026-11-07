@@ -34,7 +34,7 @@ cai serve --host 0.0.0.0 --port 8080
 `--skip-ai` roda o scan sem a etapa de triagem, que é o que você quer quando o LLM
 está fora e você ainda precisa de cobertura.
 
-### REST — FastAPI, 33 rotas
+### REST — FastAPI
 
 OpenAPI em `/docs`. Autenticação por `X-API-Key` + `X-API-Secret`, ou OIDC. As rotas
 que uma integração de fato usa:
@@ -122,31 +122,32 @@ jq -s '{
 
 ---
 
-## 3. Não implementado: servidor MCP
+## 3. Servidor MCP
 
-**Estado: proposta.** Medido em 2026-08-30: zero ocorrência de MCP em qualquer lugar
-sob `orchestrator/`. Não há servidor, não há transporte, não há definição de tool. O
-que existe e às vezes é confundido com isso: dez *skills* de Claude Code em
-`.claude/skills/`, que são instruções de prompt para um editor, não um servidor de
-protocolo que outros clientes falam.
+**Estado: implementado em 06/11/2026**, em `orchestrator/cliente/mcp_nucleo.py`, com dois
+transportes: stdio (`roqueshield mcp`, para Claude Code, Claude Desktop e Cursor) e
+HTTP (`POST /mcp`, autenticado como o resto da API). Escrito direto sobre o protocolo, e
+não com o SDK `mcp`, porque o lockfile já carrega duas versões incompatíveis dele por
+extras opcionais.
 
-As tools que se justificariam — uma por caso de uso que hoje exige shell:
-
-| Tool | Argumentos | Devolve |
+| Ferramenta | Argumentos | Devolve |
 | --- | --- | --- |
-| `shield_scan` | alvo, asset_type, profile, authorization_ref | id do scan, aceito ou o motivo da recusa |
-| `shield_status` | scan_id | estado, fase corrente, progresso |
-| `shield_findings` | scan_id, severidade mínima | os achados triados |
-| `shield_bundle` | scan_id | o AI Fix Bundle |
-| `shield_compare` | scan_a, scan_b | resolvidos, restantes, regressões, delta de cobertura |
+| `list_scans` | limit | scans recentes com estado, fase e contagens |
+| `get_scan` | scan_id | detalhe, incluindo que scanners rodaram e quais não, e por quê |
+| `get_findings` | scan_id, severity, limit | os achados; **erro** se o scan falhou ou a cobertura veio incompleta |
+| `get_ai_bundle` | scan_id | o AI Fix Bundle; **erro** nas mesmas condições |
+| `list_targets` | — | os alvos registrados |
+| `start_scan` | target, asset_type, profile, authorization_ref | só com as ações ligadas; a referência é obrigatória |
 
-**O que falta para construir:** o processo servidor e seu transporte; autenticação por
-token de serviço, já que cliente MCP não carrega a sessão do operador; a decisão sobre
-se uma tool pode iniciar scan ou só ler — iniciar scan é efeito colateral com peso
-jurídico quando o alvo é de terceiro; e um teste provando que toda tool **devolve erro
-quando o scan falhou**, em vez de lista vazia. Esse último não é detalhe. Uma tool que
-responde `[]` para um scan que nunca rodou reintroduz, na fronteira do protocolo,
-exatamente o silêncio que o resto deste projeto gasta dois gates de CI impedindo.
+Cada ferramenta chama a API REST com a credencial de quem chamou, então o RBAC vale
+como sempre. Ações vêm desligadas (`MCP_ALLOW_ACTIONS` no servidor,
+`ROQUESHIELD_MCP_ACTIONS=1` no stdio): disparar scan contra terceiro tem peso legal. E o
+teste que faltava existe: `tests/unit/test_mcp.py` prova que scan que falhou ou veio
+incompleto volta com erro e o motivo, nunca `[]`, e um mutante que devolve a lista em
+silêncio reprova.
+
+Fora do que a proposta original pedia: `shield_compare` (diferença entre dois scans). A
+CLI e o bundle cobrem isso com `jq` (seção 2).
 
 ---
 

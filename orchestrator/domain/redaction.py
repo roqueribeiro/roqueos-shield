@@ -57,7 +57,8 @@ _CHAVES_SECRETAS = frozenset(
     }
 )
 
-_URL_COM_USUARIO = re.compile(r"(?P<esquema>[a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@", re.I)
+# Usuário pode ser vazio: `redis://:senha@host` é a forma comum de senha do Redis.
+_URL_COM_USUARIO = re.compile(r"(?P<esquema>[a-z][a-z0-9+.-]*://)[^/\s:@]*:[^/\s@]+@", re.I)
 _BEARER = re.compile(r"\b(Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]{6,}", re.I)
 _PAR_CHAVE_VALOR = re.compile(
     r"(?P<chave>\b(?:api[_-]?key|password|passwd|secret|token|access_token|apikey)\b)"

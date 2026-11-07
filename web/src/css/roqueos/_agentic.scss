@@ -1,0 +1,86 @@
+// Shared visual contract for the "agentic" apps (Agents / Automations / Flows).
+//
+// The three apps used to each hand-roll their own accent mesh, card frame, chips
+// and low-end overrides — they drifted (Agents hardcoded its purple, the pair
+// derived theirs). These mixins are the single source of truth for that chrome,
+// keyed off the `--ag-accent*` CSS vars every agentic app sets via
+// `useAgenticAccent(appId)` + `:style="accentVars"`. Consume with @include so a
+// scoped stylesheet still emits the rules under the app's `[data-v-*]` scope.
+//
+// The shared HEADER and STATE (server/loading/error/empty) chrome live in the
+// self-styled components `AgenticAppHeader.vue` + `AgenticState.vue`; this partial
+// covers the app-root mesh and the list/card/chip frame the apps keep locally.
+
+@import 'src/css/roqueos/tokens.scss';
+
+/// Ambient accent mesh — apply on the app root's `&::before`.
+@mixin agentic-mesh {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 55% at 50% -12%, rgba(var(--ag-accent-rgb), 0.16), transparent 60%),
+    radial-gradient(ellipse 100% 80% at 25% 115%, rgba(var(--ag-accent-rgb), 0.08), transparent 70%);
+}
+
+/// The app-root shell: column flex, dark bg, ambient mesh, content above it.
+@mixin agentic-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: $ros-bg-dark;
+  color: $ros-text;
+
+  &::before {
+    @include agentic-mesh;
+  }
+}
+
+/// A gradient accent button (New / Save / Run) — matches the brand icon box.
+@mixin agentic-gradient-btn {
+  background: linear-gradient(135deg, var(--ag-accent) 0%, var(--ag-accent-strong) 100%);
+  color: var(--ros-text-100);
+  border: none;
+  box-shadow: 0 4px 14px rgba(var(--ag-accent-rgb), 0.3);
+}
+
+/// The count label above a list ("3 AUTOMATIONS").
+@mixin agentic-count {
+  font-size: var(--ros-text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: $ros-text-subtle;
+  padding: 0 2px 2px;
+}
+
+/// A list card frame (accent hover border).
+@mixin agentic-card {
+  border: 1px solid $ros-border-muted;
+  border-radius: var(--ros-radius-md);
+  background: var(--ros-fill-03);
+  transition: border-color var(--ros-duration-fast) ease;
+  &:hover {
+    border-color: rgba(var(--ag-accent-rgb), 0.3);
+  }
+}
+
+/// A small meta chip shown on a card (model / tools / count).
+@mixin agentic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--ros-radius-pill);
+  font-size: var(--ros-text-sm);
+  font-weight: 500;
+  background: var(--ros-fill-06);
+  color: $ros-text-muted;
+  white-space: nowrap;
+}

@@ -61,7 +61,9 @@ async def _check_zap() -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=3.0) as c:
             r = await c.get(
                 f"{settings.ZAP_BASE_URL}/JSON/core/view/version/",
-                params={"apikey": settings.ZAP_API_KEY},
+                # Cabeçalho e não query: o erro do httpx carrega a URL, e o detalhe do
+                # /health é público.
+                headers={"X-ZAP-API-Key": settings.ZAP_API_KEY},
             )
             if r.status_code == 200 and "version" in r.json():
                 return _ok("zap", t0, detail={"version": r.json()["version"]})

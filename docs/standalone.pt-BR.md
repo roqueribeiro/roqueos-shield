@@ -1,0 +1,220 @@
+# RoqueShield standalone
+
+O RoqueShield inteiro num container: o motor e os scanners, a tela, a API REST com
+Swagger, o servidor MCP, o Redis e o OWASP ZAP. Sem RoqueOS.
+
+> **Autorização antes de tudo.** Escanear sistema de terceiro sem autorização formal
+> é crime em muitos países, inclusive no Brasil. Rode só contra o que você tem
+> autorização escrita para testar, dentro da janela combinada. O RoqueShield ajuda a
+> registrar isso (referência de autorização em cada scan), mas não decide por você.
+
+```bash
+docker run -d --name roqueshield \
+  -p 127.0.0.1:8080:8080 --shm-size=1g --stop-timeout 30 \
+  -v roqueshield:/data \
+  roqueribeiro1988/roqueos-shield:<versão>-standalone
+```
+
+A tag é a versão com `v` mais `-standalone`, por exemplo `v0.5.0-standalone`.
+
+## Primeiro uso
+
+1. Abra `http://localhost:8080`. A primeira tela cria a conta de administrador.
+2. Ela pede o **código de primeiro uso**, que prova que você tem acesso ao container:
+
+   ```bash
+   docker exec roqueshield cat /data/secrets/SETUP_CODE
+   ```
+
+   Sem o código (ou o `APP_TOKEN` no cabeçalho `X-API-Token`), o `POST /setup` é
+   recusado. Isso impede que alguém que alcance a porta antes de você vire admin.
+3. Depois disso a tela é de login. API e Swagger ficam em `/docs`.
+
+Faça o primeiro uso **antes** de publicar a porta fora do `127.0.0.1`.
+
+## O que roda dentro
+
+| Processo | O que é | Exposto |
+| --- | --- | --- |
+| `orchestrator` | API, tela, Swagger, MCP por HTTP, progresso ao vivo (SSE) | `:8080` |
+| `worker` | roda os scans (nmap, ZAP, nuclei, trivy, semgrep, gitleaks, trufflehog, checkov…) | não |
+| `redis` | a fila dos jobs, com senha | só `127.0.0.1` |
+| `zap` | o daemon do OWASP ZAP e o Firefox headless do AJAX spider | só `127.0.0.1`, com chave |
+
+Um supervisor pequeno, em Python, sobe os quatro, reinicia quem cair (1s, 2s, 4s…
+até 60s) e, no `docker stop`, para todos em ordem inversa em até 8 segundos no
+total. O `--stop-timeout 30` do exemplo dá folga a isso. Roda como UID 1000; o
+container não precisa de capability nenhuma.
+
+Cada processo recebe só os segredos de que precisa: o worker, e os scanners que ele
+roda contra o alvo, não recebem o `APP_TOKEN`, a chave que assina sessão nem o código
+de primeiro uso. Isso evita vazamento acidental (variável parando num log ou num
+relatório), mas não isola um scanner comprometido: worker e scanners rodam com o mesmo
+usuário que lê `/data/secrets` (e, no `compose.prod.yml`, com o mesmo ambiente do
+container). Isolamento de verdade, com o worker em outro usuário e sem alcance aos
+segredos, é limite conhecido desta versão.
+
+A aba **Execução**, no detalhe de cada scan, mostra o log de cada processo, CPU e
+memória, lidos de dentro do container. Não há socket do Docker montado.
+
+## Segredos
+
+Sem `APP_TOKEN`, `SESSION_SECRET`, `SECRETS_KEY`, `ZAP_API_KEY`, `REDIS_PASSWORD` e
+`SETUP_CODE` no ambiente, o primeiro boot gera os seis em `/data/secrets` (modo 0600)
+e reaproveita depois. O valor nunca é impresso: o log diz só `gerado`, `arquivo` ou
+`ambiente`. O que vier no ambiente vence.
+
+O `APP_TOKEN` é uma chave de serviço com poder de admin. Ele é o caminho de
+recuperação quando ninguém lembra a senha do admin:
+
+```bash
+docker exec roqueshield roqueshield status   # o CLI de dentro já usa o APP_TOKEN
+curl -X PUT http://127.0.0.1:8080/users/<id>/password \
+  -H "X-API-Token: $(docker exec roqueshield cat /data/secrets/APP_TOKEN)" \
+  -H 'Content-Type: application/json' -d '{"password":"nova-senha-forte"}'
+```
+
+A chave do provedor de IA digitada na seção **IA** da tela é guardada cifrada com a
+`SECRETS_KEY` e nunca volta para o navegador.
+
+## Contas e sessão
+
+- Só o admin cria usuários, na seção **Usuários**. Usuário sem senha entra só pela API
+  e pelo CLI, com o token que aparece **uma vez** na criação. Com senha, entra também
+  na tela.
+- Só o admin troca senha (inclusive a própria), também em **Usuários**.
+- Sair, trocar a senha ou ser desativado derruba **todas** as sessões abertas daquele
+  usuário. O último admin ativo não pode ser desativado nem rebaixado.
+- Depois de 5 senhas erradas seguidas para o mesmo e-mail **vindas do mesmo IP**, o
+  login daquele e-mail, daquele IP, espera 30 s, e a espera dobra a cada erro novo,
+  até 15 min. O dono, de outro IP, continua entrando. Um IP sozinho só é freado depois
+  de 50 erros somando todos os e-mails. Atrás de proxy, configure
+  `FORWARDED_ALLOW_IPS` (abaixo), senão todo mundo aparece com o IP do proxy.
+
+## Fora do localhost
+
+O shield não termina TLS. Para usar de outra máquina, ponha um proxy reverso com
+HTTPS na frente (Caddy, Traefik, nginx) e publique só o proxy. Atrás dele:
+
+- `FORWARDED_ALLOW_IPS=<ip do proxy>` faz o uvicorn confiar no `X-Forwarded-Proto` e
+  marcar o cookie de sessão como `Secure`;
+- ou `COOKIE_SECURE=true` força o `Secure` direto.
+
+Nunca publique a porta 8080 em HTTP aberto numa rede que não é sua.
+
+## Escopo: o primeiro scan num lab
+
+`LAB_ONLY=true` é o padrão: alvo em rede privada ou loopback (`192.168.x`, `10.x`,
+`localhost`, nome de container) só é escaneado se estiver na lista de alvos
+autorizados. Para testar o seu lab, ponha o host na seção **Escopo** antes do
+primeiro scan.
+
+## Memória
+
+O AJAX spider e o active scan do ZAP são a parte faminta. Dê ao container pelo menos
+**6 GB de RAM** livres de verdade. No Docker Desktop isso é a VM, não o notebook: com
+menos, o kernel mata o ZAP no meio do scan e o relatório diz isso. O `zap` aparece em
+`scanners_skipped`, a cobertura fica incompleta, e não vira "zero achado".
+
+## Tudo pelo ambiente
+
+O ambiente vence a tela. Campo definido por variável aparece travado na tela com o
+nome da variável, que é o que um ambiente regulado precisa.
+
+| Variável | Padrão neste container | Efeito |
+| --- | --- | --- |
+| `DATA_DIR` | `/data` | segredos, SQLite, relatórios, sessão do ZAP, cache do trivy |
+| `DATABASE_URL` | SQLite em `/data` | aponte para Postgres para ter trilha de auditoria imutável |
+| `REDIS_URL` | embutido, com senha | apontando para fora, o Redis embutido não sobe |
+| `ZAP_BASE_URL` | embutido | apontando para fora, o ZAP embutido não sobe |
+| `PORT` | `8080` | porta da API dentro do container |
+| `SHIELD_SERVICES` | todos | processos a subir (`orchestrator`, `worker`); é como o compose separa API e workers |
+| `REPORTS_DIR`, `TRIVY_CACHE_DIR` | dentro de `/data` | onde ficam relatórios e o cache do trivy |
+| `LAB_ONLY`, `TARGET_ALLOWLIST`, `REQUIRE_AUTH_REF` | pela tela | travam o escopo autorizado |
+| `LLM_MODEL`, `LLM_API_BASE`, `ANTHROPIC_API_KEY`… | pela tela | travam a configuração de IA |
+| `ALLOW_CLOUD_FALLBACK` | `true` | `false` proíbe o modelo local de cair num de nuvem |
+| `MCP_ALLOW_ACTIONS` | `false` | deixa o `POST /mcp` disparar scan (sempre com referência de autorização) |
+| `COOKIE_SECURE` | `false` | força o `Secure` no cookie de sessão |
+| `OIDC_*` | desligado | SSO, ao lado do login por senha |
+
+Para produção, `docker/compose.prod.yml` roda a mesma imagem com Postgres, Redis (com
+senha) e ZAP em serviços separados.
+
+## Backup e atualização
+
+O volume `/data` guarda **juntos** o banco SQLite, os relatórios e os segredos. Trate
+o backup como segredo: quem tem a cópia tem o `APP_TOKEN` e a `SECRETS_KEY`. Perder a
+`SECRETS_KEY` torna ilegível a chave de IA guardada (é só digitar de novo).
+
+```bash
+docker run --rm -v roqueshield:/data -v "$PWD":/bkp alpine \
+  tar czf /bkp/roqueshield-data.tgz -C /data .
+```
+
+Para atualizar, troque a tag e recrie o container com o mesmo volume. No boot, antes
+de a API subir, o supervisor aplica as migrations do banco (SQLite ou Postgres).
+
+## CLI
+
+`roqueshield` fala com um shield rodando, pela API. Dentro do container não precisa
+configurar nada, ele usa o shield local e o `APP_TOKEN`:
+
+```bash
+docker exec roqueshield roqueshield status
+```
+
+Fora do container, a CLI vem do repositório (não está no PyPI):
+
+```bash
+pip install "git+https://github.com/roqueribeiro/roqueos-shield@v<versão>"
+```
+
+ou roda pela própria imagem, sem instalar nada:
+
+```bash
+docker run --rm -it --entrypoint roqueshield \
+  -e ROQUESHIELD_URL=https://shield.exemplo -e ROQUESHIELD_TOKEN \
+  roqueribeiro1988/roqueos-shield:<versão>-standalone status
+```
+
+Com um token criado em **Usuários**:
+
+```bash
+roqueshield login --server https://shield.exemplo   # pergunta o token, sem eco
+roqueshield scan start https://app.exemplo --auth-ref CHG-123 --wait --fail-on high
+roqueshield report <scan_id> --format bundle -o bundle.json
+```
+
+Códigos de saída para pipeline:
+
+| Código | Quando |
+| --- | --- |
+| `0` | terminou e está limpo no limite do `--fail-on` |
+| `1` | achado no `--fail-on` ou acima |
+| `2` | erro de uso, de conexão ou credencial recusada |
+| `3` | o scan falhou, a cobertura veio incompleta, ou o `--wait` estourou o `--prazo` (7200 s) |
+
+O `3` vence: zero achado de scanner que não rodou nunca sai `0`.
+`ROQUESHIELD_URL` e `ROQUESHIELD_TOKEN` substituem o `login` no CI.
+
+## MCP
+
+Para Claude Code, Claude Desktop ou Cursor, por stdio:
+
+```bash
+claude mcp add roqueshield \
+  -e ROQUESHIELD_URL=https://shield.exemplo -e ROQUESHIELD_TOKEN=<token> \
+  -- roqueshield mcp
+```
+
+Ou por HTTP, `POST /mcp` com o cabeçalho `X-API-Token`. Ferramentas: `list_scans`,
+`get_scan`, `get_findings`, `get_ai_bundle`, `list_targets`, e `start_scan`.
+
+O `start_scan` só aparece com as ações ligadas, e quem liga depende do transporte:
+no `POST /mcp` é o servidor (`MCP_ALLOW_ACTIONS=true`); no stdio é o cliente
+(`ROQUESHIELD_MCP_ACTIONS=1`), e o que o servidor controla é o papel do token. Para
+um agente que só lê, dê a ele um token de papel `viewer` ou `auditor`: esses não
+disparam scan por nenhum caminho.
+
+Scan que falhou, veio incompleto ou ainda está rodando volta como erro com o motivo
+(e os dados parciais), nunca como lista vazia.

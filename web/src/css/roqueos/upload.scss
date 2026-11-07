@@ -1,0 +1,25 @@
+// Transições globais usadas por várias telas. O painel de upload mora em `upload-painel.scss`,
+// carregado pelo `ROSUploadDialog`.
+// Slide up animation
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all var(--ros-duration-slow) ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+// Scale animation
+.scale-enter-active,
+.scale-leave-active {
+  transition: all var(--ros-duration-normal) ease;
+}
+
+.scale-enter-from,
+.scale-leave-to {
+  opacity: 0;
+  transform: scale(0.5);
+}

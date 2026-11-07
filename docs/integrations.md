@@ -34,7 +34,7 @@ cai serve --host 0.0.0.0 --port 8080
 `--skip-ai` runs the scan without the triage step, which is what you want when the
 LLM is unavailable and you still need coverage.
 
-### REST — FastAPI, 33 routes
+### REST — FastAPI
 
 OpenAPI at `/docs`. Authentication is `X-API-Key` + `X-API-Secret`, or OIDC. The
 routes an integration actually needs:
@@ -125,31 +125,32 @@ jq -s '{
 
 ---
 
-## 3. Not implemented: MCP server
+## 3. MCP server
 
-**Status: proposal.** Measured on 2026-08-30: zero occurrences of MCP anywhere under
-`orchestrator/`. There is no server, no transport, no tool definition. What exists and
-is sometimes mistaken for it: ten Claude Code *skills* under `.claude/skills/`, which
-are prompt instructions for one editor, not a protocol server other clients can speak.
-
-The tools that would earn their place — one per use case that today needs a shell:
+**Status: implemented on 2026-11-06**, in `orchestrator/cliente/mcp_nucleo.py`, with two
+transports: stdio (`roqueshield mcp`, for Claude Code, Claude Desktop and Cursor) and
+HTTP (`POST /mcp`, authenticated like the rest of the API). Written against the
+protocol directly rather than the `mcp` SDK, because the lockfile already carries two
+incompatible versions of that SDK through optional extras.
 
 | Tool | Arguments | Returns |
 | --- | --- | --- |
-| `shield_scan` | target, asset_type, profile, authorization_ref | scan id, accepted or the reason it was refused |
-| `shield_status` | scan_id | state, current phase, progress |
-| `shield_findings` | scan_id, min_severity | the triaged findings |
-| `shield_bundle` | scan_id | the AI Fix Bundle |
-| `shield_compare` | scan_a, scan_b | resolved, remaining, regressions, coverage delta |
+| `list_scans` | limit | recent scans with state, phase and counts |
+| `get_scan` | scan_id | detail, including which scanners ran and which did not, and why |
+| `get_findings` | scan_id, severity, limit | the findings; **an error** if the scan failed or coverage is incomplete |
+| `get_ai_bundle` | scan_id | the AI Fix Bundle; **an error** under the same conditions |
+| `list_targets` | — | registered targets |
+| `start_scan` | target, asset_type, profile, authorization_ref | only with actions enabled; the reference is mandatory |
 
-**What is missing to build it:** the server process and its transport; authentication
-by service token, since MCP clients do not carry the operator's session; a decision
-about whether a tool call may start a scan at all, or only read — starting a scan is
-a side effect with legal weight when the target is a third party; and a test proving
-that every tool **returns an error when the scan failed**, rather than an empty list.
-That last one is not a detail. A tool that answers `[]` for a scan that never ran
-reintroduces, at the protocol boundary, exactly the silence the rest of this project
-spends two CI gates preventing.
+Every tool calls the REST API with the caller's credential, so RBAC applies as usual.
+Actions are off by default (`MCP_ALLOW_ACTIONS` on the server, `ROQUESHIELD_MCP_ACTIONS=1`
+for stdio): starting a scan against a third party has legal weight. And the test that
+was listed as missing exists: `tests/unit/test_mcp.py` proves a failed or incomplete scan
+returns an error with the reason, never `[]`, and a mutant that returns the list
+silently fails it.
+
+Not built from the original proposal: `shield_compare` (diff between two scans). The CLI
+and the bundle cover it with `jq` (section 2).
 
 ---
 

@@ -108,7 +108,20 @@ pipeline calls it.
 
 ## Quickstart
 
-Prerequisites: Docker Desktop (WSL2 on Windows) or Docker Engine, 8 GB of free RAM,
+**One container, nothing else.** The engine, the web UI, the API with Swagger, the MCP
+server, Redis and OWASP ZAP:
+
+```bash
+docker run -d --name roqueshield -p 127.0.0.1:8080:8080 --shm-size=1g \
+  -v roqueshield:/data roqueribeiro1988/roqueos-shield:<version>-standalone
+docker exec roqueshield cat /data/secrets/SETUP_CODE   # first-run code
+```
+
+Open `http://localhost:8080`, create the admin on the first screen with that code, and
+scan what you are authorized to test. Secrets, TLS, backup, memory, the CLI, MCP and
+the production compose are in **[docs/standalone.md](docs/standalone.md)**.
+
+**From source**, to work on the code. Prerequisites: Docker Desktop (WSL2 on Windows) or Docker Engine, 8 GB of free RAM,
 optionally an Anthropic/OpenAI key — or none at all, if you point it at a local
 model.
 
@@ -157,8 +170,9 @@ scan → fix → re-scan without a human in the middle:
 
 | Surface | Entry point | Good for |
 | --- | --- | --- |
-| **CLI** | `cai scan` · `cai exposure` · `cai bundle` | an agent that already has a shell — Claude Code, Cursor, a CI step |
-| **REST** | 33 routes, OpenAPI at `/docs`, SSE at `/ui/api/events` | a service integrating over the network |
+| **CLI** | `roqueshield scan start … --wait --fail-on high` (client) · `cai scan` (in-process) | a CI step, or an agent that already has a shell |
+| **REST** | OpenAPI at `/docs` (snapshot in `docs/openapi.json`), SSE at `/ui/api/events` | a service integrating over the network |
+| **MCP** | `roqueshield mcp` (stdio) · `POST /mcp` (HTTP) | Claude Code, Claude Desktop, Cursor |
 | **AI Fix Bundle** | `GET /reports/{scan_id}/ai-bundle`, schema `1.0.0` | the agent that writes the patch |
 
 <picture>
@@ -171,9 +185,11 @@ not finding what the previous one found, with `coverage_complete` still true. A
 scanner that stopped running between rounds invalidates both — and shows up in
 `scanners_skipped` instead of turning into zero findings.
 
-An **MCP server** and a **reusable GitHub Action** are designed in
-[docs/integrations.md](docs/integrations.md) and are **not implemented**. They are
-marked as roadmap in the figure above, and you will not find them in the code.
+The **MCP server** exists since 2026-11-06 (`orchestrator/cliente/`): tools that read
+scans, findings and the bundle, and `start_scan` only when actions are enabled. A
+failed or incomplete scan comes back as an error, never as an empty list. A **reusable
+GitHub Action** is still only designed, in [docs/integrations.md](docs/integrations.md),
+and marked as roadmap in the figure.
 
 ---
 
@@ -283,7 +299,7 @@ Known inconsistencies, listed rather than hidden:
 
 | What | Where | Effect |
 | --- | --- | --- |
-| Three different version numbers | `pyproject.toml` says `0.1.0`, `main.py` says `0.4.0`, the AI Fix Bundle emits `"version": "0.3.0"` | a consumer of the bundle cannot tell which build produced it |
+| Bundle version is not the build version | the package and the API are `0.5.0`, the AI Fix Bundle still emits `"version": "0.3.0"` | a consumer of the bundle cannot tell which build produced it |
 | `render_pdf()` has no caller | `orchestrator/reporting/renderer.py` | the `[pdf]` extra installs WeasyPrint and nothing invokes it |
 | `cai-expert` container is legacy | `docker/images/cai-expert/`, `docker/compose.agent.yml` | left from the `cai-framework` period; nothing in the pipeline calls it, the agent loop runs in the orchestrator itself, behind the investigate route |
 | Markdown and CSV reports | not in this repository | the RoqueOS front builds those four formats client-side from the AI Fix Bundle |
@@ -294,6 +310,7 @@ Known inconsistencies, listed rather than hidden:
 
 | Document | Language | What it covers |
 | --- | --- | --- |
+| [docs/standalone.md](docs/standalone.md) | EN | the one-container install: first run, secrets, TLS, backup, CLI, MCP |
 | [docs/c4-model.md](docs/c4-model.md) | EN | the nine architecture diagrams, level by level |
 | [docs/integrations.md](docs/integrations.md) | EN | CLI, REST, AI Fix Bundle, the agent loop, and the MCP/Action roadmap |
 | [docs/architecture.md](docs/architecture.md) | pt-BR | internal layout, flows, security and compliance |

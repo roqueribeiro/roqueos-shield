@@ -1,0 +1,101 @@
+// GERADO por scripts/icones-mdi.mjs. Não edite: rode `node scripts/icones-mdi.mjs`.
+// Só os ícones MDI que o código usa; a fonte inteira pesava 49 KB gzip na abertura.
+
+@font-face {
+  font-family: 'Material Design Icons';
+  font-style: normal;
+  font-weight: normal;
+  font-display: block;
+  src: url('@quasar/extras/mdi-v7/materialdesignicons-webfont.woff2') format('woff2');
+}
+
+.mdi::before,
+.mdi-set {
+  display: inline-block;
+  font: normal normal normal 24px/1 'Material Design Icons';
+  font-size: inherit;
+  line-height: inherit;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.mdi-check::before {
+  content: '\F012C';
+}
+
+.mdi-checkbox-marked-circle-outline::before {
+  content: '\F0134';
+}
+
+.mdi-chevron-left::before {
+  content: '\F0141';
+}
+
+.mdi-chevron-right::before {
+  content: '\F0142';
+}
+
+.mdi-clipboard-check-outline::before {
+  content: '\F08A8';
+}
+
+.mdi-close::before {
+  content: '\F0156';
+}
+
+.mdi-folder-image::before {
+  content: '\F024F';
+}
+
+.mdi-image-plus::before {
+  content: '\F087C';
+}
+
+.mdi-microsoft-visual-studio-code::before {
+  content: '\F0A1E';
+}
+
+.mdi-plus::before {
+  content: '\F0415';
+}
+
+.mdi-weather-cloudy::before {
+  content: '\F0590';
+}
+
+.mdi-weather-fog::before {
+  content: '\F0591';
+}
+
+.mdi-weather-lightning-rainy::before {
+  content: '\F067E';
+}
+
+.mdi-weather-night::before {
+  content: '\F0594';
+}
+
+.mdi-weather-night-partly-cloudy::before {
+  content: '\F0F31';
+}
+
+.mdi-weather-partly-cloudy::before {
+  content: '\F0595';
+}
+
+.mdi-weather-rainy::before {
+  content: '\F0597';
+}
+
+.mdi-weather-snowy::before {
+  content: '\F0598';
+}
+
+.mdi-weather-sunny::before {
+  content: '\F0599';
+}
+
+.mdi-weather-windy::before {
+  content: '\F059D';
+}

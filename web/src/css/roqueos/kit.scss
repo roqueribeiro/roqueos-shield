@@ -1,0 +1,617 @@
+// =============================================================================
+// O KIT DO SISTEMA (Goal 63, 10/10/2026)
+//
+// As peças que todo app reescrevia do seu jeito: campo de busca, controle
+// segmentado, abas, estado vazio, carregando e esqueleto. Cada uma tem um
+// componente (`src/components/roqueos/ROS*.vue`) que é o jeito de usar; as classes
+// ficam aqui, globais, para que o conteúdo teleportado (menu, modal) e uma tela que
+// não é Vue também consigam o mesmo desenho.
+//
+// O accent é o do app (`--ros-app-accent-rgb`, publicado pela janela em ROSWindow) e,
+// fora de uma janela, o do tema. Texto sobre accent nunca é branco: a cor do app entra
+// como tinta e como `--ros-app-accent-text-rgb`, clareado até 4,5:1 sobre o vidro.
+// =============================================================================
+
+// --- campo de busca ---------------------------------------------------------
+
+.ros-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 40px;
+  border: 1px solid var(--ros-line-15);
+  border-radius: var(--ros-radius-md);
+  background: var(--ros-fill-05);
+  color: var(--ros-text-100);
+  transition:
+    border-color var(--ros-duration-fast) var(--ros-ease-default),
+    box-shadow var(--ros-duration-fast) var(--ros-ease-default),
+    background var(--ros-duration-fast) var(--ros-ease-default);
+
+  @media (pointer: coarse) {
+    height: 44px;
+  }
+
+  &:focus-within {
+    border-color: rgb(var(--ros-app-accent-rgb));
+    background: var(--ros-fill-08);
+    box-shadow: 0 0 0 3px rgba(var(--ros-app-accent-rgb), 0.3);
+  }
+
+  &--sm {
+    height: 32px;
+    border-radius: var(--ros-radius-sm);
+
+    @media (pointer: coarse) {
+      height: 44px;
+    }
+  }
+
+  &--desabilitado {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  &__lupa {
+    flex-shrink: 0;
+    margin-left: var(--ros-space-3);
+    color: var(--ros-text-50);
+  }
+
+  &__campo {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0 var(--ros-space-2);
+    border: none;
+    outline: none;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: var(--ros-text-md);
+
+    &::placeholder {
+      color: var(--ros-text-50);
+    }
+
+    // A lupa e o "x" são do sistema; os do navegador sobrariam em dobro.
+    &::-webkit-search-cancel-button,
+    &::-webkit-search-decoration {
+      appearance: none;
+    }
+  }
+
+  &--sm &__campo {
+    font-size: var(--ros-text-base);
+  }
+
+  &__atalho {
+    flex-shrink: 0;
+    margin-right: var(--ros-space-2);
+    padding: 1px 6px;
+    border: 1px solid var(--ros-line-15);
+    border-radius: var(--ros-radius-xs);
+    color: var(--ros-text-50);
+    font-size: var(--ros-text-xs);
+    font-family: inherit;
+    line-height: 1.5;
+  }
+
+  &__limpar {
+    margin-right: var(--ros-space-1);
+  }
+}
+
+// --- controle segmentado ----------------------------------------------------
+
+// Grade de colunas iguais: cada segmento tem a largura do maior rótulo (1fr num
+// contêiner que se ajusta ao conteúdo), e no `block` dividem a largura toda. Com flex e
+// base 0, o Chromium dava a cada um a largura do MENOR e cortava "Não lidas" em "Não l…".
+.ros-segmented {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: stretch;
+  max-width: 100%;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--ros-radius-md);
+  background: var(--ros-fill-06);
+  box-shadow: inset 0 0 0 1px var(--ros-border-soft);
+
+  &--block {
+    display: grid;
+    width: 100%;
+    // Medida pela própria largura (só no bloco: num segmentado de largura automática a
+    // contenção zeraria a largura). Estreito, o ícone sai e o rótulo cabe inteiro.
+    container: ros-segmented / inline-size;
+  }
+
+  &__opcao {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ros-space-1);
+    min-width: 0;
+    min-height: 32px;
+    padding: 0 var(--ros-space-3);
+    border: none;
+    border-radius: var(--ros-radius-sm);
+    background: transparent;
+    color: var(--ros-text-60);
+    font-family: inherit;
+    font-size: var(--ros-text-base);
+    font-weight: var(--ros-font-medium);
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background var(--ros-duration-fast) var(--ros-ease-default),
+      color var(--ros-duration-fast) var(--ros-ease-default);
+
+    @media (pointer: coarse) {
+      min-height: 38px;
+
+      // O toque alcança também a borda do trilho (3px em cima e embaixo): 44 de alvo.
+      &::before {
+        content: '';
+        position: absolute;
+        inset: -3px 0;
+      }
+    }
+
+    &:hover {
+      color: var(--ros-text-100);
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgb(var(--ros-app-accent-rgb));
+      outline-offset: 1px;
+    }
+
+    &--ativa {
+      background: var(--ros-fill-16);
+      color: var(--ros-text-100);
+      font-weight: var(--ros-font-semibold);
+      box-shadow: 0 1px 2px rgba(var(--ros-shadow-rgb), 0.25);
+    }
+  }
+
+  &--sm &__opcao {
+    min-height: 26px;
+    padding: 0 var(--ros-space-2);
+    font-size: var(--ros-text-sm);
+
+    // No toque o pequeno tem a altura do médio: 34 mais os 3+3 do trilho davam 40, e a
+    // régua do QA do Goal 79 reprovou o período e a ordem do Uso por pessoa no tablet.
+    @media (pointer: coarse) {
+      min-height: 38px;
+    }
+  }
+
+  &__rotulo {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // Quebra: estreito, as opções descem para duas colunas (o formato do relatório a 390px
+  // cortava "Markdown" e "JSON (AI fix)"), e o rótulo longo quebra dentro da opção em vez
+  // de virar reticência. Duas colunas, e não auto-fit puro: com quatro opções o auto-fit
+  // dava três em cima e uma sozinha embaixo. O clamp escolhe entre as duas larguras sem
+  // container query (o elemento não consulta a si mesmo): acima de 32rem a coluna vale
+  // 1/N, abaixo o termo do meio estoura e ela vale metade. `--ros-seg-n` vem do componente.
+  &--quebra {
+    display: grid;
+    width: 100%;
+    grid-auto-flow: row;
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(
+        clamp(calc(100% / var(--ros-seg-n, 4) - 2px), calc((32rem - 100%) * 999), calc(50% - 2px)),
+        1fr
+      )
+    );
+  }
+
+  &--quebra &__opcao {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
+    padding-block: var(--ros-space-1);
+  }
+
+  &--quebra &__rotulo {
+    overflow: visible;
+  }
+
+  // Num celular de 320px, três opções com ícone cortavam o rótulo ("Aut…", "24 …").
+  @container ros-segmented (max-width: 340px) {
+    &__opcao {
+      padding: 0 var(--ros-space-2);
+    }
+
+    &__opcao:has(.ros-segmented__rotulo) > .q-icon {
+      display: none;
+    }
+  }
+
+  // Mais estreito ainda (o cartão dos Ajustes num celular de 320 deixa ~250px), sem o
+  // ícone o rótulo de três opções ainda cortava ("Automát…"): a letra desce um degrau.
+  @container ros-segmented (max-width: 280px) {
+    &__opcao {
+      padding: 0 var(--ros-space-1);
+      font-size: var(--ros-text-sm);
+    }
+  }
+
+  &__selo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--ros-radius-pill);
+    // Selo cheio: o accent claro (o de texto, 4,5:1 sobre o vidro) com número escuro.
+    // A tinta a 22% com número no accent sumia no roxo e no âmbar.
+    background: rgb(var(--ros-app-accent-text-rgb));
+    color: rgb(var(--ros-scrim-rgb));
+    font-size: var(--ros-text-xs);
+    font-weight: var(--ros-font-bold);
+  }
+}
+
+// --- abas -----------------------------------------------------------------
+
+// A raiz é o trilho (o traço embaixo, ou a pílula); dentro dela, a fileira que rola e,
+// quando a fileira não cabe, uma seta em cada ponta. A barra de rolagem fica escondida,
+// então sem as setas a aba de fora só existia para quem arrasta com o dedo.
+.ros-tabs {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  border-bottom: 1px solid var(--ros-border-soft);
+
+  &__fileira {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: stretch;
+    gap: var(--ros-space-1);
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    @include ros-scrollbar-hidden;
+  }
+
+  &--quebra &__fileira {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  // Ladrilho: no trilho estreito (um celular, uma janela pequena), em vez de a última aba
+  // descer sozinha para a linha de baixo (o RoqueShield a 390px: "Achados" órfã sob as
+  // outras três), todas dividem a largura em partes iguais, com o ícone sobre o rótulo,
+  // como uma barra de navegação. Com largura, é a fileira de sempre.
+  &--ladrilho {
+    container: ros-tabs / inline-size;
+  }
+
+  @container ros-tabs (max-width: 560px) {
+    &--ladrilho &__fileira {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(0, 1fr);
+      gap: 0;
+      overflow: visible;
+    }
+
+    &--ladrilho &__aba {
+      flex-direction: column;
+      justify-content: center;
+      gap: var(--ros-space-1);
+      min-width: 0;
+      min-height: 54px;
+      padding: var(--ros-space-1) 2px;
+      font-size: var(--ros-text-sm);
+      line-height: 1.15;
+      white-space: normal;
+      text-align: center;
+    }
+
+    &--ladrilho &__rotulo {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+
+    // O selo sai da fileira e fica no ombro do ícone: embaixo do rótulo ele empurrava a
+    // aba com contagem para uma altura diferente das outras.
+    &--ladrilho &__selo {
+      position: absolute;
+      top: var(--ros-space-1);
+      inset-inline-start: calc(50% + var(--ros-space-2));
+      min-width: 16px;
+      height: 16px;
+      padding: 0 var(--ros-space-1);
+      line-height: 16px;
+    }
+  }
+
+  &__aba {
+    position: relative;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ros-space-2);
+    min-height: 40px;
+    padding: 0 var(--ros-space-3);
+    border: none;
+    background: transparent;
+    color: var(--ros-text-60);
+    font-family: inherit;
+    font-size: var(--ros-text-base);
+    font-weight: var(--ros-font-medium);
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color var(--ros-duration-fast) var(--ros-ease-default);
+
+    @media (pointer: coarse) {
+      min-height: 44px;
+    }
+
+    // O traço da aba ativa: 2px no accent do app, com as pontas arredondadas.
+    &::after {
+      content: '';
+      position: absolute;
+      left: var(--ros-space-2);
+      right: var(--ros-space-2);
+      bottom: -1px;
+      height: 2px;
+      border-radius: var(--ros-radius-xs) var(--ros-radius-xs) 0 0;
+      background: transparent;
+      transition: background var(--ros-duration-fast) var(--ros-ease-default);
+    }
+
+    &:hover {
+      color: var(--ros-text-100);
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgb(var(--ros-app-accent-rgb));
+      outline-offset: -2px;
+      border-radius: var(--ros-radius-sm);
+    }
+
+    &--ativa {
+      color: rgb(var(--ros-app-accent-text-rgb));
+      font-weight: var(--ros-font-semibold);
+
+      &::after {
+        background: rgb(var(--ros-app-accent-rgb));
+      }
+    }
+  }
+
+  &__selo {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--ros-radius-pill);
+    background: var(--ros-fill-12);
+    color: var(--ros-text-80);
+    font-size: var(--ros-text-xs);
+    font-weight: var(--ros-font-bold);
+    line-height: 18px;
+    text-align: center;
+  }
+}
+
+// --- estado vazio ---------------------------------------------------------
+
+.ros-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ros-space-2);
+  padding: var(--ros-space-8) var(--ros-space-5);
+  text-align: center;
+
+  &__icone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    margin-bottom: var(--ros-space-2);
+    border-radius: var(--ros-radius-lg);
+    // A tela que precisa de outro tom (erro, aviso) troca estas duas, sem :deep().
+    background: var(--ros-empty-icone-fundo, rgba(var(--ros-app-accent-rgb), 0.14));
+    color: var(--ros-empty-icone-cor, rgb(var(--ros-app-accent-text-rgb)));
+  }
+
+  &__titulo {
+    margin: 0;
+    color: var(--ros-text-100);
+    font-size: var(--ros-text-lg);
+    font-weight: var(--ros-font-semibold);
+  }
+
+  &__texto {
+    max-width: 320px;
+    margin: 0;
+    color: var(--ros-text-60);
+    font-size: var(--ros-text-base);
+    line-height: 1.5;
+  }
+
+  &__acoes {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--ros-space-2);
+    margin-top: var(--ros-space-3);
+  }
+
+  &--sm {
+    padding: var(--ros-space-5) var(--ros-space-4);
+  }
+
+  &--sm &__icone {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--ros-radius-md);
+  }
+
+  &--sm &__titulo {
+    font-size: var(--ros-text-md);
+  }
+}
+
+// --- carregando -----------------------------------------------------------
+
+.ros-spinner {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: rgb(var(--ros-app-accent-text-rgb));
+
+  &--sm {
+    width: 16px;
+    height: 16px;
+  }
+
+  &--lg {
+    width: 32px;
+    height: 32px;
+  }
+
+  // Dentro de botão, o anel acompanha a cor do texto do botão.
+  &--herda {
+    color: currentColor;
+  }
+
+  svg {
+    width: 100%;
+    height: 100%;
+    animation: ros-spinner-gira 0.8s linear infinite;
+  }
+
+  &__trilha,
+  &__arco {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+  }
+
+  &__trilha {
+    opacity: 0.2;
+  }
+
+  &__arco {
+    stroke-linecap: round;
+    stroke-dasharray: 42 100;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    svg {
+      animation-duration: 1.6s;
+    }
+  }
+}
+
+// Ícone que gira enquanto algo acontece (o `sync` de "recalcular"). Era a classe `fa-spin`
+// do Font Awesome, que pesava 20 KB gzip na abertura só por ela.
+.ros-girando {
+  animation: ros-spinner-gira 1s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-duration: 2s;
+  }
+}
+
+html[data-low-end='1'] .ros-girando {
+  animation-duration: 2s;
+}
+
+@keyframes ros-spinner-gira {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// --- esqueleto ------------------------------------------------------------
+
+.ros-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ros-space-3);
+  width: 100%;
+
+  &__peca {
+    display: block;
+    border-radius: var(--ros-radius-sm);
+    background:
+      linear-gradient(90deg, transparent 0%, var(--ros-fill-08) 50%, transparent 100%) 0 0 / 200%
+        100% no-repeat,
+      var(--ros-fill-06);
+    animation: ros-skeleton-brilho 1.4s ease-in-out infinite;
+  }
+
+  &__linha {
+    height: 12px;
+  }
+
+  &__bloco {
+    height: 96px;
+    border-radius: var(--ros-radius-md);
+  }
+
+  &__circulo {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--ros-radius-pill);
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: var(--ros-space-3);
+  }
+
+  &__textos {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--ros-space-2);
+    min-width: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &__peca {
+      animation: none;
+    }
+  }
+}
+
+html[data-low-end='1'] .ros-skeleton__peca {
+  animation: none;
+}
+
+@keyframes ros-skeleton-brilho {
+  from {
+    background-position:
+      100% 0,
+      0 0;
+  }
+  to {
+    background-position:
+      -100% 0,
+      0 0;
+  }
+}

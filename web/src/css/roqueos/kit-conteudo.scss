@@ -1,0 +1,897 @@
+// =============================================================================
+// O KIT DO SISTEMA, SEGUNDA PARTE (Goal 64, 10/10/2026)
+//
+// O que organiza o conteúdo de um app: barra de ferramentas, linha de lista,
+// cartão, selo, etiqueta e dica. Mesma regra do `kit.scss`: o componente
+// (`src/components/roqueos/ROS*.vue`) é o jeito de usar, as classes ficam aqui,
+// globais, para o conteúdo teleportado e para a tela que não é Vue.
+// =============================================================================
+
+// --- barra de ferramentas ---------------------------------------------------
+
+.ros-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ros-space-2);
+  min-width: 0;
+  min-height: 48px;
+  padding: var(--ros-space-1) var(--ros-space-3);
+
+  &--denso {
+    min-height: 40px;
+    padding: 2px var(--ros-space-2);
+
+    // O alvo de um botão de ícone tem 44 no toque, e a barra rola de lado no celular
+    // (o que recorta também em cima e embaixo): com 40 de altura ele perdia 2px de cada
+    // lado e o dedo a 21px do centro caía fora (Goal 70, Editor de Texto).
+    @media (pointer: coarse) {
+      min-height: 44px;
+    }
+  }
+
+  &--borda {
+    border-bottom: 1px solid var(--ros-border-soft);
+  }
+
+  // `quebrar`: no mouse, os trechos e os controles do meio descem de linha quando não
+  // cabem, centrados, em vez de passar da borda e ficar fora de alcance (Goal 71).
+  @media (pointer: fine) {
+    &--quebra {
+      flex-wrap: wrap;
+      justify-content: center;
+      row-gap: var(--ros-space-1);
+    }
+
+    &--quebra &__meio {
+      flex-wrap: wrap;
+      justify-content: center;
+      row-gap: var(--ros-space-1);
+    }
+  }
+
+  &__inicio,
+  &__fim {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--ros-space-1);
+
+    // No toque o botão de ícone alcança 44px (botoes.scss). Com 4px entre botões de 32,
+    // o vizinho cobria metade desse alcance e o dedo acertava o botão do lado: 12px de
+    // vão dão 44 de passo.
+    @media (pointer: coarse) {
+      gap: var(--ros-space-3);
+    }
+  }
+
+  // O meio também: o Visualizador de imagens põe ali os grupos de botões de 32, e abaixo
+  // de 480 o divisor some e dois grupos ficavam a 8 um do outro (Goal 70).
+  &__meio {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--ros-space-2);
+    min-width: 0;
+
+    @media (pointer: coarse) {
+      gap: var(--ros-space-3);
+    }
+  }
+
+  &__titulo {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ros-text-100);
+    font-size: var(--ros-text-md);
+    font-weight: var(--ros-font-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // No celular a barra não quebra em duas linhas: ela rola de lado, sem barra
+  // pintada (regra 21: trilha horizontal de ferramentas é sempre escondida).
+  @include ros-celular {
+    overflow-x: auto;
+    @include ros-scrollbar-hidden;
+
+    &__meio {
+      flex: 1 0 auto;
+    }
+  }
+}
+
+// --- linha de lista ---------------------------------------------------------
+
+.ros-list-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--ros-space-3);
+  min-width: 0;
+  min-height: 48px;
+  padding: var(--ros-space-2) var(--ros-space-3);
+  border-radius: var(--ros-radius-md);
+  color: var(--ros-text-100);
+  transition: background var(--ros-duration-fast) var(--ros-ease-default);
+
+  &--denso {
+    min-height: 40px;
+    gap: var(--ros-space-2);
+    padding: var(--ros-space-1) var(--ros-space-2);
+  }
+
+  // Linha que se toca tem 44 no toque, mesmo a densa.
+  &--clicavel {
+    @media (pointer: coarse) {
+      min-height: 44px;
+    }
+  }
+
+  &__inicio {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--ros-radius-sm);
+    background: var(--ros-fill-06);
+    color: var(--ros-text-80);
+  }
+
+  &--denso &__inicio {
+    width: 28px;
+    height: 28px;
+  }
+
+  &__textos {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+  }
+
+  &__titulo,
+  &__subtitulo {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__titulo {
+    font-size: var(--ros-text-md);
+    font-weight: var(--ros-font-medium);
+  }
+
+  &__subtitulo {
+    color: var(--ros-text-60);
+    font-size: var(--ros-text-sm);
+  }
+
+  &--denso &__titulo {
+    font-size: var(--ros-text-base);
+  }
+
+  &__fim {
+    // Por cima do alvo esticado: as ações do fim são botões próprios.
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--ros-space-1);
+  }
+
+  &__meta {
+    color: var(--ros-text-50);
+    font-size: var(--ros-text-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  // O alvo esticado: o botão é o bloco de texto, e o pseudo-elemento dele cobre a linha.
+  &__alvo {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+    }
+
+    &:focus-visible {
+      outline: none;
+    }
+
+    &:focus-visible::after {
+      box-shadow: inset 0 0 0 2px rgb(var(--ros-app-accent-rgb));
+    }
+
+    &:disabled {
+      cursor: default;
+    }
+  }
+
+  &--clicavel:hover {
+    background: var(--ros-fill-06);
+  }
+
+  &--ativo {
+    background: rgba(var(--ros-app-accent-rgb), 0.16);
+
+    .ros-list-item__inicio {
+      background: rgba(var(--ros-app-accent-rgb), 0.2);
+      color: rgb(var(--ros-app-accent-text-rgb));
+    }
+  }
+
+  &--ativo.ros-list-item--clicavel:hover {
+    background: rgba(var(--ros-app-accent-rgb), 0.22);
+  }
+
+  &--desabilitado {
+    opacity: 0.5;
+  }
+}
+
+// --- cartão -----------------------------------------------------------------
+
+.ros-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ros-space-3);
+  min-width: 0;
+  padding: var(--ros-space-4);
+  border: 1px solid var(--ros-border-soft);
+  border-radius: var(--ros-radius-lg);
+  color: var(--ros-text-100);
+  transition:
+    background var(--ros-duration-fast) var(--ros-ease-default),
+    border-color var(--ros-duration-fast) var(--ros-ease-default);
+
+  &--surface {
+    background: var(--ros-fill-05);
+  }
+
+  &--outlined {
+    background: transparent;
+  }
+
+  &--pad-none {
+    padding: 0;
+  }
+
+  &--pad-sm {
+    gap: var(--ros-space-2);
+    padding: var(--ros-space-3);
+  }
+
+  &--pad-lg {
+    gap: var(--ros-space-4);
+    padding: var(--ros-space-5);
+  }
+
+  &__cabeca {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ros-space-3);
+    min-width: 0;
+  }
+
+  &__icone {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--ros-radius-md);
+    background: rgba(var(--ros-app-accent-rgb), 0.16);
+    color: rgb(var(--ros-app-accent-text-rgb));
+
+    &--cor {
+      color: var(--ros-text-100);
+    }
+  }
+
+  &__titulos {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__titulo {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: none;
+    background: none;
+    color: inherit;
+    font-family: inherit;
+    font-size: var(--ros-text-md);
+    font-weight: var(--ros-font-semibold);
+    line-height: 1.35;
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__subtitulo {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: var(--ros-text-60);
+    font-size: var(--ros-text-sm);
+    line-height: 1.4;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  &__acoes {
+    // Por cima do alvo esticado, como na linha de lista.
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--ros-space-1);
+    // Lógico, não físico: em árabe as ações ficam à esquerda e o recuo vai junto.
+    margin-block-start: calc(var(--ros-space-1) * -1);
+    margin-inline-end: calc(var(--ros-space-1) * -1);
+  }
+
+  &__corpo {
+    min-width: 0;
+    color: var(--ros-text-80);
+    font-size: var(--ros-text-base);
+    line-height: 1.5;
+  }
+
+  &__pe {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ros-space-2);
+  }
+
+  &__alvo {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--ros-radius-lg);
+    }
+
+    &:focus-visible {
+      outline: none;
+    }
+
+    &:focus-visible::after {
+      box-shadow: 0 0 0 2px rgb(var(--ros-app-accent-rgb));
+    }
+
+    &:disabled {
+      cursor: default;
+    }
+  }
+
+  &--interativo:hover {
+    border-color: var(--ros-line-20);
+    background: var(--ros-fill-08);
+  }
+
+  &--ativo {
+    border-color: rgba(var(--ros-app-accent-rgb), 0.6);
+    background: rgba(var(--ros-app-accent-rgb), 0.1);
+  }
+
+  &--desabilitado {
+    opacity: 0.5;
+  }
+}
+
+// --- abas de documento (Goal 70) --------------------------------------------
+
+// A fileira dos documentos abertos (ROSDocumentTabs). O `rolo` rola de lado sem barra
+// pintada, e o `#fim` (o "+") rola junto, logo depois da última aba; com aba demais, uma
+// seta em cada ponta do trilho (Goal 71). A altura é a de quem a contém.
+.ros-doc-tabs {
+  // O lado do fechar, para a aba inteira (nome e fechar) caber entre 120 e 200.
+  --ros-doc-tabs-fechar: 28px;
+
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  align-self: stretch;
+  min-width: 0;
+
+  &__rolo {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    @include ros-scrollbar-hidden;
+  }
+
+  // Duas colunas por aba (o nome e o fechar) e três camadas nelas: o fundo de cada aba
+  // embaixo, a lista de abas, e o fechar (ou o campo de renomear) fora da lista. `subgrid`
+  // alinha as camadas sem medir nada.
+  &__fileira {
+    display: grid;
+    flex-shrink: 0;
+    align-self: stretch;
+    grid-template-columns: repeat(var(--ros-doc-tabs-n), auto auto);
+  }
+
+  &__fundos,
+  &__lista,
+  &__acoes {
+    display: grid;
+    grid-row: 1;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+  }
+
+  // O fundo é só enfeite, e a camada do fechar só pega o ponteiro onde há fechar ou campo.
+  &__fundos,
+  &__acoes {
+    pointer-events: none;
+  }
+
+  &__acoes > * {
+    pointer-events: auto;
+  }
+
+  // O desenho da aba inteira, que passa por baixo do nome e do fechar dela.
+  &__fundo {
+    grid-row: 1;
+    border-inline-end: 1px solid var(--ros-border-soft);
+    transition: background var(--ros-duration-fast) var(--ros-ease-default);
+
+    &--sobre {
+      background: var(--ros-fill-06);
+    }
+
+    &--ativa {
+      background: var(--ros-fill-08);
+      box-shadow: inset 0 -2px 0 rgb(var(--ros-app-accent-rgb));
+    }
+
+    // A aba que o mouse está arrastando para outro lugar da fileira.
+    &--arrastando {
+      opacity: 0.5;
+    }
+  }
+
+  &__aba {
+    display: flex;
+    grid-row: 1;
+    align-items: center;
+    gap: var(--ros-space-2);
+    // A aba inteira (o nome, o fechar e a margem dele) fica entre 120 e 200.
+    min-width: calc(120px - var(--ros-doc-tabs-fechar) - var(--ros-space-2));
+    max-width: calc(200px - var(--ros-doc-tabs-fechar) - var(--ros-space-2));
+    padding: 0 var(--ros-space-2) 0 var(--ros-space-4);
+    border: none;
+    background: none;
+    color: var(--ros-text-60);
+    font: inherit;
+    font-size: var(--ros-text-base);
+    white-space: nowrap;
+    text-align: start;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+
+    &--ativa {
+      color: var(--ros-text-100);
+    }
+
+    &--arrastando {
+      opacity: 0.5;
+    }
+
+    // Renomeando, o campo toma o lugar do nome na camada de cima; ele guarda a largura.
+    &--renomeando {
+      visibility: hidden;
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgb(var(--ros-app-accent-rgb));
+      outline-offset: -2px;
+    }
+  }
+
+  &__renomear {
+    display: flex;
+    grid-row: 1;
+    align-self: center;
+    min-width: 0;
+    margin-inline-start: var(--ros-space-2);
+  }
+
+  // O fechar aparece com o ponteiro na aba, na aba ativa e no foco.
+  &__fechar {
+    grid-row: 1;
+    align-self: center;
+    margin-inline-end: var(--ros-space-2);
+    opacity: 0;
+    transition: opacity var(--ros-duration-fast) var(--ros-ease-default);
+
+    &--visivel,
+    &:focus-visible {
+      opacity: 1;
+    }
+  }
+
+  // No toque não há hover: invisível, o fechar das outras abas continuava recebendo o
+  // toque (o dedo fechava a aba que queria abrir). Ele fica à vista, com caixa de 44 (o
+  // fundo do botão só aparece no hover): a fileira rola, e o fechar da aba cortada na
+  // borda da tela perdia metade do alcance.
+  @media (pointer: coarse) {
+    --ros-doc-tabs-fechar: 44px;
+
+    &__fechar {
+      opacity: 1;
+    }
+
+    &__fechar.ros-icon-btn {
+      width: 44px;
+      height: 44px;
+    }
+  }
+
+  // Sem `subgrid` (o Safari antes do 16; o alvo do build é safari14), as camadas não dividem
+  // as colunas da fileira e cada uma faria as suas: o fechar sairia da ponta da aba dele.
+  // Então todas as quatro grades levam as MESMAS colunas, de largura fixa: a aba inteira com
+  // 160 (o nome e o fechar lado a lado), e o nome que não cabe é cortado. Medido no Chromium
+  // com o ramo forçado: aba e fechar lado a lado, sem se cobrir, e o fundo cobre os dois.
+  @supports not (grid-template-columns: subgrid) {
+    &__fileira,
+    &__fundos,
+    &__lista,
+    &__acoes {
+      grid-template-columns: repeat(
+        var(--ros-doc-tabs-n),
+        calc(160px - var(--ros-doc-tabs-fechar) - var(--ros-space-2))
+          calc(var(--ros-doc-tabs-fechar) + var(--ros-space-2))
+      );
+    }
+
+    &__aba {
+      overflow: hidden;
+    }
+  }
+}
+
+// --- alvo esticado (Goal 70) ------------------------------------------------
+
+// O "link esticado" do ROSListItem e do ROSCard, para a linha ou o cartão que não cabe
+// neles (status, metadados em várias linhas, avatar): o alvo é um botão de verdade (o nome)
+// e o pseudo-elemento dele cobre a superfície inteira. O que é interativo dentro dela (menu,
+// excluir, configurar) leva `.ros-sobre-o-alvo` e fica por cima. Nunca `<div @click>` (sem
+// teclado nem nome) e nunca botão dentro de botão.
+//
+// O CONTRATO: a superfície que o alvo cobre leva `.ros-superficie-do-alvo`. O pseudo-elemento
+// só se estica DENTRO dela: sem a superfície, `inset: 0` media o primeiro ancestral
+// posicionado que houvesse (a janela inteira, um modal), e o clique em qualquer lugar dele
+// virava o clique do alvo. Esquecida a classe, o alvo fica do tamanho do botão, e não vaza.
+// `isolation` prende o `z-index` do `.ros-sobre-o-alvo` à superfície.
+.ros-superficie-do-alvo {
+  position: relative;
+  isolation: isolate;
+}
+
+.ros-alvo-esticado {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
+  .ros-superficie-do-alvo &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--ros-radius-md);
+  }
+
+  // O anel de foco vai para a superfície; fora dela o botão guarda o contorno dele.
+  .ros-superficie-do-alvo &:focus-visible {
+    outline: none;
+  }
+
+  .ros-superficie-do-alvo &:focus-visible::after {
+    box-shadow: inset 0 0 0 2px rgb(var(--ros-app-accent-rgb));
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.ros-sobre-o-alvo {
+  position: relative;
+  z-index: 1;
+}
+
+// --- selo -------------------------------------------------------------------
+
+// Cada tom publica três cores: a tinta do fundo, o texto (4,5:1 sobre a tinta a 16%
+// em cima do vidro, nos quatro temas) e o par do selo cheio.
+.ros-badge {
+  --ros-badge-tinta: var(--ros-fill-rgb);
+  --ros-badge-texto: var(--ros-text-rgb);
+  --ros-badge-cheio: var(--ros-text-rgb);
+  --ros-badge-cheio-texto: var(--ros-scrim-rgb);
+
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--ros-space-2);
+  border-radius: var(--ros-radius-pill);
+  background: rgba(var(--ros-badge-tinta), 0.16);
+  color: rgb(var(--ros-badge-texto));
+  font-size: var(--ros-text-xs);
+  font-weight: var(--ros-font-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+
+  &--neutral {
+    background: var(--ros-fill-10);
+    color: var(--ros-text-80);
+  }
+
+  &--accent {
+    --ros-badge-tinta: var(--ros-app-accent-rgb);
+    --ros-badge-texto: var(--ros-app-accent-text-rgb);
+    --ros-badge-cheio: var(--ros-app-accent-text-rgb);
+  }
+
+  &--success {
+    --ros-badge-tinta: var(--ros-success-rgb);
+    --ros-badge-texto: var(--ros-success-rgb);
+    --ros-badge-cheio: var(--ros-success-rgb);
+  }
+
+  &--warning {
+    --ros-badge-tinta: var(--ros-warning-rgb);
+    --ros-badge-texto: var(--ros-warning-rgb);
+    --ros-badge-cheio: var(--ros-warning-rgb);
+  }
+
+  // O vermelho puro sobre a própria tinta dá 4,3:1; o texto é o clareado, e o selo
+  // cheio é o vermelho fechado com texto branco (4,8:1), o mesmo do botão de perigo.
+  &--danger {
+    --ros-badge-tinta: var(--ros-danger-rgb);
+    --ros-badge-texto: var(--ros-danger-text-rgb);
+    --ros-badge-cheio: var(--ros-danger-strong-rgb);
+    --ros-badge-cheio-texto: var(--ros-on-danger-rgb);
+  }
+
+  &--info {
+    --ros-badge-tinta: var(--ros-info-rgb);
+    --ros-badge-texto: var(--ros-info-rgb);
+    --ros-badge-cheio: var(--ros-info-rgb);
+  }
+
+  &--solido {
+    background: rgb(var(--ros-badge-cheio));
+    color: rgb(var(--ros-badge-cheio-texto));
+    font-weight: var(--ros-font-bold);
+  }
+
+  &--sm {
+    min-width: 16px;
+    height: 16px;
+    padding: 0 5px;
+  }
+
+  &--ponto {
+    width: 8px;
+    min-width: 0;
+    height: 8px;
+    padding: 0;
+    background: rgb(var(--ros-badge-cheio));
+  }
+}
+
+// --- etiqueta ---------------------------------------------------------------
+
+.ros-chip {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  max-width: 100%;
+  height: 28px;
+  border: 1px solid var(--ros-border-soft);
+  border-radius: var(--ros-radius-pill);
+  background: var(--ros-fill-06);
+  color: var(--ros-text-80);
+  font-size: var(--ros-text-sm);
+  font-weight: var(--ros-font-medium);
+  transition:
+    background var(--ros-duration-fast) var(--ros-ease-default),
+    border-color var(--ros-duration-fast) var(--ros-ease-default),
+    color var(--ros-duration-fast) var(--ros-ease-default);
+
+  &--sm {
+    height: 22px;
+    font-size: var(--ros-text-xs);
+  }
+
+  &__corpo {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ros-space-1);
+    min-width: 0;
+    height: 100%;
+    padding: 0 var(--ros-space-3);
+    border: none;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+  }
+
+  &--sm &__corpo {
+    padding: 0 var(--ros-space-2);
+  }
+
+  &--removivel &__corpo {
+    padding-inline-end: 2px;
+  }
+
+  &__rotulo {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &--interativo &__corpo {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+
+    &:focus-visible {
+      outline: 2px solid rgb(var(--ros-app-accent-rgb));
+      outline-offset: 2px;
+    }
+
+    // No toque a área de clique cresce até 44px sem mudar o desenho. O pseudo-elemento
+    // se mede pela caixa de dentro da etiqueta (26px: a borda de 1px fica de fora), então
+    // são 9px em cima e embaixo. Com 8 dava 42, medido no Playwright. Etiqueta curta
+    // ("All", "5 min") também alarga até 44 de lado; a comprida fica do tamanho dela.
+    @media (pointer: coarse) {
+      &::before {
+        content: '';
+        position: absolute;
+        inset: -9px min(0px, calc((100% - 44px) / 2));
+      }
+    }
+  }
+
+  &--interativo:hover {
+    border-color: var(--ros-line-20);
+    background: var(--ros-fill-10);
+    color: var(--ros-text-100);
+  }
+
+  &--ligado {
+    border-color: rgba(var(--ros-app-accent-rgb), 0.55);
+    background: rgba(var(--ros-app-accent-rgb), 0.18);
+    color: rgb(var(--ros-app-accent-text-rgb));
+  }
+
+  &--ligado.ros-chip--interativo:hover {
+    background: rgba(var(--ros-app-accent-rgb), 0.26);
+    color: rgb(var(--ros-app-accent-text-rgb));
+  }
+
+  &__remover {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-inline-end: 3px;
+    padding: 0;
+    border: none;
+    border-radius: var(--ros-radius-pill);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    opacity: 0.7;
+
+    &:hover {
+      background: var(--ros-fill-12);
+      opacity: 1;
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgb(var(--ros-app-accent-rgb));
+      outline-offset: 0;
+      opacity: 1;
+    }
+
+    // O x tem 22px; no toque a área cresce até 44 de altura sem invadir o rótulo.
+    @media (pointer: coarse) {
+      &::before {
+        content: '';
+        position: absolute;
+        inset: -11px -4px;
+      }
+    }
+  }
+
+  &--sm &__remover {
+    width: 18px;
+    height: 18px;
+  }
+
+  &--desabilitado {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+// --- dica -------------------------------------------------------------------
+
+// Todas as dicas do Quasar vestem o desenho do sistema, não só as do ROSTooltip. A
+// regra antiga morava em `.ros-layout .q-tooltip` e nunca casou: a dica é teleportada
+// para o `<body>`, fora do layout. Ficava o padrão de fábrica, cinza chapado a 10px.
+.q-tooltip.q-tooltip--style {
+  padding: 6px 10px;
+  border: 1px solid var(--ros-line-14);
+  border-radius: var(--ros-radius-sm);
+  background: rgba(var(--ros-surface-0-rgb), 0.96);
+  box-shadow: var(--ros-elevation-3);
+  color: rgb(var(--ros-text-rgb));
+  font-size: var(--ros-text-sm);
+  font-weight: var(--ros-font-medium);
+  line-height: 1.4;
+  // O Quasar põe a dica em 9000, abaixo de todo modal (9999): a dica de um botão de ícone
+  // dentro de um modal ficava atrás do fundo. A camada está nos tokens.
+  z-index: var(--ros-camada-dica) !important;
+}
+
+.ros-tooltip__atalho {
+  display: inline-block;
+  margin-inline-start: var(--ros-space-2);
+  padding: 0 5px;
+  border: 1px solid var(--ros-line-20);
+  border-radius: var(--ros-radius-xs);
+  color: var(--ros-text-60);
+  font-family: inherit;
+  font-size: var(--ros-text-xs);
+  line-height: 1.5;
+}

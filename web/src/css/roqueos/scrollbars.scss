@@ -1,0 +1,134 @@
+@import 'mixins.scss';
+
+// ==================== ROQUEOS SCROLLBAR ====================
+// Canonical scrollbar system for the WHOLE RoqueOS shell.
+//
+// ONE desktop-wide default drives every scrollable surface (shell, landings,
+// teleported modals/drawers/popups, Quasar menus) so they look identical
+// without each component re-declaring `::-webkit-scrollbar`. Contexts recolor
+// or resize by overriding the CSS custom properties below — NEVER by rewriting
+// the pseudo-element. Re-introducing a raw `::-webkit-scrollbar { background:
+// rgba(...) }` is drift: it diverges from the design tokens and ignores the
+// low-end / theme cascade.
+//
+//   Recolor a context:  .my-area { --ros-sb-thumb: …; --ros-sb-track: …; }
+//   Thinner:            add class `ros-scrollbar-thin`  (or --ros-sb-size: 4px)
+//   Hide entirely:      add class `ros-scrollbar-hidden`
+//
+// MOBILE/TOUCH is intentionally left to the OS overlay scrollbar: a forced
+// `width` paints a persistent bar that reads as a "risco" over content on
+// touch (reported on iPhone). So the global block is gated behind
+// `(hover: hover) and (pointer: fine)` — desktop only. The hidden variant is
+// unscoped (must hide everywhere).
+
+// Runtime knobs — the single source of truth for every scrollbar in the app.
+:root {
+  --ros-sb-size: 8px;
+  --ros-sb-radius: 4px;
+  --ros-sb-track: transparent;
+  --ros-sb-thumb: #{$ros-scrollbar-thumb};
+  --ros-sb-thumb-hover: #{$ros-scrollbar-thumb-hover};
+  --ros-sb-thumb-active: #{$ros-scrollbar-thumb-active};
+}
+
+// ---- Global desktop default (mouse / trackpad only) ----
+//
+// WebKit / Blink get the rich classic styled bar via `::-webkit-scrollbar`.
+// CRITICAL: do NOT set the standard `scrollbar-width` on the same elements —
+// Chromium 121+ treats `scrollbar-width` as authoritative and then IGNORES
+// `::-webkit-scrollbar`, collapsing every bar to a 0-width overlay (this was
+// the real cause of the "inconsistent scrollbar" report: areas that inherited
+// a `scrollbar-width: thin` rendered as thin overlays while components with a
+// local `::-webkit-scrollbar` rendered as classic bars). Firefox — which has
+// no `::-webkit-scrollbar` — gets the standard thin coloured bar behind an
+// `@supports` guard, so the two engines never collide.
+@media (hover: hover) and (pointer: fine) {
+  *::-webkit-scrollbar {
+    width: var(--ros-sb-size);
+    height: var(--ros-sb-size);
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--ros-sb-track);
+    border-radius: var(--ros-sb-radius);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--ros-sb-thumb);
+    border-radius: var(--ros-sb-radius);
+    transition: background 0.2s ease;
+
+    &:hover {
+      background: var(--ros-sb-thumb-hover);
+    }
+
+    &:active {
+      background: var(--ros-sb-thumb-active);
+    }
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  // Firefox (no `::-webkit-scrollbar` support) — standard thin coloured bar.
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--ros-sb-thumb) var(--ros-sb-track);
+    }
+  }
+}
+
+// ============================================================================
+// Context variants — recolor / resize ONLY via the custom properties above.
+// They set inherited custom properties; the global `*::-webkit-scrollbar`
+// rule reads them, so there is no per-variant pseudo-element duplication.
+// ============================================================================
+
+// Explicit "apply the standard". Redundant with the global default but kept as
+// a readable opt-in marker (used widely in templates) and a safety net.
+.ros-scrollbar {
+  --ros-sb-track: transparent;
+  --ros-sb-thumb: #{$ros-scrollbar-thumb};
+  --ros-sb-thumb-hover: #{$ros-scrollbar-thumb-hover-soft};
+}
+
+// Window content (every app window) — inset grey thumb on the window surface.
+.ros-window__content {
+  --ros-sb-track: #{$ros-scrollbar-window-track};
+  --ros-sb-thumb: #{$ros-scrollbar-window-thumb};
+  --ros-sb-thumb-hover: #{$ros-scrollbar-window-thumb-hover};
+  --ros-sb-thumb-active: #{$ros-scrollbar-window-thumb-active};
+}
+
+// Dark surfaces (terminal, code editor, dropdowns over glass).
+.ros-scrollbar-dark {
+  --ros-sb-track: #{$ros-scrollbar-dark-track};
+  --ros-sb-thumb: #{$ros-scrollbar-dark-thumb};
+  --ros-sb-thumb-hover: #{$ros-scrollbar-dark-thumb-hover};
+  --ros-sb-thumb-active: #{$ros-scrollbar-dark-thumb-active};
+}
+
+// Light surfaces.
+.ros-scrollbar-light {
+  --ros-sb-track: #{$ros-scrollbar-light-track};
+  --ros-sb-thumb: #{$ros-scrollbar-light-thumb};
+  --ros-sb-thumb-hover: #{$ros-scrollbar-light-thumb-hover};
+  --ros-sb-thumb-active: #{$ros-scrollbar-light-thumb-active};
+}
+
+// Thin variant — for tight strips. Prefer `ros-scrollbar-hidden` on horizontal
+// tab/toolbar rails.
+.ros-scrollbar-thin {
+  --ros-sb-size: 4px;
+  --ros-sb-radius: 2px;
+}
+
+// Hidden — content still scrolls (touch / wheel / trackpad / drag) but the
+// track is NEVER painted. Canonical for overlay surfaces (bottom sheet, modal
+// content, drawer body) and horizontal tab/toolbar strips. Declared LAST and
+// UNSCOPED so it wins over the global default on every device.
+.ros-scrollbar-hidden {
+  @include ros-scrollbar-hidden;
+}

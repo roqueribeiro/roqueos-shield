@@ -29,9 +29,19 @@ def _key() -> str:
 
 
 def issue_session(
-    *, user_id: UUID | str, email: str, role: str, ttl_hours: int | None = None
+    *,
+    user_id: UUID | str,
+    email: str,
+    role: str,
+    ttl_hours: int | None = None,
+    versao: int = 0,
 ) -> str:
-    """Emite um JWT de sessão pra `user_id`."""
+    """Emite um JWT de sessão pra `user_id`.
+
+    `versao` é o `UserRow.session_version` no momento do login. Sair, trocar a senha ou
+    ser desativado sobe a versão do usuário, e o `get_principal` recusa todo JWT emitido
+    antes (sem isto o JWT valia até o `exp`, mesmo depois do logout).
+    """
     ttl = settings.SESSION_TTL_HOURS if ttl_hours is None else ttl_hours
     now = datetime.now(UTC)
     claims = {
@@ -39,6 +49,7 @@ def issue_session(
         "email": email,
         "role": role,  # informativo; autorização re-busca no DB
         "typ": _TYP,
+        "sv": int(versao),
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(hours=ttl)).timestamp()),
     }
