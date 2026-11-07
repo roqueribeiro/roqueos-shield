@@ -8,9 +8,28 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, DateTime
+from sqlalchemy.types import TypeDecorator
 from sqlmodel import Field, SQLModel
 
 from orchestrator.domain.schemas import Severity
+
+
+class UTCDateTime(TypeDecorator[datetime]):
+    """`DateTime(timezone=True)` que devolve sempre com fuso UTC.
+
+    O SQLite não guarda fuso: a data volta "ingênua" e a API a serializava sem `Z`
+    ("2026-11-07T11:51:15"). O navegador lê isso como hora LOCAL, e no Brasil o scan
+    feito agora aparecia "em 3 horas". Tudo aqui é gravado em UTC (`datetime.now(UTC)`),
+    então data sem fuso que sai do banco é UTC. No Postgres nada muda.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_result_value(self, value: datetime | None, dialect: Any) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
 
 
 class ScanState(StrEnum):
@@ -50,7 +69,7 @@ class TargetRow(SQLModel, table=True):
     criticality: str = Severity.MEDIUM.value
     contains_pii: bool = False
     metadata_json: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
 
 
 class ScanRow(SQLModel, table=True):
@@ -66,8 +85,8 @@ class ScanRow(SQLModel, table=True):
     # Referência formal à autorização (ticket, change, aprovação por escrito).
     # Exigido quando settings.REQUIRE_AUTH_REF=true.
     authorization_ref: str | None = Field(default=None, index=True)
-    started_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
-    finished_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    started_at: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    finished_at: datetime | None = Field(default=None, sa_type=UTCDateTime())
     errors: list[str] = Field(default_factory=list, sa_type=JSON)
     # COBERTURA — quem realmente rodou e quem não rodou, com o motivo.
     # Existe porque `state=done` + zero achados tem dois significados opostos: alvo
@@ -82,7 +101,7 @@ class ScanRow(SQLModel, table=True):
     # dedup|ai_triage|persisting|reporting|done|failed
     current_phase: str | None = Field(default=None, index=True)
     phase_progress: int | None = None  # 0-100 quando aplicável (ex: ZAP spider %)
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
 
 
 class AuditLogRow(SQLModel, table=True):
@@ -103,9 +122,7 @@ class AuditLogRow(SQLModel, table=True):
     authorization_ref: str | None = Field(default=None, index=True)
     request_hash: str | None = None  # sha256 do body da requisição (sem PII)
     metadata_json: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
-    created_at: datetime = Field(
-        default_factory=_utcnow, sa_type=DateTime(timezone=True), index=True
-    )
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime(), index=True)
 
 
 class FindingRow(SQLModel, table=True):
@@ -122,7 +139,7 @@ class FindingRow(SQLModel, table=True):
     severity: str = Field(index=True)
     confidence: str = "firm"
     payload: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
-    discovered_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))
+    discovered_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
 
 
 class FindingStatusRow(SQLModel, table=True):
@@ -148,8 +165,8 @@ class FindingStatusRow(SQLModel, table=True):
     status: str = Field(default=FindingStatus.OPEN.value, index=True)
     note: str | None = None
     updated_by: str | None = Field(default=None, index=True)
-    updated_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))
-    resolved_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    updated_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
+    resolved_at: datetime | None = Field(default=None, sa_type=UTCDateTime())
     # snapshot denormalizado do último finding com essa key (contexto sem JOIN)
     last_severity: str | None = Field(default=None, index=True)
     last_title: str | None = None
@@ -181,8 +198,8 @@ class UserRow(SQLModel, table=True):
     session_version: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
     idp_subject: str | None = Field(default=None, index=True)  # OIDC `sub` (Fase 6)
     active: bool = Field(default=True, index=True)
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))
-    last_login_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
+    last_login_at: datetime | None = Field(default=None, sa_type=UTCDateTime())
 
 
 class AIRun(SQLModel, table=True):
@@ -203,7 +220,7 @@ class AIRun(SQLModel, table=True):
     finding_count: int = 0
     success: bool = True
     error: str | None = None
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
 
 
 class AppSettingRow(SQLModel, table=True):
@@ -218,5 +235,5 @@ class AppSettingRow(SQLModel, table=True):
 
     key: str = Field(primary_key=True)
     value: str  # JSON; segredo vai como "enc:v1:<fernet>"
-    updated_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))
+    updated_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
     updated_by: str | None = None

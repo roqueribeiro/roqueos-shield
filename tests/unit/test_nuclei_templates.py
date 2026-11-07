@@ -96,3 +96,27 @@ def test_dockerfile_confere_a_contagem_de_templates() -> None:
         assert "NUCLEI_TEMPLATES_MIN" in fonte, f"{arquivo} sem piso de templates"
         assert "nuclei -tl" in fonte, f"{arquivo} não conta o que baixou"
         assert "-update-templates || true" not in fonte, f"{arquivo} ainda engole a falha"
+
+
+async def test_falha_do_nuclei_registra_codigo_e_stderr(tmp_path, capsys) -> None:
+    """O "status failed" sozinho não dizia nada: o log precisa do rc e do stderr."""
+    import asyncio
+    import stat
+
+    from orchestrator.adapters.base import ScanStatus
+
+    falso = tmp_path / "nuclei"
+    falso.write_text("#!/bin/sh\necho 'fatal: templates corrompidos token=abc123' >&2\nexit 7\n")
+    falso.chmod(falso.stat().st_mode | stat.S_IEXEC)
+    adapter = NucleiAdapter(nuclei_bin=str(falso), templates_dir=str(tmp_path))
+    alvo = Target(asset_type=AssetType.URL, value="http://127.0.0.1:8088")
+    h = await adapter.start_scan(alvo, {})
+    for _ in range(50):
+        if await adapter.poll(h) != ScanStatus.RUNNING:
+            break
+        await asyncio.sleep(0.05)
+    assert await adapter.poll(h) == ScanStatus.FAILED
+    saida = capsys.readouterr().out
+    assert "nuclei.failed" in saida and "rc=7" in saida
+    assert "templates corrompidos" in saida
+    assert "abc123" not in saida  # o stderr passa pela redação

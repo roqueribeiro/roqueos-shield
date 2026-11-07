@@ -120,6 +120,8 @@ Abra `http://localhost:8080`, crie o admin na primeira tela com esse código e v
 que você tem autorização para testar. Segredos, TLS, backup, memória, CLI, MCP e o
 compose de produção estão em **[docs/standalone.pt-BR.md](docs/standalone.pt-BR.md)**.
 
+![RoqueShield standalone: detalhe do scan](docs/assets/screens/pt-BR/03-detalhe-resumo.webp)
+
 **Do código-fonte**, para mexer no projeto. Pré-requisitos: Docker Desktop (WSL2 no Windows) ou Docker Engine, 8 GB de RAM livre,
 e opcionalmente uma chave Anthropic/OpenAI — ou nenhuma, se apontar para um modelo
 local.

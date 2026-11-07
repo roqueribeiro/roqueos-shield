@@ -17,6 +17,8 @@ docker run -d --name roqueshield \
 
 A tag é a versão com `v` mais `-standalone`, por exemplo `v0.5.0-standalone`.
 
+![Lista de scans do RoqueShield standalone](assets/screens/pt-BR/02-scans.webp)
+
 ## Primeiro uso
 
 1. Abra `http://localhost:8080`. A primeira tela cria a conta de administrador.
@@ -28,9 +30,58 @@ A tag é a versão com `v` mais `-standalone`, por exemplo `v0.5.0-standalone`.
 
    Sem o código (ou o `APP_TOKEN` no cabeçalho `X-API-Token`), o `POST /setup` é
    recusado. Isso impede que alguém que alcance a porta antes de você vire admin.
+
+   <img src="assets/screens/pt-BR/00-primeiro-uso.webp" alt="Primeiro uso, com o campo do código" width="720">
+
 3. Depois disso a tela é de login. API e Swagger ficam em `/docs`.
 
 Faça o primeiro uso **antes** de publicar a porta fora do `127.0.0.1`.
+
+## A tela
+
+É a mesma tela do RoqueShield dentro do RoqueOS, com as mesmas seções.
+
+**Novo scan.** Tipo de alvo, perfil, autenticação e revisão, com o resumo ao lado. A
+referência de autorização entra aqui.
+
+![Novo scan](assets/screens/pt-BR/07-novo-scan.webp)
+
+**Detalhe do scan, aba Resumo.** Achados, graves, duração, quais ferramentas rodaram, a
+nota de risco, a distribuição por severidade, os principais riscos e a postura de
+compliance (OWASP, PCI DSS, LGPD). "Cobertura completa" no topo diz que todos os
+scanners pedidos rodaram; quando um não roda, o topo diz isso e o relatório também.
+
+![Detalhe do scan, Resumo](assets/screens/pt-BR/03-detalhe-resumo.webp)
+
+**Achados.** Agrupados por regra, com filtro por severidade, ferramenta e título, e a
+evidência de cada um.
+
+![Achados](assets/screens/pt-BR/06-detalhe-achados.webp)
+
+**Execução.** O log de cada processo do container (orchestrator, worker, Redis, ZAP) e
+CPU e memória de cada um, lidos de dentro do container.
+
+![Execução](assets/screens/pt-BR/04-detalhe-execucao.webp)
+
+**Triagem de IA.** O que o modelo fez com os achados, chamada a chamada. Nesta captura
+não há chave de provedor configurada: a aba diz que a triagem falhou e mostra o erro de
+cada chamada, em vez de fingir que não havia o que analisar. Os achados ficam com a
+classificação da ferramenta.
+
+![Triagem de IA](assets/screens/pt-BR/05-detalhe-ia.webp)
+
+**IA.** O provedor e o modelo (Anthropic, OpenAI, OpenRouter ou um servidor local
+compatível com OpenAI). A chave fica cifrada no shield e não volta para a tela.
+
+![IA](assets/screens/pt-BR/08-ia.webp)
+
+**No celular.** A mesma tela, com a navegação num menu.
+
+<p>
+  <img src="assets/screens/pt-BR/20-celular-scans.webp" alt="Scans no celular" width="260">
+  <img src="assets/screens/pt-BR/21-celular-detalhe.webp" alt="Detalhe do scan no celular" width="260">
+  <img src="assets/screens/pt-BR/22-celular-menu.webp" alt="Menu no celular" width="260">
+</p>
 
 ## O que roda dentro
 
@@ -79,6 +130,9 @@ A chave do provedor de IA digitada na seção **IA** da tela é guardada cifrada
 
 ## Contas e sessão
 
+![Usuários](assets/screens/pt-BR/10-usuarios.webp)
+
+
 - Só o admin cria usuários, na seção **Usuários**. Usuário sem senha entra só pela API
   e pelo CLI, com o token que aparece **uma vez** na criação. Com senha, entra também
   na tela.
@@ -108,6 +162,8 @@ Nunca publique a porta 8080 em HTTP aberto numa rede que não é sua.
 `localhost`, nome de container) só é escaneado se estiver na lista de alvos
 autorizados. Para testar o seu lab, ponha o host na seção **Escopo** antes do
 primeiro scan.
+
+![Escopo](assets/screens/pt-BR/09-escopo.webp)
 
 ## Memória
 
@@ -153,6 +209,13 @@ docker run --rm -v roqueshield:/data -v "$PWD":/bkp alpine \
 
 Para atualizar, troque a tag e recrie o container com o mesmo volume. No boot, antes
 de a API subir, o supervisor aplica as migrations do banco (SQLite ou Postgres).
+
+## API e Swagger
+
+Tudo o que a tela faz passa pela API REST, documentada em `/docs` (Swagger) e versionada
+em [docs/openapi.json](openapi.json). Autenticação pelo cabeçalho `X-API-Token`.
+
+![Swagger](assets/screens/pt-BR/11-swagger.webp)
 
 ## CLI
 
