@@ -23,7 +23,10 @@ healthcheck e abre o navegador com o código de primeiro uso no endereço. Rodar
 porta, `ROQUESHIELD_NAO_ABRIR=1` não abre o navegador.
 
 O código vai no fragmento do endereço (`#setup=...`), que o navegador não manda ao
-servidor: não aparece em log de acesso, e a tela apaga ele da barra assim que lê.
+servidor: não aparece em log de acesso, e a tela apaga ele da barra assim que lê. Ele
+também não vai na linha de comando do navegador, que outro usuário da máquina veria no
+`ps`: o instalador abre uma página local numa pasta `0700`, que leva ao endereço e é
+apagada um minuto depois.
 
 **À mão, ou no Windows sem WSL** (PowerShell igual, trocando `\` por `` ` ``):
 

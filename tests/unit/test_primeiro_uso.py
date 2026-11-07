@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
+from structlog.testing import capture_logs
 
 from orchestrator.ai import analyzer
 from orchestrator.config import settings
@@ -155,7 +156,15 @@ async def test_sem_chave_a_triagem_nao_chama_a_llm(
         raise AssertionError("a LLM foi chamada sem credencial")
 
     monkeypatch.setattr(analyzer, "complete_json", nao_chame)
-    achados = await analyzer.triage_batch([_achado(), _achado()], skip_severities=set())
+    scan_id = uuid4()
+    with capture_logs() as logs:
+        achados = await analyzer.triage_batch(
+            [_achado(), _achado()], skip_severities=set(), scan_id=scan_id
+        )
+    eventos = [e for e in logs if e["event"] == "ai.triage_skipped_no_credentials"]
+    # Com o scan_id: o log do worker é de todos os scans, e a tela filtra pelo aberto.
+    assert [e.get("scan_id") for e in eventos] == [str(scan_id)]
+    assert not [e for e in logs if e["event"] == "ai.triage_start"]
     for f in achados:
         assert f.ai_triage is not None
         assert f.ai_triage.model_used == analyzer.TRIAGEM_DETERMINISTICA

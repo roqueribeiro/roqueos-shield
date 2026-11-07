@@ -148,14 +148,36 @@ if [ "$precisa" = "True" ]; then
   [ -n "$CODIGO" ] && ENDERECO="${URL}/#setup=${CODIGO}"
 fi
 
+abrir_com() {
+  if [ "$(uname -s)" = "Darwin" ] && command -v open >/dev/null 2>&1; then
+    open "$1" >/dev/null 2>&1
+  elif command -v wslview >/dev/null 2>&1; then
+    wslview "$1" >/dev/null 2>&1
+  elif command -v xdg-open >/dev/null 2>&1 && { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; }; then
+    xdg-open "$1" >/dev/null 2>&1
+  else
+    return 1
+  fi
+}
+
 abriu=0
 if [ "${ROQUESHIELD_NAO_ABRIR:-}" = "" ]; then
-  if [ "$(uname -s)" = "Darwin" ] && command -v open >/dev/null 2>&1; then
-    open "$ENDERECO" >/dev/null 2>&1 && abriu=1
-  elif command -v wslview >/dev/null 2>&1; then
-    wslview "$ENDERECO" >/dev/null 2>&1 && abriu=1
-  elif command -v xdg-open >/dev/null 2>&1 && { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; }; then
-    xdg-open "$ENDERECO" >/dev/null 2>&1 && abriu=1
+  if [ "$ENDERECO" = "$URL" ]; then
+    abrir_com "$URL" && abriu=1
+  else
+    # O código NÃO vai na linha de comando do navegador: argumento de processo aparece
+    # no `ps` para qualquer usuário da máquina, e o código existe justamente para quem
+    # alcança a porta não virar admin. Vai numa página local numa pasta 0700, que só
+    # você lê, e que leva ao endereço; a pasta some depois de um minuto.
+    PASTA=$(umask 077 && mktemp -d "${TMPDIR:-/tmp}/roqueshield.XXXXXX")
+    (
+      umask 077
+      printf '<!doctype html><meta charset="utf-8"><title>RoqueShield</title>'
+      printf '<script>location.replace("%s")</script>' "$ENDERECO"
+      printf '<a href="%s">RoqueShield</a>\n' "$ENDERECO"
+    ) >"$PASTA/abrir.html"
+    abrir_com "$PASTA/abrir.html" && abriu=1
+    (sleep 60; rm -rf "$PASTA") >/dev/null 2>&1 &
   fi
 fi
 

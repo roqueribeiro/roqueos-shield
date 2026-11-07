@@ -24,7 +24,9 @@ changes the port, `ROQUESHIELD_NAO_ABRIR=1` skips opening the browser.
 
 The code goes in the address fragment (`#setup=...`), which the browser never sends to
 the server: it does not land in any access log, and the screen removes it from the bar
-as soon as it reads it.
+as soon as it reads it. Nor does it go on the browser's command line, which another
+user on the machine could read with `ps`: the installer opens a local page in a `0700`
+folder that leads to the address and is deleted a minute later.
 
 **By hand, or on Windows without WSL** (same in PowerShell, with `` ` `` instead of `\`):
 

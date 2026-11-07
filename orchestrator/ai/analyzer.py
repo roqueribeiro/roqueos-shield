@@ -117,7 +117,12 @@ async def triage_batch(
         # chamar é a resposta honesta: o evento diz por quê, e a tela mostra "IA não
         # configurada" com o atalho para configurar, em vez de "a triagem falhou". Antes do
         # `ai.triage_start`, que anunciaria os achados indo para um modelo que não é chamado.
-        log.warning("ai.triage_skipped_no_credentials", eligible=len(eligible), model=used_model)
+        log.warning(
+            "ai.triage_skipped_no_credentials",
+            eligible=len(eligible),
+            model=used_model,
+            scan_id=str(scan_id) if scan_id else None,
+        )
         for f in eligible:
             f.ai_triage = _triagem_deterministica(f, "IA não configurada")
         return findings
@@ -165,7 +170,12 @@ async def triage_batch(
                 finding_count=len(batch),
             )
         except Exception as e:  # noqa: BLE001
-            log.error("ai.triage_batch_failed", batch=i // batch_size + 1, error=str(e))
+            log.error(
+                "ai.triage_batch_failed",
+                batch=i // batch_size + 1,
+                error=str(e),
+                scan_id=str(scan_id) if scan_id else None,
+            )
             falhas.append(str(e).splitlines()[0][:200])
             continue
 
