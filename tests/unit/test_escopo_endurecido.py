@@ -168,3 +168,24 @@ async def test_usuario_criado_com_maiuscula_entra(cliente: AsyncClient) -> None:
         "/auth/session", json={"email": "ana@exemplo.com", "password": "senha-da-ana-123"}
     )
     assert r.status_code == 200, r.text
+
+
+def test_registry_de_imagem_passa_pela_guarda_dura(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Revisão do PR #20: o tipo image saía antes da guarda dura.
+    monkeypatch.setattr(settings, "LAB_ONLY", False)
+    for valor in ("169.254.169.254/x/y:latest", "127.0.0.1:5000/x/y:latest"):
+        with pytest.raises(tv.TargetValidationError):
+            tv.validate_target_value(valor, asset_type="image")
+    assert tv.validate_target_value("nginx:1.27-alpine", asset_type="image")
+
+
+def test_nat64_de_loopback_nao_se_libera(fechado: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    for embrulho in ("64:ff9b::7f00:1", "64:ff9b:1::7f00:1"):
+        monkeypatch.setattr(settings, "TARGET_ALLOWLIST", embrulho)
+        with pytest.raises(tv.AlvoForaDoEscopo) as e:
+            tv.validate_target_value(f"http://[{embrulho}]/", asset_type="url")
+        assert tv.liberavel_pela_tela(e.value) is False
+    monkeypatch.setattr(settings, "LAB_ONLY", False)
+    monkeypatch.setattr(settings, "TARGET_ALLOWLIST", "")
+    with pytest.raises(tv.AlvoForaDoEscopo):
+        tv.validate_target_value("http://[64:ff9b:1::7f00:1]/", asset_type="url")

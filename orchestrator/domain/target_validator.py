@@ -74,7 +74,9 @@ def _ipv4_embutido(
         return ip.ipv4_mapped
     if ip.sixtofour:
         return ip.sixtofour
-    if ip in ipaddress.ip_network("64:ff9b::/96"):
+    # NAT64 bem-conhecido (/96) e o local (64:ff9b:1::/48, RFC 8215): o IPv4 vem nos
+    # últimos 32 bits nas duas formas usuais de tradutor.
+    if ip in ipaddress.ip_network("64:ff9b::/96") or ip in ipaddress.ip_network("64:ff9b:1::/48"):
         return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
     return None
 
@@ -124,7 +126,11 @@ def _guarda_dura(host: str, rotulo: str) -> None:
       shield: API, Redis e ZAP.
     """
     nu = host.strip("[]")
-    literal = _is_ip_literal(nu) or nu.lower() == "localhost"
+    # A exceção do loopback vale só para o endereço DIRETO (127.x, ::1, localhost) na
+    # allowlist: um IPv6 que embrulha 127.0.0.1 (NAT64, 6to4, mapeado) não é a forma
+    # que alguém escreve de propósito.
+    embrulhado = _is_ip_literal(nu) and _ipv4_embutido(ipaddress.ip_address(nu)) is not None
+    literal = (_is_ip_literal(nu) and not embrulhado) or nu.lower() == "localhost"
     ips = (
         ["127.0.0.1"]
         if nu.lower() == "localhost"
@@ -277,6 +283,8 @@ def validate_target_value(value: str, *, asset_type: str | None = None) -> str:
         first = v.split("/", 1)[0] if "/" in v else ""
         if first and ("." in first or ":" in first or first == "localhost"):
             registry_host = first.split(":", 1)[0]
+            # Loopback e metadata nem com LAB_ONLY=false (o mesmo dos outros tipos).
+            _guarda_dura(registry_host, "registry")
             if (
                 settings.LAB_ONLY
                 and not _host_in_allowlist(registry_host, settings.target_allowlist)
@@ -397,14 +405,8 @@ def liberavel_pela_tela(erro: AlvoForaDoEscopo) -> bool:
     if h in _FORBIDDEN_HOSTNAMES:
         return False
     ips = [h] if _is_ip_literal(h) else _resolve_host_ips(h)
-    for s in ips:
-        try:
-            ip = ipaddress.ip_address(s)
-        except ValueError:
-            continue
-        if ip.is_link_local or ip.is_loopback or ip.is_unspecified:
-            return False
-    return True
+    # Com o IPv4 embutido desembrulhado: o NAT64 de 127.0.0.1 é loopback.
+    return not any(_classe_sensivel(s) for s in ips)
 
 
 def _e_loopback(host: str) -> bool:

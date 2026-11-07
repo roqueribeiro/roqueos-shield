@@ -136,13 +136,56 @@ _BANNED_ARG_RE = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
-# Flags que só são perigosas num binário: `-T` é upload no curl e timing no nmap.
-# Comparadas com maiúscula e minúscula (`-k` do curl é --insecure, legítimo; `-K` lê
-# opções de arquivo) e por PREFIXO nas curtas, porque o curl aceita o valor colado:
-# `-T/data/x`, `-K/tmp/cfg`, `-xhttp://127.0.0.1:8090` (revisão do PR #20).
-_BANNED_POR_BINARIO: dict[str, tuple[frozenset[str], tuple[str, ...]]] = {
-    "curl": (frozenset({"--upload-file"}), ("-T", "-K", "-x")),
-}
+# O curl tem mais de 250 opções, e dezenas leem ou escrevem arquivo (-T, -K, -b, -c,
+# -D, -E, --cert, --key, -w @arq, --data-urlencode x@arq...), aceitando o valor colado
+# (`-T/data/x`) e em grupo (`-sd@/data/x`). Lista negra não fecha isso (revisão do PR
+# #20, duas rodadas), então o curl tem LISTA DO QUE PODE. Fora dela, recusado.
+_CURL_SEM_VALOR = frozenset("sSIikvfgNq46G")  # agrupáveis: -sSIk
+_CURL_COM_VALOR = frozenset("XHAemd")  # o valor vem no próximo argumento ou colado
+_CURL_LONGAS = frozenset(
+    {
+        "--silent",
+        "--show-error",
+        "--head",
+        "--include",
+        "--insecure",
+        "--verbose",
+        "--fail",
+        "--globoff",
+        "--no-buffer",
+        "--get",
+        "--compressed",
+        "--path-as-is",
+        "--http1.1",
+        "--http2",
+        "--request",
+        "--header",
+        "--user-agent",
+        "--referer",
+        "--max-time",
+        "--connect-timeout",
+        "--data",
+        "--data-raw",
+    }
+)
+
+
+def _curl_fora_da_lista(arg: str) -> str | None:
+    """Motivo para recusar uma opção do curl que não está na lista do que pode."""
+    if arg.startswith("--"):
+        nome = arg.split("=", 1)[0]
+        return None if nome in _CURL_LONGAS else f"opção {nome} do curl fora da lista permitida"
+    if not arg.startswith("-") or arg == "-":
+        return None
+    letras = arg[1:]
+    for c in letras:
+        if c in _CURL_SEM_VALOR:
+            continue
+        if c in _CURL_COM_VALOR:
+            return None  # o resto do token é o valor, conferido como argumento
+        return f"opção -{c} do curl fora da lista permitida"
+    return None
+
 
 # Esquemas que um argumento pode trazer. Qualquer outro (`file:`, `gopher:`, `dict:`,
 # `ftp:`, `ldap:`) lê disco ou fala protocolo interno.
@@ -200,6 +243,8 @@ def _argumento_fora_do_alvo(arg: str, host_alvo: str) -> str | None:
         if "=" in arg:
             arg = arg.split("=", 1)[1]
         elif not arg.startswith("--") and len(arg) > 2:
+            # Valor colado na curta (`-T/caminho`, `-t/var/x.yaml`). Em grupo (`-sd@x`)
+            # o curl é barrado pela lista do que pode; os outros binários não agrupam.
             arg = arg[2:]
         else:
             return "lê arquivo local (@arquivo)" if "@" in arg or "://" in arg else None
@@ -310,16 +355,17 @@ def check_command(
     if not target:
         return d(False, "sem alvo: o agente só roda comando contra o alvo do finding")
     host_alvo = _host_do_alvo(target)
-    proibidas, prefixos = _BANNED_POR_BINARIO.get(binary, (frozenset(), ()))
     for arg in command[1:]:
         if any(ch in arg for ch in _SHELL_METACHARS):
             return d(False, f"argumento com metacaractere de shell: {arg!r}")
-        if _BANNED_ARG_RE.match(arg):
+        if binary == "curl":
+            if motivo := _curl_fora_da_lista(arg):
+                return d(False, f"argumento {arg!r} recusado: {motivo}")
+            if "@" in arg and "://" not in arg:
+                # `-d @arq`, `--data-urlencode x@arq`, `-F f=@arq`: o curl lê o arquivo.
+                return d(False, f"argumento {arg!r} recusado: lê arquivo local (@)")
+        elif _BANNED_ARG_RE.match(arg):
             return d(False, f"flag '{arg}' recusada (escrita em disco/leitura local/shell)")
-        if arg.split("=", 1)[0] in proibidas or (
-            not arg.startswith("--") and any(arg.startswith(x) for x in prefixos)
-        ):
-            return d(False, f"flag '{arg}' recusada para {binary} (upload, arquivo ou proxy)")
         motivo = _argumento_fora_do_alvo(arg, host_alvo)
         if motivo:
             return d(False, f"argumento {arg!r} recusado: {motivo}")
