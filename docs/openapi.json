@@ -686,6 +686,21 @@
         "title": "ModelosOut",
         "type": "object"
       },
+      "PasswordUpdate": {
+        "properties": {
+          "password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "PasswordUpdate",
+        "type": "object"
+      },
       "QueueItem": {
         "properties": {
           "confidence": {
@@ -1374,6 +1389,18 @@
             ],
             "title": "Name"
           },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
           "role": {
             "$ref": "#/components/schemas/Role",
             "default": "viewer"
@@ -1404,6 +1431,11 @@
           "email": {
             "title": "Email",
             "type": "string"
+          },
+          "has_password": {
+            "default": false,
+            "title": "Has Password",
+            "type": "boolean"
           },
           "id": {
             "format": "uuid",
@@ -1465,6 +1497,11 @@
           "email": {
             "title": "Email",
             "type": "string"
+          },
+          "has_password": {
+            "default": false,
+            "title": "Has Password",
+            "type": "boolean"
           },
           "id": {
             "format": "uuid",
@@ -3875,6 +3912,68 @@
           }
         ],
         "summary": "Deactivate User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/{user_id}/password": {
+      "put": {
+        "description": "Define (ou troca) a senha de login da tela. A senha não vai para a trilha.",
+        "operationId": "set_password_users__user_id__password_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Set Password",
         "tags": [
           "users"
         ]

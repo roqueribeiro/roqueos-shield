@@ -149,3 +149,31 @@ async def test_token_na_query_so_no_sse(cliente: AsyncClient) -> None:
 async def test_ui_aceita_token_de_servico_no_cabecalho(cliente: AsyncClient) -> None:
     r = await cliente.get("/ui/api/scans", headers={"X-API-Token": settings.APP_TOKEN})
     assert r.status_code == 200
+
+
+async def test_usuarios_com_senha_e_ultimo_admin(cliente: AsyncClient) -> None:
+    await _setup(cliente)
+    h = {"X-RoqueShield": "1"}
+    r = await cliente.post(
+        "/users", json={"email": "op@x.com", "role": "operator", "password": "curta"}, headers=h
+    )
+    assert r.status_code == 422
+    r = await cliente.post(
+        "/users",
+        json={"email": "op@x.com", "role": "operator", "password": "senha-do-operador"},
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["has_password"] is True and r.json()["api_token"]
+    lista = (await cliente.get("/users")).json()
+    admin = next(u for u in lista if u["role"] == "admin")
+    # o único admin não pode ser desativado nem rebaixado
+    assert (await cliente.post(f"/users/{admin['id']}/deactivate", headers=h)).status_code == 409
+    r = await cliente.patch(f"/users/{admin['id']}/role", json={"role": "viewer"}, headers=h)
+    assert r.status_code == 409
+    # o operador entra pela tela com a senha
+    cliente.cookies.clear()
+    r = await cliente.post(
+        "/auth/session", json={"email": "op@x.com", "password": "senha-do-operador"}
+    )
+    assert r.status_code == 200 and r.json()["role"] == "operator"

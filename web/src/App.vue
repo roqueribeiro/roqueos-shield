@@ -8,6 +8,8 @@
       @tentar="iniciar"
     />
     <ROSPentest v-else :conta="conta" @sair="sair" />
+    <!-- confirmar() de useConfirm depende deste host montado uma vez só. -->
+    <ROSConfirmHost />
   </div>
 </template>
 
@@ -20,6 +22,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import ROSPentest from 'src/components/roqueos/apps/ROSPentest.vue'
 import TelaEntrada from 'src/components/shield/TelaEntrada.vue'
+import ROSConfirmHost from 'src/components/roqueos/ROSConfirmHost.vue'
 import { aoPerderSessao, del, get } from 'src/services/http'
 
 const etapa = ref('carregando') // carregando | sem-servidor | setup | login | app
