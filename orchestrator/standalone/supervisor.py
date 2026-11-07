@@ -65,7 +65,11 @@ def ambiente_base(env: dict[str, str], data: Path) -> dict[str, str]:
 
 
 def servicos(env: dict[str, str], data: Path) -> list[Servico]:
-    """A lista do que sobe, já decidida pelo ambiente."""
+    """A lista do que sobe, já decidida pelo ambiente.
+
+    `SHIELD_SERVICES` (ex.: `orchestrator` ou `worker`) restringe a lista: é como o
+    `compose.prod.yml` roda a API e N workers em containers separados com a mesma imagem.
+    """
     py = sys.executable
     lista: list[Servico] = []
     if env.get("REDIS_URL") == REDIS_LOCAL:
@@ -130,7 +134,20 @@ def servicos(env: dict[str, str], data: Path) -> list[Servico]:
         )
     )
     lista.append(Servico("worker", [py, "-m", "arq", "orchestrator.jobs.queue.WorkerSettings"]))
-    return lista
+    so = {x.strip() for x in env.get("SHIELD_SERVICES", "").split(",") if x.strip()}
+    return [svc for svc in lista if not so or svc.nome in so]
+
+
+def precisa_migrar(env: dict[str, str], lista: list[Servico]) -> bool:
+    """Postgres com a API neste container: roda o alembic antes de servir.
+
+    Em SQLite a API cria as tabelas no boot; em Postgres o schema (e o trigger que torna
+    a trilha de auditoria imutável) vem das migrations, e servir sem elas é servir sem a
+    garantia. Só quem sobe a API migra, para N workers não disputarem a migração.
+    """
+    return env.get("DATABASE_URL", "").startswith("postgresql") and any(
+        s.nome == "orchestrator" for s in lista
+    )
 
 
 def espera(reinicios: int) -> float:
@@ -197,6 +214,14 @@ async def principal(env: dict[str, str] | None = None) -> int:
     for svc in lista:
         svc.env = filho
     print("[supervisor] serviços: " + ", ".join(s.nome for s in lista), flush=True)
+    if precisa_migrar(filho, lista):
+        print("[supervisor] alembic upgrade head", flush=True)
+        mig = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "alembic", "upgrade", "head", env=filho
+        )
+        if await mig.wait() != 0:
+            print("[supervisor] a migração falhou; a API não sobe sem o schema", flush=True)
+            return 1
 
     redis_cliente: Any = None
     try:

@@ -107,7 +107,19 @@ termina a instalação com `|| true`, e nada no pipeline chama ele.
 
 ## Quickstart
 
-Pré-requisitos: Docker Desktop (WSL2 no Windows) ou Docker Engine, 8 GB de RAM livre,
+**Um container, mais nada.** O motor, a tela, a API com Swagger, o servidor MCP, o
+Redis e o OWASP ZAP:
+
+```bash
+docker run -d --name roqueshield -p 8080:8080 --shm-size=1g \
+  -v roqueshield:/data roqueribeiro1988/roqueos-shield:<versão>-standalone
+```
+
+Abra `http://localhost:8080`, crie o admin na primeira tela e varra. Segredos, memória,
+CLI, MCP e o compose de produção estão em
+**[docs/standalone.pt-BR.md](docs/standalone.pt-BR.md)**.
+
+**Do código-fonte**, para mexer no projeto. Pré-requisitos: Docker Desktop (WSL2 no Windows) ou Docker Engine, 8 GB de RAM livre,
 e opcionalmente uma chave Anthropic/OpenAI — ou nenhuma, se apontar para um modelo
 local.
 
@@ -161,8 +173,9 @@ scan → conserto → re-scan sem humano no meio:
 
 | Superfície | Entrada | Boa para |
 | --- | --- | --- |
-| **CLI** | `cai scan` · `cai exposure` · `cai bundle` | agente que já tem shell — Claude Code, Cursor, passo de CI |
-| **REST** | 33 rotas, OpenAPI em `/docs`, SSE em `/ui/api/events` | serviço integrando pela rede |
+| **CLI** | `roqueshield scan start … --wait --fail-on high` (cliente) · `cai scan` (in-process) | passo de CI, ou agente que já tem shell |
+| **REST** | OpenAPI em `/docs` (fotografia em `docs/openapi.json`), SSE em `/ui/api/events` | serviço integrando pela rede |
+| **MCP** | `roqueshield mcp` (stdio) · `POST /mcp` (HTTP) | Claude Code, Claude Desktop, Cursor |
 | **AI Fix Bundle** | `GET /reports/{scan_id}/ai-bundle`, schema `1.0.0` | o agente que escreve o patch |
 
 <picture>
@@ -175,10 +188,11 @@ achar o que o anterior achou, com `coverage_complete` ainda verdadeiro. Scanner 
 deixou de rodar entre as rodadas invalida os dois — e aparece em `scanners_skipped`
 em vez de virar zero achados.
 
-Um **servidor MCP** e uma **GitHub Action reutilizável** estão desenhados em
-[docs/integrations.pt-BR.md](docs/integrations.pt-BR.md) e **não estão
-implementados**. Estão marcados como roadmap na figura acima, e você não vai
-encontrá-los no código.
+O **servidor MCP** existe desde 06/11/2026 (`orchestrator/cliente/`): ferramentas que
+leem scans, achados e o bundle, e `start_scan` só com as ações ligadas. Scan que falhou
+ou veio incompleto volta como erro, nunca como lista vazia. A **GitHub Action
+reutilizável** continua só desenhada, em
+[docs/integrations.pt-BR.md](docs/integrations.pt-BR.md), e marcada como roadmap na figura.
 
 ---
 
@@ -304,7 +318,7 @@ roqueos-shield/
 │   │   ├── analyzer.py          # triage_batch
 │   │   ├── agentic/             # executor (a coleira) + cai_expert (o laço)
 │   │   └── prompts/
-│   ├── api/routers/             # 10 routers, 33 rotas
+│   ├── api/routers/             # os routers da API (contrato em docs/openapi.json)
 │   ├── domain/                  # Finding canônico, scrubber, dedup, validador
 │   ├── jobs/                    # workers arq + pipelines + fases
 │   ├── persistence/             # SQLModel, 9 tabelas, 7 migrations

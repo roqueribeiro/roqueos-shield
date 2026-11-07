@@ -108,7 +108,19 @@ pipeline calls it.
 
 ## Quickstart
 
-Prerequisites: Docker Desktop (WSL2 on Windows) or Docker Engine, 8 GB of free RAM,
+**One container, nothing else.** The engine, the web UI, the API with Swagger, the MCP
+server, Redis and OWASP ZAP:
+
+```bash
+docker run -d --name roqueshield -p 8080:8080 --shm-size=1g \
+  -v roqueshield:/data roqueribeiro1988/roqueos-shield:<version>-standalone
+```
+
+Open `http://localhost:8080`, create the admin on the first screen, and scan. Secrets,
+memory, the CLI, MCP and the production compose are in
+**[docs/standalone.md](docs/standalone.md)**.
+
+**From source**, to work on the code. Prerequisites: Docker Desktop (WSL2 on Windows) or Docker Engine, 8 GB of free RAM,
 optionally an Anthropic/OpenAI key — or none at all, if you point it at a local
 model.
 
@@ -157,8 +169,9 @@ scan → fix → re-scan without a human in the middle:
 
 | Surface | Entry point | Good for |
 | --- | --- | --- |
-| **CLI** | `cai scan` · `cai exposure` · `cai bundle` | an agent that already has a shell — Claude Code, Cursor, a CI step |
-| **REST** | 33 routes, OpenAPI at `/docs`, SSE at `/ui/api/events` | a service integrating over the network |
+| **CLI** | `roqueshield scan start … --wait --fail-on high` (client) · `cai scan` (in-process) | a CI step, or an agent that already has a shell |
+| **REST** | OpenAPI at `/docs` (snapshot in `docs/openapi.json`), SSE at `/ui/api/events` | a service integrating over the network |
+| **MCP** | `roqueshield mcp` (stdio) · `POST /mcp` (HTTP) | Claude Code, Claude Desktop, Cursor |
 | **AI Fix Bundle** | `GET /reports/{scan_id}/ai-bundle`, schema `1.0.0` | the agent that writes the patch |
 
 <picture>
@@ -171,9 +184,11 @@ not finding what the previous one found, with `coverage_complete` still true. A
 scanner that stopped running between rounds invalidates both — and shows up in
 `scanners_skipped` instead of turning into zero findings.
 
-An **MCP server** and a **reusable GitHub Action** are designed in
-[docs/integrations.md](docs/integrations.md) and are **not implemented**. They are
-marked as roadmap in the figure above, and you will not find them in the code.
+The **MCP server** exists since 2026-11-06 (`orchestrator/cliente/`): tools that read
+scans, findings and the bundle, and `start_scan` only when actions are enabled. A
+failed or incomplete scan comes back as an error, never as an empty list. A **reusable
+GitHub Action** is still only designed, in [docs/integrations.md](docs/integrations.md),
+and marked as roadmap in the figure.
 
 ---
 

@@ -71,3 +71,17 @@ async def test_encerrar_termina_os_filhos() -> None:
     svc.processo = await asyncio.create_subprocess_exec(*svc.argv)
     await sup._encerrar([svc], prazo=5)
     assert svc.processo.returncode is not None
+
+
+def test_shield_services_restringe(tmp_path: Path) -> None:
+    env = {"REDIS_URL": "redis://r:6379/0", "SHIELD_SERVICES": "worker"}
+    assert [s.nome for s in sup.servicos(env, tmp_path)] == ["worker"]
+
+
+def test_so_quem_sobe_a_api_migra_e_so_em_postgres(tmp_path: Path) -> None:
+    pg = {"REDIS_URL": "redis://r/0", "DATABASE_URL": "postgresql+asyncpg://u@db/x"}
+    assert sup.precisa_migrar(pg, sup.servicos(pg, tmp_path)) is True
+    so_worker = {**pg, "SHIELD_SERVICES": "worker"}
+    assert sup.precisa_migrar(so_worker, sup.servicos(so_worker, tmp_path)) is False
+    lite = {"REDIS_URL": "redis://r/0", "DATABASE_URL": "sqlite+aiosqlite:///x.db"}
+    assert sup.precisa_migrar(lite, sup.servicos(lite, tmp_path)) is False

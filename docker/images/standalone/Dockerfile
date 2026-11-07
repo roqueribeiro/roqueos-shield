@@ -44,6 +44,9 @@ RUN printf '#!/bin/sh\nexec /opt/zap/zap.sh "$@"\n' > /usr/local/bin/zap.sh \
     && chmod 0755 /usr/local/bin/zap.sh \
     && test -x /opt/zap/zap.sh
 COPY --from=web /src/orchestrator/web_dist /app/orchestrator/web_dist
+# A CLI cliente dentro do container: `docker exec roqueshield roqueshield scan list`.
+RUN printf '#!/bin/sh\nexec python -m orchestrator.cliente.cli "$@"\n' > /usr/local/bin/roqueshield \
+    && chmod 0755 /usr/local/bin/roqueshield
 RUN mkdir -p /data && chown 1000:1000 /data
 ENV DATA_DIR=/data \
     HOME=/data
