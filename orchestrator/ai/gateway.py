@@ -190,6 +190,25 @@ async def complete(
             )
             return text
         raise
+    except Exception as e:
+        # Erro que não é de rede/serviço (chave ausente ou recusada, modelo
+        # desconhecido) também precisa virar AIRun de falha. Sem isso a falha só ia
+        # para o log, que é efêmero: depois de um restart a aba de IA dizia "a IA não
+        # foi chamada" para um scan cuja triagem tinha falhado (medido em 07/11/2026,
+        # "Missing Anthropic API Key"). Não tenta o fallback: credencial errada não
+        # se resolve trocando de modelo, e o fallback de nuvem tem regra própria acima.
+        await _persist_ai_run(
+            scan_id=scan_id,
+            purpose=purpose,
+            model=primary,
+            api_base=primary_api_base,
+            response=None,
+            latency_ms=int((time.perf_counter() - t0) * 1000),
+            finding_count=finding_count,
+            success=False,
+            error=f"{type(e).__name__}: {e}"[:500],
+        )
+        raise
 
 
 def _routable_model(model: str, api_base: str | None) -> str:

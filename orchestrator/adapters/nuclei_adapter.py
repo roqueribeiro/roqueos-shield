@@ -122,8 +122,17 @@ class NucleiAdapter:
         self._output_paths[native_id] = out_path
 
         async def _wait() -> int:
-            await proc.communicate()
-            return proc.returncode or 0
+            _, err = await proc.communicate()
+            rc = proc.returncode or 0
+            if rc != 0:
+                # Sem isto a falha chegava só como "status failed": o código de saída
+                # (negativo = morto por sinal, -9 é o OOM killer) e o fim do stderr são
+                # o que diz se foi memória, template ou rede.
+                from orchestrator.domain.redaction import redact_text
+
+                cauda = (err or b"").decode("utf-8", "replace")[-800:]
+                log.error("nuclei.failed", rc=rc, stderr=redact_text(cauda))
+            return rc
 
         self._tasks[native_id] = asyncio.create_task(_wait())
         return ScanHandle(

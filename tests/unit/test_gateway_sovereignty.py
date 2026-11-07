@@ -57,3 +57,29 @@ async def test_cloud_fallback_allowed_when_enabled(monkeypatch: pytest.MonkeyPat
     out = await gateway.complete([{"role": "user", "content": "x"}], model="openai/qwen-local")
     assert out == "cloud answer"
     assert any(not c.get("api_base") for c in calls)  # o fallback cloud foi exercido
+
+
+async def test_erro_de_credencial_vira_ai_run_de_falha(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Chave ausente não é erro de rede: antes não gravava AIRun e a falha sumia no restart."""
+    gravados: list[dict] = []
+
+    async def persist(**kwargs: object) -> None:
+        gravados.append(dict(kwargs))
+
+    class ChaveAusente(Exception):
+        pass
+
+    async def fake_acompletion(**kwargs: object) -> _FakeResp:
+        raise ChaveAusente("Missing Anthropic API Key")
+
+    monkeypatch.setattr(gateway, "_persist_ai_run", persist)
+    monkeypatch.setattr(gateway, "acompletion", fake_acompletion)
+    monkeypatch.setattr(gateway.settings, "LLM_FALLBACK_MODEL", "anthropic/claude-haiku-4-5")
+    with pytest.raises(ChaveAusente):
+        await gateway.complete(
+            [{"role": "user", "content": "x"}], model="anthropic/claude-opus-4-7", purpose="triage"
+        )
+    assert len(gravados) == 1  # só o primário; credencial errada não tenta o fallback
+    run = gravados[0]
+    assert run["success"] is False and run["purpose"] == "triage"
+    assert "Missing Anthropic API Key" in str(run["error"])
