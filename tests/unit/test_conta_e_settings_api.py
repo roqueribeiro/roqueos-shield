@@ -128,3 +128,24 @@ async def test_viewer_nao_le_settings(cliente: AsyncClient) -> None:
     )
     assert (await cliente.get("/settings/ai")).status_code == 403
     del app.dependency_overrides[deps.get_principal]
+
+
+async def test_leituras_da_tela_aceitam_o_cookie(cliente: AsyncClient) -> None:
+    # Até o standalone, /ui/api/* só aceitava o APP_TOKEN (o único cliente era o proxy
+    # do RoqueOS). A tela standalone entra com o cookie da sessão.
+    assert (await cliente.get("/ui/api/scans")).status_code == 401
+    await _setup(cliente)
+    r = await cliente.get("/ui/api/scans")
+    assert r.status_code == 200, r.text
+    assert r.json() == []
+
+
+async def test_token_na_query_so_no_sse(cliente: AsyncClient) -> None:
+    r = await cliente.get("/ui/api/scans", params={"token": settings.APP_TOKEN})
+    assert r.status_code == 401
+    assert "events" in r.json()["detail"]
+
+
+async def test_ui_aceita_token_de_servico_no_cabecalho(cliente: AsyncClient) -> None:
+    r = await cliente.get("/ui/api/scans", headers={"X-API-Token": settings.APP_TOKEN})
+    assert r.status_code == 200
