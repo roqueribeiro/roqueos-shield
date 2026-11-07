@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     PHOENIX_COLLECTOR_ENDPOINT: str = "http://phoenix:6006/v1/traces"
 
     # API auth (token simples; pentester comercial num engagement)
+    # Chave Fernet (base64 urlsafe, 32 bytes) que cifra os segredos guardados pela
+    # tela (chave de API de IA). No standalone o primeiro boot gera; vazio = a tela
+    # não aceita gravar segredo (o RoqueOS injeta os dele por ambiente).
+    SECRETS_KEY: str = ""
+    # Pasta de dados do standalone (segredos gerados, SQLite, cache do trivy).
+    DATA_DIR: Path = Path("./data")
     APP_TOKEN: str = "dev-changeme"  # token simples API; trocar em prod
     # SEC-01: o APP_TOKEN mapeia para um principal de serviço ADMIN e é a chave de
     # sessão no fallback. Subir com o token de exemplo entrega admin a quem lê o

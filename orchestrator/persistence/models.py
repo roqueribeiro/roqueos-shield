@@ -173,6 +173,9 @@ class UserRow(SQLModel, table=True):
     role: str = Field(default="viewer", index=True)  # admin|operator|auditor|viewer
     # SHA-256 do token por-usuário (nunca guardamos o token em claro).
     api_token_hash: str | None = Field(default=None, index=True, unique=True)
+    # scrypt da senha (login da tela standalone). None = usuário sem senha, entra por
+    # token ou OIDC. Formato em `orchestrator.auth.senha`.
+    password_hash: str | None = None
     idp_subject: str | None = Field(default=None, index=True)  # OIDC `sub` (Fase 6)
     active: bool = Field(default=True, index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))
@@ -198,3 +201,19 @@ class AIRun(SQLModel, table=True):
     success: bool = True
     error: str | None = None
     created_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))
+
+
+class AppSettingRow(SQLModel, table=True):
+    """Configuração editável em runtime (IA e escopo), uma linha por campo.
+
+    O ambiente vence: campo cuja variável veio no ambiente do processo fica travado
+    e esta tabela não o sobrescreve (`orchestrator.runtime_settings`). Valor secreto
+    (chave de API) é gravado cifrado com `SECRETS_KEY`, nunca em claro.
+    """
+
+    __tablename__ = "app_settings"
+
+    key: str = Field(primary_key=True)
+    value: str  # JSON; segredo vai como "enc:v1:<fernet>"
+    updated_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))
+    updated_by: str | None = None

@@ -23,6 +23,9 @@ from orchestrator.api.routers import (
     auth as auth_router,
 )
 from orchestrator.api.routers import (
+    conta as conta_router,
+)
+from orchestrator.api.routers import (
     exposure as exposure_router,
 )
 from orchestrator.api.routers import (
@@ -39,6 +42,9 @@ from orchestrator.api.routers import (
 )
 from orchestrator.api.routers import (
     scans as scans_router,
+)
+from orchestrator.api.routers import (
+    settings as settings_router,
 )
 from orchestrator.api.routers import (
     targets as targets_router,
@@ -106,6 +112,19 @@ async def lifespan(app: FastAPI):
         await init_db()
         log.info("db.sqlite_init_done")
 
+    # Configuração gravada pela tela (IA e escopo) por cima do ambiente. O que veio
+    # no ambiente continua valendo; ver `orchestrator.runtime_settings`.
+    try:
+        from orchestrator.persistence.db import session as _db_session
+        from orchestrator.runtime_settings import aplicar
+
+        async with _db_session() as s:
+            aplicadas = await aplicar(s)
+        if aplicadas:
+            log.info("settings.runtime_aplicadas", campos=aplicadas)
+    except Exception as e:  # noqa: BLE001  banco sem a migration 0008 ainda
+        log.warning("settings.runtime_indisponivel", error=str(e))
+
     # phoenix tracing opt-in
     if settings.PHOENIX_ENABLED and settings.PHOENIX_COLLECTOR_ENDPOINT:
         try:
@@ -136,6 +155,8 @@ app.include_router(health_router.router)  # /health/full
 app.include_router(ui_router.router)  # /ui/api/*
 app.include_router(users_router.router)  # /users (admin-only, RBAC)
 app.include_router(auth_router.router)  # /auth (OIDC SSO)
+app.include_router(conta_router.router)  # /setup, /auth/session (senha, standalone)
+app.include_router(settings_router.router)  # /settings/ai, /settings/scope
 
 # Session cookie pro state/nonce do fluxo OIDC (authlib usa request.session).
 # Só montamos o SessionMiddleware quando o OIDC está realmente configurado — assim

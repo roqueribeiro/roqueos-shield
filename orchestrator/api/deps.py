@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Cookie, Depends, Header, HTTPException, Request, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -31,6 +31,15 @@ from orchestrator.persistence.db import get_session
 from orchestrator.persistence.models import UserRow
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+# Cookie da sessão da tela standalone (httpOnly: o JavaScript não lê, então um XSS
+# não leva a sessão). O mesmo JWT do login OIDC, em outro transporte.
+COOKIE_SESSAO = "rs_session"
+# Cabeçalho que a tela manda em toda escrita. Navegador não deixa outro site pôr
+# cabeçalho próprio num request sem preflight de CORS, e nós não liberamos CORS:
+# isto é o que impede um formulário de outro site de usar o cookie (CSRF).
+CABECALHO_CSRF = "X-RoqueShield"
+_METODOS_SEGUROS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 @dataclass(frozen=True)
@@ -56,6 +65,8 @@ async def get_principal(
     session: SessionDep,
     x_api_token: Annotated[str | None, Header(alias="X-API-Token")] = None,
     authorization: Annotated[str | None, Header()] = None,
+    rs_session: Annotated[str | None, Cookie(alias=COOKIE_SESSAO, include_in_schema=False)] = None,
+    request: Request = None,  # type: ignore[assignment]  # o FastAPI sempre injeta; None só em chamada direta
 ) -> Principal:
     """Resolve o `Principal` a partir das credenciais do request.
 
@@ -64,6 +75,8 @@ async def get_principal(
     2. `X-API-Token` = token por-usuário → lookup por hash.
     3. `Authorization: Bearer <session-jwt>` (login OIDC/SSO) → valida a sessão e
        **re-busca o usuário no DB** (papel/ativo correntes — revoga na hora).
+    4. Cookie `rs_session` (login por senha da tela standalone) → o mesmo JWT; em
+       escrita exige o cabeçalho `X-RoqueShield` (CSRF).
 
     401 se nenhuma credencial válida.
     """
@@ -85,9 +98,22 @@ async def get_principal(
             )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="X-API-Token inválido")
 
-    # 3) sessão OIDC (Bearer JWT)
+    # 3) sessão OIDC (Bearer JWT), ou 4) a mesma sessão no cookie da tela
+    jwt_sessao: str | None = None
     if authorization and authorization.lower().startswith("bearer "):
-        claims = verify_session(authorization[7:].strip())
+        jwt_sessao = authorization[7:].strip()
+    elif rs_session:
+        # Sem request (chamada direta, fora de HTTP) conta como escrita: falha fechado.
+        metodo = request.method if request is not None else "POST"
+        tem_csrf = bool(request is not None and request.headers.get(CABECALHO_CSRF))
+        if metodo not in _METODOS_SEGUROS and not tem_csrf:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"escrita por cookie exige o cabeçalho {CABECALHO_CSRF}",
+            )
+        jwt_sessao = rs_session
+    if jwt_sessao is not None:
+        claims = verify_session(jwt_sessao)
         if claims:
             try:
                 user = await session.get(UserRow, UUID(claims["sub"]))

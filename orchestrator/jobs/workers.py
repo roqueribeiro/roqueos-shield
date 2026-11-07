@@ -36,6 +36,13 @@ async def run_scan_job(
     consumido + expira) — nunca da `scans` table, que não guarda o segredo.
     """
     from orchestrator.jobs.pipelines import run_scan
+    from orchestrator.persistence.db import session as _db_session
+    from orchestrator.runtime_settings import aplicar
+
+    # A tela pode ter trocado o modelo de IA ou o escopo desde o último job: este
+    # processo é outro, então lê de novo antes de começar.
+    async with _db_session() as s:
+        await aplicar(s)
 
     target = Target(
         asset_type=AssetType(asset_type),
