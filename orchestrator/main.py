@@ -47,6 +47,9 @@ from orchestrator.api.routers import (
     settings as settings_router,
 )
 from orchestrator.api.routers import (
+    system as system_router,
+)
+from orchestrator.api.routers import (
     targets as targets_router,
 )
 from orchestrator.api.routers import (
@@ -157,6 +160,7 @@ app.include_router(users_router.router)  # /users (admin-only, RBAC)
 app.include_router(auth_router.router)  # /auth (OIDC SSO)
 app.include_router(conta_router.router)  # /setup, /auth/session (senha, standalone)
 app.include_router(settings_router.router)  # /settings/ai, /settings/scope
+app.include_router(system_router.router)  # /system/services, /system/logs, /system/usage
 
 # Session cookie pro state/nonce do fluxo OIDC (authlib usa request.session).
 # Só montamos o SessionMiddleware quando o OIDC está realmente configurado — assim
