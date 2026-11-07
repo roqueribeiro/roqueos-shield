@@ -25,6 +25,9 @@ SEGREDOS: dict[str, int] = {
     "APP_TOKEN": 32,
     "SESSION_SECRET": 32,
     "SECRETS_KEY": 32,
+    # O ZAP do container escuta só em 127.0.0.1, mas a API dele aceita qualquer
+    # processo local: a chave fecha isso para o que não for o worker.
+    "ZAP_API_KEY": 24,
 }
 
 

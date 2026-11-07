@@ -149,3 +149,13 @@ async def test_logs_servico_invalido_e_viewer(monkeypatch: pytest.MonkeyPatch) -
         assert (await c.get("/system/logs/WORKER")).status_code == 400
     async with _cliente_http(Role.VIEWER) as c:
         assert (await c.get("/system/logs/worker")).status_code == 403
+
+
+def test_sem_teto_no_cgroup_usa_a_memoria_da_maquina(tmp_path: Path) -> None:
+    cg = tmp_path / "cg"
+    cg.mkdir()
+    (cg / "memory.max").write_text("max\n")
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    (proc / "meminfo").write_text("MemTotal:        8122332 kB\n")
+    assert telemetria._limite_de_memoria(cg, proc) == 8122332 * 1024

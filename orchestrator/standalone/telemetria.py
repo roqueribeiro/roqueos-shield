@@ -80,12 +80,23 @@ def _inicio(proc: Path, pid: int) -> str | None:
     return datetime.fromtimestamp(st.st_mtime, UTC).isoformat()
 
 
-def _limite_de_memoria(cgroup: Path) -> int | None:
+def _memoria_da_maquina(proc: Path = PROC) -> int | None:
+    try:
+        for linha in (proc / "meminfo").read_text().splitlines():
+            if linha.startswith("MemTotal:"):
+                return int(linha.split()[1]) * 1024
+    except (OSError, ValueError):
+        return None
+    return None
+
+
+def _limite_de_memoria(cgroup: Path, proc: Path = PROC) -> int | None:
+    """O teto do container; sem teto (`max`, o padrão do `docker run`), a memória da máquina."""
     try:
         bruto = (cgroup / "memory.max").read_text().strip()
     except OSError:
         return None
-    return None if bruto == "max" else int(bruto)
+    return _memoria_da_maquina(proc) if bruto == "max" else int(bruto)
 
 
 def servicos(proc: Path = PROC, cgroup: Path = CGROUP, janela: float = 0.25) -> dict[str, Any]:
