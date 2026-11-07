@@ -141,11 +141,43 @@ async def lifespan(app: FastAPI):
     yield
 
 
+_DESCRICAO = """
+API do **RoqueShield**: teste contínuo de segurança com triagem de IA.
+
+**Como autenticar.** Clique em *Authorize* e cole um token no `ApiToken`. Um admin cria
+tokens por usuário em `POST /users` (ou na tela, em Usuários); o token aparece uma vez
+só. A tela web usa um cookie de sessão próprio e não precisa disto.
+
+**O contrato do silêncio.** Zero achado só quer dizer "limpo" quando
+`coverage_complete` é `true`. Scanner que não rodou aparece em `scanners_skipped` com o
+motivo, nunca como lista vazia.
+
+Também: CLI `roqueshield`, servidor MCP em `/mcp` e o AI Fix Bundle em
+`GET /reports/{scan_id}/ai-bundle`.
+"""
+
+_TAGS = [
+    {"name": "conta", "description": "Primeiro uso e login por senha da tela."},
+    {"name": "targets", "description": "Alvos autorizados."},
+    {"name": "scans", "description": "Disparar, acompanhar e apagar scans."},
+    {"name": "findings", "description": "Achados, fila de triagem e resolução."},
+    {"name": "reports", "description": "Relatórios, conformidade e o AI Fix Bundle."},
+    {"name": "investigate", "description": "Investigação de um achado pelo agente, sob a coleira."},
+    {"name": "exposure", "description": "Exposição externa (OSINT)."},
+    {"name": "settings", "description": "Configuração de IA e de escopo, sem reiniciar."},
+    {"name": "system", "description": "Serviços, logs e uso do container."},
+    {"name": "users", "description": "Usuários, papéis e tokens."},
+    {"name": "auth", "description": "Login OIDC (SSO)."},
+    {"name": "ui", "description": "Leituras agregadas que a tela usa, e o SSE de progresso."},
+    {"name": "health", "description": "Saúde do serviço e de cada dependência."},
+]
+
 app = FastAPI(
-    title="CAI Orchestrator",
-    description="Continuous AI Security testing platform",
+    title="RoqueShield API",
+    description=_DESCRICAO,
     version="0.4.1",
     lifespan=lifespan,
+    openapi_tags=_TAGS,
 )
 
 app.include_router(targets_router.router)

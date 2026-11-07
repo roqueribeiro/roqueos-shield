@@ -116,3 +116,41 @@ async def put_scope(
 ) -> dict[str, Any]:
     await _salvar(session, CAMPOS_ESCOPO, body, principal, "settings.scope")
     return escopo()
+
+
+class ModelosIn(BaseModel):
+    """Chaves para listar antes de salvar. Ausente = usa a guardada."""
+
+    model_config = ConfigDict(extra="forbid")
+    apiBase: str | None = None
+    apiKey: str | None = None
+    anthropicKey: str | None = None
+    openaiKey: str | None = None
+    openrouterKey: str | None = None
+
+
+class ModeloOut(BaseModel):
+    id: str
+    label: str
+
+
+class GrupoOut(BaseModel):
+    provider: str
+    label: str
+    live: bool = Field(description="false = lista curta escrita à mão, o provedor não respondeu")
+    models: list[ModeloOut]
+
+
+class ModelosOut(BaseModel):
+    groups: list[GrupoOut]
+    errors: list[str]
+
+
+@router.post("/ai/models", response_model=ModelosOut)
+async def listar_modelos(body: ModelosIn, _p: Principal = RequireConfigManage) -> dict[str, Any]:
+    """Os modelos que cada chave alcança, buscados do lado do servidor."""
+    from orchestrator.standalone.modelos import listar
+
+    return await listar(
+        {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    )

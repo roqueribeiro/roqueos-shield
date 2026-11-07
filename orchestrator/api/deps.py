@@ -20,7 +20,8 @@ from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Cookie, Depends, Header, HTTPException, Request, status
+from fastapi import Cookie, Depends, HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader, HTTPBearer
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -40,6 +41,21 @@ COOKIE_SESSAO = "rs_session"
 # isto é o que impede um formulário de outro site de usar o cookie (CSRF).
 CABECALHO_CSRF = "X-RoqueShield"
 _METODOS_SEGUROS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+# Declarados como esquema de segurança para o Swagger mostrar o botão Authorize e
+# saber pôr a credencial em toda chamada. auto_error=False: quem decide o 401 é o
+# get_principal, que conhece as quatro formas de entrar.
+_ESQUEMA_TOKEN = APIKeyHeader(
+    name="X-API-Token",
+    auto_error=False,
+    scheme_name="ApiToken",
+    description="Token de usuário (crie em Usuários) ou o APP_TOKEN de serviço.",
+)
+_ESQUEMA_BEARER = HTTPBearer(
+    auto_error=False,
+    scheme_name="Sessao",
+    description="Sessão JWT do login OIDC.",
+)
 
 
 @dataclass(frozen=True)
@@ -63,8 +79,8 @@ def token_hash(token: str) -> str:
 
 async def get_principal(
     session: SessionDep,
-    x_api_token: Annotated[str | None, Header(alias="X-API-Token")] = None,
-    authorization: Annotated[str | None, Header()] = None,
+    x_api_token: Annotated[str | None, Security(_ESQUEMA_TOKEN)] = None,
+    bearer: Annotated[object | None, Security(_ESQUEMA_BEARER)] = None,
     rs_session: Annotated[str | None, Cookie(alias=COOKIE_SESSAO, include_in_schema=False)] = None,
     request: Request = None,  # type: ignore[assignment]  # o FastAPI sempre injeta; None só em chamada direta
 ) -> Principal:
@@ -100,8 +116,9 @@ async def get_principal(
 
     # 3) sessão OIDC (Bearer JWT), ou 4) a mesma sessão no cookie da tela
     jwt_sessao: str | None = None
-    if authorization and authorization.lower().startswith("bearer "):
-        jwt_sessao = authorization[7:].strip()
+    credencial = getattr(bearer, "credentials", None)
+    if credencial:
+        jwt_sessao = credencial
     elif rs_session:
         # Sem request (chamada direta, fora de HTTP) conta como escrita: falha fechado.
         metodo = request.method if request is not None else "POST"

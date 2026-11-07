@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 
 from orchestrator.api import deps
 from orchestrator.api.deps import (
@@ -117,7 +118,11 @@ async def test_bearer_session_maps_to_user_with_current_role():
     jwt_tok = issue_session(user_id=uid, email="op@bank.com", role="operator")
     session = MagicMock()
     session.get = AsyncMock(return_value=user)
-    p = await get_principal(session=session, x_api_token=None, authorization=f"Bearer {jwt_tok}")
+    p = await get_principal(
+        session=session,
+        x_api_token=None,
+        bearer=HTTPAuthorizationCredentials(scheme="Bearer", credentials=jwt_tok),
+    )
     assert p.email == "op@bank.com"
     assert p.role is Role.OPERATOR
     assert p.is_service is False
@@ -134,7 +139,11 @@ async def test_bearer_inactive_user_is_401():
     session = MagicMock()
     session.get = AsyncMock(return_value=user)
     with pytest.raises(HTTPException) as ei:
-        await get_principal(session=session, x_api_token=None, authorization=f"Bearer {jwt_tok}")
+        await get_principal(
+            session=session,
+            x_api_token=None,
+            bearer=HTTPAuthorizationCredentials(scheme="Bearer", credentials=jwt_tok),
+        )
     assert ei.value.status_code == 401
 
 
@@ -142,5 +151,9 @@ async def test_bearer_garbage_is_401():
     session = MagicMock()
     session.get = AsyncMock(return_value=None)
     with pytest.raises(HTTPException) as ei:
-        await get_principal(session=session, x_api_token=None, authorization="Bearer not.a.jwt")
+        await get_principal(
+            session=session,
+            x_api_token=None,
+            bearer=HTTPAuthorizationCredentials(scheme="Bearer", credentials="not.a.jwt"),
+        )
     assert ei.value.status_code == 401

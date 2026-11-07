@@ -1,0 +1,4175 @@
+{
+  "components": {
+    "schemas": {
+      "AssetType": {
+        "enum": [
+          "host",
+          "url",
+          "port",
+          "image",
+          "repo",
+          "domain",
+          "k8s_resource"
+        ],
+        "title": "AssetType",
+        "type": "string"
+      },
+      "AuthContext": {
+        "description": "Contexto de autenticação pra scanning autenticado (atrás de login).\n\nOs `headers` (Cookie/Authorization/custom) são SEGREDOS: nunca persistem na\ntabela `scans` — viajam só como arg efêmero do job (Redis) até o worker, e\no scrubber redige seus valores de qualquer evidência/relatório. O\n`openapi_url` NÃO é segredo (é a spec pública da API) e pode ser persistido.",
+        "properties": {
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Headers injetados em toda request (ex.: Cookie, Authorization).",
+            "title": "Headers",
+            "type": "object"
+          },
+          "openapi_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL de uma spec OpenAPI/Swagger pra enumerar a superfície da API.",
+            "title": "Openapi Url"
+          }
+        },
+        "title": "AuthContext",
+        "type": "object"
+      },
+      "EscopoIn": {
+        "additionalProperties": false,
+        "properties": {
+          "allowCloudFallback": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowcloudfallback"
+          },
+          "allowlist": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              [
+                "app.empresa.com.br",
+                "10.0.0.0/8"
+              ]
+            ],
+            "title": "Allowlist"
+          },
+          "labOnly": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labonly"
+          },
+          "requireAuthRef": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requireauthref"
+          }
+        },
+        "title": "EscopoIn",
+        "type": "object"
+      },
+      "EscopoOut": {
+        "properties": {
+          "allowCloudFallback": {
+            "title": "Allowcloudfallback",
+            "type": "boolean"
+          },
+          "allowlist": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowlist",
+            "type": "array"
+          },
+          "labOnly": {
+            "title": "Labonly",
+            "type": "boolean"
+          },
+          "locked": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Locked",
+            "type": "array"
+          },
+          "requireAuthRef": {
+            "title": "Requireauthref",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "labOnly",
+          "allowlist",
+          "requireAuthRef",
+          "allowCloudFallback",
+          "locked"
+        ],
+        "title": "EscopoOut",
+        "type": "object"
+      },
+      "ExposureIn": {
+        "properties": {
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Domains",
+            "type": "array"
+          },
+          "dorks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Dorks",
+            "type": "array"
+          },
+          "github_orgs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Github Orgs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "company_name"
+        ],
+        "title": "ExposureIn",
+        "type": "object"
+      },
+      "ExposureOut": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "job_id",
+          "queued"
+        ],
+        "title": "ExposureOut",
+        "type": "object"
+      },
+      "FindingOut": {
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "string"
+          },
+          "deduped_key": {
+            "title": "Deduped Key",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "scan_id": {
+            "format": "uuid",
+            "title": "Scan Id",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "source_tool": {
+            "title": "Source Tool",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "vuln_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vuln Id"
+          }
+        },
+        "required": [
+          "id",
+          "scan_id",
+          "target_id",
+          "deduped_key",
+          "source_tool",
+          "title",
+          "severity",
+          "confidence",
+          "vuln_id",
+          "payload",
+          "status"
+        ],
+        "title": "FindingOut",
+        "type": "object"
+      },
+      "FindingStatus": {
+        "description": "Estado de RESOLUÇÃO de um problema (workflow), ortogonal à severity.\n\nAtrelado ao `deduped_key` (identidade determinística do problema), não a um\nFindingRow (instância de um scan) — ver `FindingStatusRow`.",
+        "enum": [
+          "open",
+          "in_progress",
+          "resolved",
+          "false_positive",
+          "wont_fix",
+          "risk_accepted"
+        ],
+        "title": "FindingStatus",
+        "type": "string"
+      },
+      "GrupoOut": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "live": {
+            "description": "false = lista curta escrita à mão, o provedor não respondeu",
+            "title": "Live",
+            "type": "boolean"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModeloOut"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "label",
+          "live",
+          "models"
+        ],
+        "title": "GrupoOut",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "IaIn": {
+        "additionalProperties": false,
+        "description": "Só o que vier é gravado. Chave: string vazia apaga, ausente mantém.",
+        "properties": {
+          "anthropicKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anthropickey"
+          },
+          "apiBase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "http://host.docker.internal:1234/v1"
+            ],
+            "title": "Apibase"
+          },
+          "apiKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apikey"
+          },
+          "fallbackModel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallbackmodel"
+          },
+          "investigationModel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investigationmodel"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "anthropic/claude-sonnet-4-6"
+            ],
+            "title": "Model"
+          },
+          "openaiKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openaikey"
+          },
+          "openrouterKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openrouterkey"
+          }
+        },
+        "title": "IaIn",
+        "type": "object"
+      },
+      "IaOut": {
+        "properties": {
+          "apiBase": {
+            "title": "Apibase",
+            "type": "string"
+          },
+          "fallbackModel": {
+            "title": "Fallbackmodel",
+            "type": "string"
+          },
+          "hasAnthropicKey": {
+            "title": "Hasanthropickey",
+            "type": "boolean"
+          },
+          "hasApiKey": {
+            "title": "Hasapikey",
+            "type": "boolean"
+          },
+          "hasOpenaiKey": {
+            "title": "Hasopenaikey",
+            "type": "boolean"
+          },
+          "hasOpenrouterKey": {
+            "title": "Hasopenrouterkey",
+            "type": "boolean"
+          },
+          "investigationModel": {
+            "title": "Investigationmodel",
+            "type": "string"
+          },
+          "isLocal": {
+            "title": "Islocal",
+            "type": "boolean"
+          },
+          "locked": {
+            "description": "campos definidos pelo ambiente; a tela não troca",
+            "items": {
+              "type": "string"
+            },
+            "title": "Locked",
+            "type": "array"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "fallbackModel",
+          "investigationModel",
+          "apiBase",
+          "hasApiKey",
+          "hasAnthropicKey",
+          "hasOpenaiKey",
+          "hasOpenrouterKey",
+          "isLocal",
+          "locked"
+        ],
+        "title": "IaOut",
+        "type": "object"
+      },
+      "InvestigationIn": {
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instructions"
+          },
+          "max_steps": {
+            "default": 10,
+            "title": "Max Steps",
+            "type": "integer"
+          }
+        },
+        "title": "InvestigationIn",
+        "type": "object"
+      },
+      "InvestigationOut": {
+        "properties": {
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "final_assessment": {
+            "title": "Final Assessment",
+            "type": "string"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "title": "Finding Id",
+            "type": "string"
+          },
+          "trace_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Url"
+          },
+          "transcript": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Transcript",
+            "type": "array"
+          }
+        },
+        "required": [
+          "finding_id",
+          "transcript",
+          "final_assessment",
+          "dry_run"
+        ],
+        "title": "InvestigationOut",
+        "type": "object"
+      },
+      "LoginIn": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginIn",
+        "type": "object"
+      },
+      "ModeloOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ModeloOut",
+        "type": "object"
+      },
+      "ModelosIn": {
+        "additionalProperties": false,
+        "description": "Chaves para listar antes de salvar. Ausente = usa a guardada.",
+        "properties": {
+          "anthropicKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anthropickey"
+          },
+          "apiBase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apibase"
+          },
+          "apiKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apikey"
+          },
+          "openaiKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openaikey"
+          },
+          "openrouterKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openrouterkey"
+          }
+        },
+        "title": "ModelosIn",
+        "type": "object"
+      },
+      "ModelosOut": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/GrupoOut"
+            },
+            "title": "Groups",
+            "type": "array"
+          }
+        },
+        "required": [
+          "groups",
+          "errors"
+        ],
+        "title": "ModelosOut",
+        "type": "object"
+      },
+      "QueueItem": {
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "string"
+          },
+          "cwe": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cwe",
+            "type": "array"
+          },
+          "deduped_key": {
+            "title": "Deduped Key",
+            "type": "string"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "title": "Finding Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "owasp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owasp"
+          },
+          "remediation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remediation"
+          },
+          "scan_id": {
+            "format": "uuid",
+            "title": "Scan Id",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "source_tool": {
+            "title": "Source Tool",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "vuln_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vuln Id"
+          }
+        },
+        "required": [
+          "finding_id",
+          "scan_id",
+          "deduped_key",
+          "severity",
+          "status",
+          "confidence",
+          "source_tool",
+          "vuln_id",
+          "owasp",
+          "cwe",
+          "title",
+          "target",
+          "remediation",
+          "note"
+        ],
+        "title": "QueueItem",
+        "type": "object"
+      },
+      "QueuePage": {
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QueueItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "status_filter": {
+            "title": "Status Filter",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit",
+          "has_more",
+          "status_filter"
+        ],
+        "title": "QueuePage",
+        "type": "object"
+      },
+      "ResolveIn": {
+        "properties": {
+          "deduped_key": {
+            "title": "Deduped Key",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FindingStatus",
+            "default": "resolved"
+          }
+        },
+        "required": [
+          "deduped_key"
+        ],
+        "title": "ResolveIn",
+        "type": "object"
+      },
+      "ResolveOut": {
+        "properties": {
+          "deduped_key": {
+            "title": "Deduped Key",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "deduped_key",
+          "status",
+          "note",
+          "updated_by",
+          "updated_at",
+          "resolved_at"
+        ],
+        "title": "ResolveOut",
+        "type": "object"
+      },
+      "Role": {
+        "enum": [
+          "admin",
+          "operator",
+          "auditor",
+          "viewer"
+        ],
+        "title": "Role",
+        "type": "string"
+      },
+      "RoleUpdate": {
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "title": "RoleUpdate",
+        "type": "object"
+      },
+      "ScanIn": {
+        "properties": {
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "auth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AuthContext"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Scanning autenticado — headers efêmeros + OpenAPI (ver AuthContext)."
+          },
+          "authorization_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Referencia formal a autorizacao do scan (ticket, change, aprovacao escrita). Exigido quando settings.REQUIRE_AUTH_REF=true.",
+            "title": "Authorization Ref"
+          },
+          "options": {
+            "additionalProperties": true,
+            "title": "Options",
+            "type": "object"
+          },
+          "profile": {
+            "default": "web",
+            "title": "Profile",
+            "type": "string"
+          },
+          "scanners": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Scanners a rodar. None (default) = escolhe pelo asset_type do target (image→trivy, repo→semgrep+gitleaks+…, url→zap, host→nmap). O default antigo era ['nmap','zap'] fixo, que zerava scan de IMAGE/REPO.",
+            "title": "Scanners"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id"
+        ],
+        "title": "ScanIn",
+        "type": "object"
+      },
+      "ScanOut": {
+        "properties": {
+          "authorization_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorization Ref"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "report_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Path"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target_id",
+          "state",
+          "profile",
+          "authorization_ref",
+          "started_at",
+          "finished_at",
+          "report_path",
+          "errors"
+        ],
+        "title": "ScanOut",
+        "type": "object"
+      },
+      "SessaoOut": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role"
+        ],
+        "title": "SessaoOut",
+        "type": "object"
+      },
+      "SetupIn": {
+        "properties": {
+          "email": {
+            "examples": [
+              "admin@empresa.com.br"
+            ],
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "SetupIn",
+        "type": "object"
+      },
+      "SetupStatus": {
+        "properties": {
+          "needs_setup": {
+            "description": "true enquanto não existe nenhum usuário",
+            "title": "Needs Setup",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "needs_setup",
+          "version"
+        ],
+        "title": "SetupStatus",
+        "type": "object"
+      },
+      "Severity": {
+        "enum": [
+          "info",
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "title": "Severity",
+        "type": "string"
+      },
+      "SummaryOut": {
+        "properties": {
+          "by_severity": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Severity",
+            "type": "object"
+          },
+          "by_severity_status": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "title": "By Severity Status",
+            "type": "object"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Status",
+            "type": "object"
+          },
+          "open": {
+            "title": "Open",
+            "type": "integer"
+          },
+          "resolved": {
+            "title": "Resolved",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "open",
+          "resolved",
+          "by_status",
+          "by_severity",
+          "by_severity_status"
+        ],
+        "title": "SummaryOut",
+        "type": "object"
+      },
+      "TargetIn": {
+        "properties": {
+          "asset_type": {
+            "$ref": "#/components/schemas/AssetType"
+          },
+          "contains_pii": {
+            "default": false,
+            "title": "Contains Pii",
+            "type": "boolean"
+          },
+          "criticality": {
+            "$ref": "#/components/schemas/Severity",
+            "default": "medium"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset_type",
+          "value"
+        ],
+        "title": "TargetIn",
+        "type": "object"
+      },
+      "TargetOut": {
+        "properties": {
+          "asset_type": {
+            "title": "Asset Type",
+            "type": "string"
+          },
+          "contains_pii": {
+            "title": "Contains Pii",
+            "type": "boolean"
+          },
+          "criticality": {
+            "title": "Criticality",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "asset_type",
+          "value",
+          "label",
+          "criticality",
+          "contains_pii"
+        ],
+        "title": "TargetOut",
+        "type": "object"
+      },
+      "UserCreate": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role",
+            "default": "viewer"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "UserCreate",
+        "type": "object"
+      },
+      "UserCreated": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "api_token": {
+            "description": "Token do usuário — mostrado UMA vez.",
+            "title": "Api Token",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role",
+          "active",
+          "created_at",
+          "last_login_at",
+          "api_token"
+        ],
+        "title": "UserCreated",
+        "type": "object"
+      },
+      "UserOut": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role",
+          "active",
+          "created_at",
+          "last_login_at"
+        ],
+        "title": "UserOut",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "ApiToken": {
+        "description": "Token de usuário (crie em Usuários) ou o APP_TOKEN de serviço.",
+        "in": "header",
+        "name": "X-API-Token",
+        "type": "apiKey"
+      },
+      "Sessao": {
+        "description": "Sessão JWT do login OIDC.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "\nAPI do **RoqueShield**: teste contínuo de segurança com triagem de IA.\n\n**Como autenticar.** Clique em *Authorize* e cole um token no `ApiToken`. Um admin cria\ntokens por usuário em `POST /users` (ou na tela, em Usuários); o token aparece uma vez\nsó. A tela web usa um cookie de sessão próprio e não precisa disto.\n\n**O contrato do silêncio.** Zero achado só quer dizer \"limpo\" quando\n`coverage_complete` é `true`. Scanner que não rodou aparece em `scanners_skipped` com o\nmotivo, nunca como lista vazia.\n\nTambém: CLI `roqueshield`, servidor MCP em `/mcp` e o AI Fix Bundle em\n`GET /reports/{scan_id}/ai-bundle`.\n",
+    "title": "RoqueShield API",
+    "version": "0.4.1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "description": "Raiz redireciona pro dashboard.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Root"
+      }
+    },
+    "/auth/callback": {
+      "get": {
+        "description": "Recebe o code do IdP → valida → provisiona usuário → emite sessão JWT.",
+        "operationId": "oidc_callback_auth_callback_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Oidc Callback",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "get": {
+        "description": "Inicia o fluxo OIDC — redireciona o browser pro IdP.",
+        "operationId": "login_auth_login_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "description": "Identidade autenticada corrente (serve pra qualquer credencial válida).",
+        "operationId": "me_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Me Auth Me Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/session": {
+      "delete": {
+        "operationId": "logout_auth_session_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "conta"
+        ]
+      },
+      "get": {
+        "operationId": "quem_sou_auth_session_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessaoOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Quem Sou",
+        "tags": [
+          "conta"
+        ]
+      },
+      "post": {
+        "operationId": "login_auth_session_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessaoOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "conta"
+        ]
+      }
+    },
+    "/exposure/scan": {
+      "post": {
+        "operationId": "scan_exposure_exposure_scan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExposureIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExposureOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Scan Exposure",
+        "tags": [
+          "exposure"
+        ]
+      }
+    },
+    "/findings": {
+      "get": {
+        "operationId": "list_findings_findings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scan_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scan Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FindingOut"
+                  },
+                  "title": "Response List Findings Findings Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "List Findings",
+        "tags": [
+          "findings"
+        ]
+      }
+    },
+    "/findings/queue": {
+      "get": {
+        "description": "Fila de problemas pra a AI resolver — paginada, compacta, severity-first.\n\nUm item por `deduped_key` (problema único, não por instância de scan). O\nstatus efetivo é `finding_status` (default `open`). Use `finding_id` em\n`GET /findings/{id}` pra puxar o detalhe completo de um problema.",
+        "operationId": "findings_queue_findings_queue_get",
+        "parameters": [
+          {
+            "description": "filtro de status: open|in_progress|resolved|false_positive|wont_fix|risk_accepted, ou 'all'",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "open",
+              "description": "filtro de status: open|in_progress|resolved|false_positive|wont_fix|risk_accepted, ou 'all'",
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "description": "só essa severity e acima: critical|high|medium|low|info",
+            "in": "query",
+            "name": "min_severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "só essa severity e acima: critical|high|medium|low|info",
+              "title": "Min Severity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueuePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Findings Queue",
+        "tags": [
+          "findings"
+        ]
+      }
+    },
+    "/findings/resolve": {
+      "post": {
+        "description": "Muda o status de resolução de um problema (por `deduped_key`).\n\nUpsert em `finding_status` + entrada no `audit_log`. Requer `scans:run`\n(operator+). Persiste entre re-scans.",
+        "operationId": "resolve_finding_findings_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Resolve Finding",
+        "tags": [
+          "findings"
+        ]
+      }
+    },
+    "/findings/summary": {
+      "get": {
+        "description": "Contagens por severity × status (um problema único por `deduped_key`).",
+        "operationId": "findings_summary_findings_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Findings Summary",
+        "tags": [
+          "findings"
+        ]
+      }
+    },
+    "/findings/{finding_id}": {
+      "get": {
+        "operationId": "get_finding_findings__finding_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "finding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Finding Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Get Finding",
+        "tags": [
+          "findings"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Liveness simples (sem auth, leve). /health/full pra checagem completa.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/health/full": {
+      "get": {
+        "description": "Checa Postgres, Redis, ZAP, LLM local + cloud em paralelo.",
+        "operationId": "health_full_health_full_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Full Health Full Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Health Full",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/investigate/{finding_id}": {
+      "post": {
+        "operationId": "investigate_investigate__finding_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "finding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Finding Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvestigationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Investigate",
+        "tags": [
+          "investigate"
+        ]
+      }
+    },
+    "/reports/{scan_id}": {
+      "get": {
+        "operationId": "download_report_reports__scan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Download Report",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/reports/{scan_id}/ai-bundle": {
+      "get": {
+        "description": "AI Fix Bundle — JSON estruturado pra outra IA consumir e patchar código.\n\nSchema versionado em `docs/ai-fix-bundle-spec.md`. Patcher externo\n(Claude Code, Cursor, Copilot) recebe esse JSON e produz patches.",
+        "operationId": "download_ai_bundle_reports__scan_id__ai_bundle_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Download Ai Bundle",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/reports/{scan_id}/compliance": {
+      "get": {
+        "description": "Mapeamento de compliance em JSON (consumível por GRC/SIEM/auditoria):\nOWASP Top 10 2021, PCI DSS 4.0, LGPD, CWE Top 25, CVSS e nota de postura.",
+        "operationId": "compliance_report_reports__scan_id__compliance_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Compliance Report",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/reports/{scan_id}/executive": {
+      "get": {
+        "description": "Relatório EXECUTIVO HTML — postura de risco (nota A–F) + mapeamento de\ncompliance (OWASP Top 10 2021 → PCI DSS 4.0 + LGPD) + CWE Top 25 + top risks.\nGerado on-demand a partir dos achados persistidos (sempre fresco).",
+        "operationId": "executive_report_reports__scan_id__executive_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Executive Report",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/reports/{scan_id}/export/defectdojo": {
+      "post": {
+        "description": "Exporta findings desse scan pro DefectDojo via API.",
+        "operationId": "export_defectdojo_reports__scan_id__export_defectdojo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Export Defectdojo",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/scans": {
+      "get": {
+        "operationId": "list_scans_scans_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScanOut"
+                  },
+                  "title": "Response List Scans Scans Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "List Scans",
+        "tags": [
+          "scans"
+        ]
+      },
+      "post": {
+        "operationId": "create_scan_scans_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Create Scan",
+        "tags": [
+          "scans"
+        ]
+      }
+    },
+    "/scans/{scan_id}": {
+      "delete": {
+        "description": "Apaga um scan e tudo que depende dele (findings + AI runs). Registra\n`scan.delete` no audit_log append-only antes de remover.",
+        "operationId": "delete_scan_scans__scan_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Delete Scan",
+        "tags": [
+          "scans"
+        ]
+      },
+      "get": {
+        "operationId": "get_scan_scans__scan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Get Scan",
+        "tags": [
+          "scans"
+        ]
+      }
+    },
+    "/settings/ai": {
+      "get": {
+        "operationId": "get_ai_settings_ai_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IaOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Get Ai",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "put_ai_settings_ai_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IaIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IaOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Put Ai",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/ai/models": {
+      "post": {
+        "description": "Os modelos que cada chave alcança, buscados do lado do servidor.",
+        "operationId": "listar_modelos_settings_ai_models_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelosIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelosOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Listar Modelos",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/scope": {
+      "get": {
+        "operationId": "get_scope_settings_scope_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscopoOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Get Scope",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "put_scope_settings_scope_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EscopoIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscopoOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Put Scope",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/setup": {
+      "get": {
+        "description": "Sem autenticação: a tela precisa saber se mostra o primeiro uso ou o login.",
+        "operationId": "setup_status_setup_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Setup Status",
+        "tags": [
+          "conta"
+        ]
+      },
+      "post": {
+        "operationId": "setup_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessaoOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Setup",
+        "tags": [
+          "conta"
+        ]
+      }
+    },
+    "/system/logs/{service}": {
+      "get": {
+        "description": "As últimas linhas de um serviço. Vazio com `available=false` se o Redis não responde.",
+        "operationId": "logs_system_logs__service__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "service",
+            "required": true,
+            "schema": {
+              "title": "Service",
+              "type": "string"
+            }
+          },
+          {
+            "description": "ISO-8601; só linhas depois disto",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO-8601; só linhas depois disto",
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tail",
+            "required": false,
+            "schema": {
+              "default": 300,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Tail",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Logs System Logs  Service  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Logs",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/system/services": {
+      "get": {
+        "description": "Um cartão por processo do container (API, worker, Redis, ZAP), com CPU e memória.",
+        "operationId": "services_system_services_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Services System Services Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Services",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/system/usage": {
+      "get": {
+        "description": "CPU e memória do container inteiro. `disponivel=false` quando não há cgroup.",
+        "operationId": "usage_system_usage_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Usage System Usage Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Usage",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/targets": {
+      "get": {
+        "operationId": "list_targets_targets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TargetOut"
+                  },
+                  "title": "Response List Targets Targets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "List Targets",
+        "tags": [
+          "targets"
+        ]
+      },
+      "post": {
+        "operationId": "create_target_targets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TargetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Create Target",
+        "tags": [
+          "targets"
+        ]
+      }
+    },
+    "/targets/{target_id}": {
+      "get": {
+        "operationId": "get_target_targets__target_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Target Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Get Target",
+        "tags": [
+          "targets"
+        ]
+      }
+    },
+    "/ui/api/ai-runs": {
+      "get": {
+        "operationId": "list_ai_runs_ui_api_ai_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Ai Runs Ui Api Ai Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Ai Runs",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/ui/api/ai-runs/stats": {
+      "get": {
+        "description": "Agregações leves sobre últimas 1000 calls.",
+        "operationId": "ai_run_stats_ui_api_ai_runs_stats_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ai Run Stats Ui Api Ai Runs Stats Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ai Run Stats",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/ui/api/events": {
+      "get": {
+        "description": "Server-Sent Events: live logs + phase updates pra um scan_id (opcional).",
+        "operationId": "events_ui_api_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scan_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scan Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Events",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/ui/api/findings": {
+      "get": {
+        "operationId": "list_findings_ui_api_findings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scan_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scan Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Findings Ui Api Findings Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Findings",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/ui/api/scans": {
+      "get": {
+        "operationId": "list_scans_ui_api_scans_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Scans Ui Api Scans Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Scans",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/ui/api/scans/{scan_id}": {
+      "get": {
+        "operationId": "scan_detail_ui_api_scans__scan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Scan Detail Ui Api Scans  Scan Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scan Detail",
+        "tags": [
+          "ui"
+        ]
+      }
+    },
+    "/users": {
+      "get": {
+        "operationId": "list_users_users_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UserOut"
+                  },
+                  "title": "Response List Users Users Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "List Users",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "operationId": "create_user_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Create User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/{user_id}/deactivate": {
+      "post": {
+        "operationId": "deactivate_user_users__user_id__deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Deactivate User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/{user_id}/role": {
+      "patch": {
+        "operationId": "set_role_users__user_id__role_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Set Role",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/{user_id}/rotate-token": {
+      "post": {
+        "operationId": "rotate_token_users__user_id__rotate_token_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Rotate Token",
+        "tags": [
+          "users"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "Primeiro uso e login por senha da tela.",
+      "name": "conta"
+    },
+    {
+      "description": "Alvos autorizados.",
+      "name": "targets"
+    },
+    {
+      "description": "Disparar, acompanhar e apagar scans.",
+      "name": "scans"
+    },
+    {
+      "description": "Achados, fila de triagem e resolução.",
+      "name": "findings"
+    },
+    {
+      "description": "Relatórios, conformidade e o AI Fix Bundle.",
+      "name": "reports"
+    },
+    {
+      "description": "Investigação de um achado pelo agente, sob a coleira.",
+      "name": "investigate"
+    },
+    {
+      "description": "Exposição externa (OSINT).",
+      "name": "exposure"
+    },
+    {
+      "description": "Configuração de IA e de escopo, sem reiniciar.",
+      "name": "settings"
+    },
+    {
+      "description": "Serviços, logs e uso do container.",
+      "name": "system"
+    },
+    {
+      "description": "Usuários, papéis e tokens.",
+      "name": "users"
+    },
+    {
+      "description": "Login OIDC (SSO).",
+      "name": "auth"
+    },
+    {
+      "description": "Leituras agregadas que a tela usa, e o SSE de progresso.",
+      "name": "ui"
+    },
+    {
+      "description": "Saúde do serviço e de cada dependência.",
+      "name": "health"
+    }
+  ]
+}
