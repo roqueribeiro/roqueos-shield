@@ -208,10 +208,12 @@ if settings.OIDC_ISSUER and settings.OIDC_CLIENT_ID and settings.OIDC_CLIENT_SEC
         https_only=False,
     )
 
-# Static files servindo o dashboard em /ui
+# A tela. Com o build da tela standalone (`web/`, saída em `orchestrator/web_dist`),
+# ela é servida na raiz e o `/ui` antigo redireciona para lá. Sem o build (clone
+# novo, imagem do RoqueOS antiga), fica o dashboard simples de antes em `/ui`.
+# O mount na raiz vai por último: as rotas da API, registradas antes, casam primeiro.
 _STATIC_DIR = Path(__file__).parent / "static"
-if _STATIC_DIR.exists():
-    app.mount("/ui", StaticFiles(directory=str(_STATIC_DIR), html=True), name="ui")
+_WEB_DIST = Path(__file__).parent / "web_dist"
 
 
 @app.get("/health")
@@ -220,7 +222,21 @@ async def health() -> dict:
     return {"status": "ok", "version": app.version}
 
 
-@app.get("/")
-async def root() -> RedirectResponse:
-    """Raiz redireciona pro dashboard."""
-    return RedirectResponse(url="/ui/", status_code=302)
+if (_WEB_DIST / "index.html").exists():
+
+    @app.get("/ui", include_in_schema=False)
+    @app.get("/ui/", include_in_schema=False)
+    async def ui_antiga() -> RedirectResponse:
+        return RedirectResponse(url="/", status_code=301)
+
+    app.mount("/", StaticFiles(directory=str(_WEB_DIST), html=True), name="web")
+else:
+    if _STATIC_DIR.exists():
+        app.mount("/ui", StaticFiles(directory=str(_STATIC_DIR), html=True), name="ui")
+
+    # Fora do schema nos dois ramos: a fotografia do contrato (docs/openapi.json) não
+    # pode depender de a tela ter sido buildada na máquina de quem gerou.
+    @app.get("/", include_in_schema=False)
+    async def root() -> RedirectResponse:
+        """Raiz redireciona pro dashboard."""
+        return RedirectResponse(url="/ui/", status_code=302)

@@ -1573,23 +1573,6 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/": {
-      "get": {
-        "description": "Raiz redireciona pro dashboard.",
-        "operationId": "root__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Root"
-      }
-    },
     "/auth/callback": {
       "get": {
         "description": "Recebe o code do IdP → valida → provisiona usuário → emite sessão JWT.",
