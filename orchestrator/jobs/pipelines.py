@@ -461,10 +461,16 @@ async def _ensure_scan_row(scan_id: UUID, target: Target) -> None:
                     id=scan_id,
                     target_id=target_row.id,
                     state=ScanState.RUNNING.value,
+                    started_at=datetime.now(UTC),
                 )
                 s.add(scan_row)
             else:
                 scan_row.state = ScanState.RUNNING.value
+                # O começo do scan nunca era gravado: a tela mostrava "—" de duração
+                # em todo scan concluído e um tempo decorrido contado a partir de
+                # quando a aba abriu (medido no standalone em 06/11/2026).
+                if scan_row.started_at is None:
+                    scan_row.started_at = datetime.now(UTC)
                 if not scan_row.target_id:
                     scan_row.target_id = target_row.id
                 s.add(scan_row)
