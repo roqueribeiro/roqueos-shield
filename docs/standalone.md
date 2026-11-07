@@ -76,7 +76,11 @@ Do the first run **before** publishing the port beyond `127.0.0.1`.
 It is the same RoqueShield screen you get inside RoqueOS, with the same sections.
 
 **New scan.** Target type, profile, authentication and review, with a summary on the
-side. The authorization reference goes in here.
+side. The authorization reference goes in here. The profile picks the scanners:
+**Web** runs ZAP and nuclei (plus nmap for a host), **Network** runs nmap, **Full** runs
+everything that applies and turns on ZAP's active scan. A Web scan of a small app took
+8 to 13 minutes in our tests against OWASP Juice Shop, most of it nuclei going through
+its templates; the **Execution** tab shows it live.
 
 ![New scan](assets/screens/en-US/07-novo-scan.webp)
 

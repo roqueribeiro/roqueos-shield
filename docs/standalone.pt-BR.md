@@ -77,7 +77,11 @@ Faça o primeiro uso **antes** de publicar a porta fora do `127.0.0.1`.
 É a mesma tela do RoqueShield dentro do RoqueOS, com as mesmas seções.
 
 **Novo scan.** Tipo de alvo, perfil, autenticação e revisão, com o resumo ao lado. A
-referência de autorização entra aqui.
+referência de autorização entra aqui. O perfil escolhe os scanners: **Web** roda ZAP e
+nuclei (mais nmap quando o alvo é host), **Rede** roda nmap, **Completo** roda tudo o que
+se aplica e liga o active scan do ZAP. Um scan Web de uma aplicação pequena levou de 8 a 13
+minutos nos nossos testes contra o OWASP Juice Shop, a maior parte o nuclei passando pelos
+templates; a aba **Execução** mostra ao vivo.
 
 ![Novo scan](assets/screens/pt-BR/07-novo-scan.webp)
 
