@@ -248,6 +248,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
+      - name: Nenhuma versão do lock com menos de 14 dias
+        working-directory: web
+        run: node scripts/idade-do-lock.mjs
       - name: yarn install (lockfile congelado)
         working-directory: web
         run: yarn install --frozen-lockfile
