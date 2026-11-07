@@ -282,7 +282,16 @@ def validate_target_value(value: str, *, asset_type: str | None = None) -> str:
         # "/" depois dele.
         first = v.split("/", 1)[0] if "/" in v else ""
         if first and ("." in first or ":" in first or first == "localhost"):
-            registry_host = first.split(":", 1)[0]
+            # `[::1]:5000` tem o host entre colchetes; `host:5000` antes do último `:`.
+            # Cortar no primeiro `:` deixava `[` como host de um IPv6 (revisão do PR #20).
+            if first.startswith("["):
+                registry_host = first[1 : first.find("]")] if "]" in first else ""
+            else:
+                registry_host = first.rsplit(":", 1)[0] if first.count(":") == 1 else first
+            if not registry_host or (
+                not _HOSTNAME_RE.match(registry_host) and not _is_ip_literal(registry_host)
+            ):
+                raise TargetValidationError(f"registry malformado em {v!r}")
             # Loopback e metadata nem com LAB_ONLY=false (o mesmo dos outros tipos).
             _guarda_dura(registry_host, "registry")
             if (

@@ -173,10 +173,18 @@ async def test_usuario_criado_com_maiuscula_entra(cliente: AsyncClient) -> None:
 def test_registry_de_imagem_passa_pela_guarda_dura(monkeypatch: pytest.MonkeyPatch) -> None:
     # Revisão do PR #20: o tipo image saía antes da guarda dura.
     monkeypatch.setattr(settings, "LAB_ONLY", False)
-    for valor in ("169.254.169.254/x/y:latest", "127.0.0.1:5000/x/y:latest"):
+    for valor in (
+        "169.254.169.254/x/y:latest",
+        "127.0.0.1:5000/x/y:latest",
+        "[::1]:5000/img:latest",  # IPv6 entre colchetes (revisão do PR #20)
+        "[::ffff:169.254.169.254]/x:1",
+        "::1/img",
+    ):
         with pytest.raises(tv.TargetValidationError):
             tv.validate_target_value(valor, asset_type="image")
     assert tv.validate_target_value("nginx:1.27-alpine", asset_type="image")
+    monkeypatch.setattr(tv, "_resolve_host_ips", lambda h: ["93.184.216.34"])
+    assert tv.validate_target_value("ghcr.io:443/acme/app:1", asset_type="image")
 
 
 def test_nat64_de_loopback_nao_se_libera(fechado: None, monkeypatch: pytest.MonkeyPatch) -> None:
