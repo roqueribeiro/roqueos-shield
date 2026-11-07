@@ -74,8 +74,15 @@ class SemChaveDeCifra(RuntimeError):
     """Pediram para gravar segredo sem `SECRETS_KEY` configurada."""
 
 
+# Chave que vem do ambiente prende o endereço para onde ela vai: com o LLM_API_KEY
+# injetado pelo deploy e o LLM_API_BASE livre, um admin de tela apontava o endereço
+# para um host seu e a chave do deploy ia junto (no listar modelos e em todo scan).
+_PRENDE = {"LLM_API_KEY": "LLM_API_BASE"}
+
+
 def travados(campos: tuple[Campo, ...], do_ambiente: frozenset[str] | None = None) -> list[str]:
-    amb = _DO_AMBIENTE if do_ambiente is None else do_ambiente
+    amb = set(_DO_AMBIENTE if do_ambiente is None else do_ambiente)
+    amb |= {preso for chave, preso in _PRENDE.items() if chave in amb}
     return [c.chave for c in campos if c.env in amb]
 
 

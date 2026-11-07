@@ -295,3 +295,48 @@ async def test_cabecalhos_de_seguranca(cliente: AsyncClient) -> None:
     assert "frame-ancestors 'none'" in r.headers["Content-Security-Policy"]
     docs = await cliente.get("/docs")
     assert "Content-Security-Policy" not in docs.headers
+
+
+async def test_dois_admins_se_rebaixando_juntos_nao_zeram_os_admins(cliente: AsyncClient) -> None:
+    import asyncio
+
+    h = {"X-API-Token": settings.APP_TOKEN}
+    await _setup(cliente)
+    r = await cliente.post("/users", json={"email": "b@x.com", "role": "admin"}, headers=h)
+    assert r.status_code == 201
+    ids = [u["id"] for u in (await cliente.get("/users", headers=h)).json()]
+    respostas = await asyncio.gather(
+        *(cliente.patch(f"/users/{i}/role", json={"role": "viewer"}, headers=h) for i in ids)
+    )
+    assert sorted(r.status_code for r in respostas) == [200, 409]
+    admins = [
+        u
+        for u in (await cliente.get("/users", headers=h)).json()
+        if u["role"] == "admin" and u["active"]
+    ]
+    assert len(admins) == 1
+
+
+async def test_errar_a_senha_de_outro_ip_nao_tranca_o_dono(cliente: AsyncClient) -> None:
+    await _setup(cliente)
+    atacante = AsyncClient(
+        transport=ASGITransport(app=app, client=("203.0.113.9", 4000)), base_url="http://t"
+    )
+    async with atacante:
+        for _ in range(6):
+            await atacante.post(
+                "/auth/session", json={"email": "admin@x.com", "password": "errada-1234"}
+            )
+        r = await atacante.post("/auth/session", json={"email": "admin@x.com", "password": SENHA})
+        assert r.status_code == 429  # o atacante fica de fora
+    dono = AsyncClient(
+        transport=ASGITransport(app=app, client=("198.51.100.7", 5000)), base_url="http://t"
+    )
+    async with dono:
+        r = await dono.post("/auth/session", json={"email": "admin@x.com", "password": SENHA})
+        assert r.status_code == 200  # o dono, de outro IP, entra
+
+
+def test_chave_do_ambiente_prende_o_endereco() -> None:
+    assert "apiBase" in rs.travados(rs.CAMPOS_IA, frozenset({"LLM_API_KEY"}))
+    assert "apiBase" not in rs.travados(rs.CAMPOS_IA, frozenset({"ANTHROPIC_API_KEY"}))

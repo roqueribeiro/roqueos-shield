@@ -63,6 +63,36 @@ class PasswordUpdate(BaseModel):
     password: str = Field(min_length=1, max_length=256)
 
 
+async def _rebaixar_se_sobrar_admin(session: SessionDep, alvo: UUID, valores: dict) -> None:
+    """Aplica a mudança num UPDATE só, condicionado a existir OUTRO admin ativo.
+
+    A checagem e a escrita no mesmo comando: no SQLite o SELECT de antes não segura
+    lock, e dois admins se rebaixando juntos liam "sobra o outro" e zeravam os admins
+    (provado pela revisão). Linha nenhuma alterada = era o último: 409.
+    """
+    from sqlalchemy import exists, update
+    from sqlalchemy.orm import aliased
+
+    outro = aliased(UserRow)
+    stmt = (
+        update(UserRow)
+        .where(
+            col(UserRow.id) == alvo,
+            exists().where(
+                col(outro.role) == Role.ADMIN.value,
+                col(outro.active).is_(True),
+                col(outro.id) != alvo,
+            ),
+        )
+        .values(**valores)
+        .execution_options(synchronize_session=False)
+    )
+    r = await session.exec(stmt)
+    if r.rowcount == 0:
+        await session.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "é o último admin ativo")
+
+
 async def _sobra_admin_ativo(session: SessionDep, sem: UUID) -> bool:
     """Existe outro admin ativo além de `sem`? Sem isto o shield podia ficar sem
     ninguém que gerencie usuários, e no standalone não há RoqueOS por fora para
@@ -70,7 +100,8 @@ async def _sobra_admin_ativo(session: SessionDep, sem: UUID) -> bool:
 
     No Postgres, um lock de transação serializa quem rebaixa ou desativa admin: sem
     ele, dois admins se rebaixando ao mesmo tempo liam "sobra o outro" e o shield ficava
-    sem nenhum. No SQLite a escrita já é serializada pelo próprio banco.
+    sem nenhum. A garantia de verdade, nos dois bancos, é o UPDATE condicional de
+    `_rebaixar_se_sobrar_admin`; esta leitura só dá a resposta cedo.
     """
     bind = session.get_bind()
     if bind.dialect.name == "postgresql":
@@ -172,6 +203,9 @@ async def set_role(
         and not await _sobra_admin_ativo(session, user.id)
     ):
         raise HTTPException(status.HTTP_409_CONFLICT, "é o último admin ativo")
+    if user.role == Role.ADMIN.value and body.role is not Role.ADMIN:
+        await _rebaixar_se_sobrar_admin(session, user.id, {"role": body.role.value})
+        await session.refresh(user)
     user.role = body.role.value
     session.add(user)
     await log_audit_event(
@@ -196,6 +230,9 @@ async def deactivate_user(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "usuário não encontrado")
     if user.role == Role.ADMIN.value and not await _sobra_admin_ativo(session, user.id):
         raise HTTPException(status.HTTP_409_CONFLICT, "é o último admin ativo")
+    if user.role == Role.ADMIN.value:
+        await _rebaixar_se_sobrar_admin(session, user.id, {"active": False})
+        await session.refresh(user)
     user.active = False
     user.session_version = int(user.session_version or 0) + 1
     session.add(user)

@@ -3,7 +3,13 @@
 Sem isto o scrypt (~40 ms) era o único freio: 30 senhas erradas seguidas davam 30
 respostas 401, sem espera. Aqui cada chave (o e-mail tentado e o IP de origem) conta as
 falhas; da quinta em diante a chave fica bloqueada por um tempo que dobra a cada falha
-nova, de 30 s até 15 min. Um login certo zera o e-mail.
+nova, de 30 s até 15 min. Um login certo zera a chave.
+
+Que chave: o PAR e-mail + IP, e não o e-mail sozinho. Com o e-mail sozinho, errar 5
+vezes a senha do admin de qualquer lugar trancava o dono fora da tela (a revisão provou).
+O IP sozinho também conta, mas com limiar alto (`LIVRES_POR_IP`), para frear quem varre
+muitos e-mails de um IP só sem trancar um escritório inteiro atrás de um NAT. Atrás de
+proxy reverso, o IP só é o do cliente com FORWARDED_ALLOW_IPS apontando para o proxy.
 
 Mora em memória do processo da API, de propósito: o standalone e o compose de produção
 rodam uma API só, e o bloqueio não pode depender do Redis estar de pé (o login por senha
@@ -16,7 +22,8 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-LIVRES = 5  # falhas sem bloqueio
+LIVRES = 5  # falhas sem bloqueio, por e-mail+IP
+LIVRES_POR_IP = 50  # falhas sem bloqueio, de um IP, somando todos os e-mails
 PRIMEIRO_BLOQUEIO_S = 30.0
 BLOQUEIO_MAX_S = 15 * 60.0
 TETO_DE_CHAVES = 10_000  # memória limitada mesmo sob varredura de e-mails
@@ -49,12 +56,14 @@ class Freio:
             conta = self._contas.setdefault(c, _Conta())
             conta.falhas += 1
             conta.visto_em = agora
-            if conta.falhas >= LIVRES:
-                passo = conta.falhas - LIVRES
+            livres = LIVRES_POR_IP if c.startswith("ip:") else LIVRES
+            if conta.falhas >= livres:
+                passo = conta.falhas - livres
                 conta.livre_em = agora + min(BLOQUEIO_MAX_S, PRIMEIRO_BLOQUEIO_S * 2**passo)
 
-    def acertou(self, chave: str) -> None:
-        self._contas.pop(chave, None)
+    def acertou(self, *chaves: str) -> None:
+        for c in chaves:
+            self._contas.pop(c, None)
 
     def _podar(self, agora: float) -> None:
         velhas = [c for c, v in self._contas.items() if v.livre_em <= agora]

@@ -48,7 +48,11 @@ needs no capabilities.
 
 Each process gets only the secrets it needs: the worker, and the scanners it runs
 against the target, do not receive the `APP_TOKEN`, the session signing key or the
-first-run code.
+first-run code. This prevents accidental leaks (a variable ending up in a log or a
+report), but it does not isolate a compromised scanner: the worker and scanners run as
+the same user that can read `/data/secrets` (and, in `compose.prod.yml`, with the
+container's full environment). Real isolation, with the worker as another user and no
+reach to the secrets, is a known limit of this version.
 
 The **Execution** tab, in each scan's detail, shows every process's log, CPU and
 memory, read from inside the container. No Docker socket is mounted.
@@ -82,8 +86,11 @@ The AI provider key typed in the UI's **AI** section is stored encrypted with
 - Only admins change passwords (their own included), also in **Users**.
 - Signing out, changing the password or being deactivated ends **all** of that user's
   open sessions. The last active admin cannot be deactivated or demoted.
-- After 5 wrong passwords in a row for the same email or from the same IP, login waits
-  30 s, and the wait doubles with each new error, up to 15 min.
+- After 5 wrong passwords in a row for the same email **from the same IP**, login for
+  that email, from that IP, waits 30 s, and the wait doubles with each new error, up to
+  15 min. The owner, from another IP, still gets in. A single IP is only slowed down
+  after 50 errors across all emails. Behind a proxy, set `FORWARDED_ALLOW_IPS` (below),
+  or everyone shows up with the proxy's IP.
 
 ## Beyond localhost
 

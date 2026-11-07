@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -226,16 +226,38 @@ _CSP = (
 _SEM_CSP = ("/docs", "/redoc", "/ui")
 
 
-@app.middleware("http")
-async def cabecalhos_de_seguranca(request: Request, call_next: Any) -> Response:
-    resposta = await call_next(request)
-    h = resposta.headers
-    h.setdefault("X-Content-Type-Options", "nosniff")
-    h.setdefault("X-Frame-Options", "DENY")
-    h.setdefault("Referrer-Policy", "no-referrer")
-    if not request.url.path.startswith(_SEM_CSP):
-        h.setdefault("Content-Security-Policy", _CSP)
-    return resposta
+class CabecalhosDeSeguranca:
+    """ASGI puro (não `BaseHTTPMiddleware`): só acrescenta cabeçalhos no início da
+    resposta e deixa o corpo passar como veio, sem bufferizar o SSE do progresso."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        com_csp = not str(scope.get("path", "")).startswith(_SEM_CSP)
+
+        async def enviar(msg: Any) -> None:
+            if msg["type"] == "http.response.start":
+                nomes = {k.lower() for k, _ in msg.get("headers", [])}
+                extra = [
+                    (b"x-content-type-options", b"nosniff"),
+                    (b"x-frame-options", b"DENY"),
+                    (b"referrer-policy", b"no-referrer"),
+                ]
+                if com_csp:
+                    extra.append((b"content-security-policy", _CSP.encode()))
+                msg["headers"] = list(msg.get("headers", [])) + [
+                    (k, v) for k, v in extra if k not in nomes
+                ]
+            await send(msg)
+
+        await self.app(scope, receive, enviar)
+
+
+app.add_middleware(CabecalhosDeSeguranca)
 
 
 # A tela. Com o build da tela standalone (`web/`, saída em `orchestrator/web_dist`),

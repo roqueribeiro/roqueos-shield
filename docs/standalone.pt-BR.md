@@ -48,7 +48,11 @@ container não precisa de capability nenhuma.
 
 Cada processo recebe só os segredos de que precisa: o worker, e os scanners que ele
 roda contra o alvo, não recebem o `APP_TOKEN`, a chave que assina sessão nem o código
-de primeiro uso.
+de primeiro uso. Isso evita vazamento acidental (variável parando num log ou num
+relatório), mas não isola um scanner comprometido: worker e scanners rodam com o mesmo
+usuário que lê `/data/secrets` (e, no `compose.prod.yml`, com o mesmo ambiente do
+container). Isolamento de verdade, com o worker em outro usuário e sem alcance aos
+segredos, é limite conhecido desta versão.
 
 A aba **Execução**, no detalhe de cada scan, mostra o log de cada processo, CPU e
 memória, lidos de dentro do container. Não há socket do Docker montado.
@@ -81,8 +85,11 @@ A chave do provedor de IA digitada na seção **IA** da tela é guardada cifrada
 - Só o admin troca senha (inclusive a própria), também em **Usuários**.
 - Sair, trocar a senha ou ser desativado derruba **todas** as sessões abertas daquele
   usuário. O último admin ativo não pode ser desativado nem rebaixado.
-- Depois de 5 senhas erradas seguidas para o mesmo e-mail ou do mesmo IP, o login
-  espera 30 s, e a espera dobra a cada erro novo, até 15 min.
+- Depois de 5 senhas erradas seguidas para o mesmo e-mail **vindas do mesmo IP**, o
+  login daquele e-mail, daquele IP, espera 30 s, e a espera dobra a cada erro novo,
+  até 15 min. O dono, de outro IP, continua entrando. Um IP sozinho só é freado depois
+  de 50 erros somando todos os e-mails. Atrás de proxy, configure
+  `FORWARDED_ALLOW_IPS` (abaixo), senão todo mundo aparece com o IP do proxy.
 
 ## Fora do localhost
 

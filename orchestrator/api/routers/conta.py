@@ -191,7 +191,8 @@ async def login(
     body: LoginIn, request: Request, response: Response, session: SessionDep
 ) -> SessaoOut:
     email = body.email.strip().lower()
-    chaves = (f"email:{email}", f"ip:{_origem(request)}")
+    origem = _origem(request)
+    chaves = (f"par:{email}|{origem}", f"ip:{origem}")
     espera = freio.espera(*chaves)
     if espera > 0:
         raise HTTPException(
@@ -210,12 +211,12 @@ async def login(
             session,
             action="user.login_failed",
             actor=email,
-            metadata={"via": "senha", "origem": _origem(request)},
+            metadata={"via": "senha", "origem": origem},
         )
         await session.commit()
         # Mesma mensagem para e-mail inexistente, senha errada e usuário desativado.
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "e-mail ou senha inválidos")
-    freio.acertou(chaves[0])
+    freio.acertou(*chaves)
     user.last_login_at = datetime.now(UTC)
     session.add(user)
     await log_audit_event(
