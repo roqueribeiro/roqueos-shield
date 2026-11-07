@@ -108,17 +108,22 @@ pipeline calls it.
 
 ## Quickstart
 
-**One container, nothing else.** The engine, the web UI, the API with Swagger, the MCP
-server, Redis and OWASP ZAP:
+**One command, one container.** The engine, the web UI, the API with Swagger, the MCP
+server, Redis and OWASP ZAP. On Mac, Linux or Windows WSL, with Docker running:
 
 ```bash
-docker run -d --name roqueshield -p 127.0.0.1:8080:8080 --shm-size=1g \
-  -v roqueshield:/data roqueribeiro1988/roqueos-shield:<version>-standalone
-docker exec roqueshield cat /data/secrets/SETUP_CODE   # first-run code
+curl -fsSL https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/install.sh | sh
 ```
 
-Open `http://localhost:8080`, create the admin on the first screen with that code, and
-scan what you are authorized to test. Secrets, TLS, backup, memory, the CLI, MCP and
+It checks Docker and its memory, starts the container, waits until it is ready and
+opens your browser at `http://localhost:8080` with the first-run code already filled
+in: you only pick an e-mail and a password. Then **New scan**, the address, and only
+what you are authorized to test. To test an app on your own machine, use
+`host.docker.internal` instead of `localhost` (the screen explains it and swaps it for
+you).
+
+Rather read what will run first? [install.sh](install.sh) is 190 lines, and the manual
+path (one `docker run`), Windows without WSL, secrets, TLS, backup, the CLI, MCP and
 the production compose are in **[docs/standalone.md](docs/standalone.md)**.
 
 ![RoqueShield standalone: scan detail](docs/assets/screens/en-US/03-detalhe-resumo.webp)

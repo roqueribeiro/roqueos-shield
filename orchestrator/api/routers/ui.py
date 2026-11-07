@@ -30,6 +30,7 @@ from orchestrator.api.deps import SessionDep
 from orchestrator.config import settings
 from orchestrator.domain.roles import Permission, has_permission
 from orchestrator.persistence.models import AIRun, FindingRow, ScanRow, TargetRow
+from orchestrator.reporting.coverage import resumo
 
 router = APIRouter(prefix="/ui/api", tags=["ui"])
 
@@ -120,6 +121,10 @@ async def list_scans(
                 "errors": list(s.errors or []),
                 "severity_counts": sev_counts,
                 "total_findings": sum(sev_counts.values()),
+                # A lista dizia "Concluído" também para scan com scanner pulado: zero
+                # achados com cobertura incompleta não é alvo limpo, e a lista é onde
+                # a pessoa decide se abre o scan.
+                "coverage_state": resumo(s)["estado"],
             }
         )
     return out
@@ -158,8 +163,6 @@ async def scan_detail(scan_id: UUID, session: SessionDep, _token: UIToken) -> di
         }
         for a in ai_runs_q.all()
     ]
-    from orchestrator.reporting.coverage import resumo
-
     _cob = resumo(s)
     return {
         "id": str(s.id),

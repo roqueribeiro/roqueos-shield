@@ -28,6 +28,22 @@ class TargetValidationError(ValueError):
     """Levantada quando target.value é rejeitado por policy."""
 
 
+class AlvoForaDoEscopo(TargetValidationError):
+    """O host é de rede interna (ou não resolve) e não está em TARGET_ALLOWLIST.
+
+    Separada do erro genérico para a tela poder explicar e oferecer o caminho certo
+    (liberar no escopo, ou trocar `localhost` por `host.docker.internal`) em vez de
+    "não foi possível iniciar o scan". `motivo` é `rede_local` ou `nao_resolve`;
+    `loopback` diz se o host é o próprio container, que não se libera pela tela.
+    """
+
+    def __init__(self, mensagem: str, *, host: str, motivo: str, loopback: bool) -> None:
+        super().__init__(mensagem)
+        self.host = host
+        self.motivo = motivo
+        self.loopback = loopback
+
+
 # Domínios/IPs que NÃO podem ser alvo quando LAB_ONLY=true sem allowlist explícita.
 # RFC1918, loopback, link-local, IMDS, ULA IPv6.
 _FORBIDDEN_HOSTNAMES: frozenset[str] = frozenset(
@@ -261,7 +277,50 @@ def _guarda_de_rede(host: str, *, rotulo: str) -> None:
     if _host_in_allowlist(host, settings.target_allowlist):
         return
     if _is_blocked_network(host):
-        raise TargetValidationError(_motivo_bloqueio(host, rotulo))
+        nao_resolve = not _is_ip_literal(host) and host.lower() not in _FORBIDDEN_HOSTNAMES
+        nao_resolve = nao_resolve and not _resolve_host_ips(host)
+        raise AlvoForaDoEscopo(
+            _motivo_bloqueio(host, rotulo),
+            host=host,
+            motivo="nao_resolve" if nao_resolve else "rede_local",
+            loopback=_e_loopback(host),
+        )
+
+
+def liberavel_pela_tela(erro: AlvoForaDoEscopo) -> bool:
+    """A tela pode oferecer "liberar no escopo" para este host?
+
+    Não para o próprio container (loopback: o scan bateria no shield, no Redis e no
+    ZAP), nem para metadata de nuvem (link-local, `metadata*`), nem para nome que não
+    resolve (liberar não faz ele resolver). Pela variável de ambiente o operador ainda
+    pode tudo; a tela só não oferece o atalho para o que quase nunca é intenção.
+    """
+    if erro.motivo != "rede_local":
+        return False
+    h = erro.host.lower().strip("[]")
+    if h in _FORBIDDEN_HOSTNAMES:
+        return False
+    ips = [h] if _is_ip_literal(h) else _resolve_host_ips(h)
+    for s in ips:
+        try:
+            ip = ipaddress.ip_address(s)
+        except ValueError:
+            continue
+        if ip.is_link_local or ip.is_loopback or ip.is_unspecified:
+            return False
+    return True
+
+
+def _e_loopback(host: str) -> bool:
+    """O próprio container: `localhost`, 127.0.0.0/8, ::1, 0.0.0.0."""
+    h = host.lower().strip("[]")
+    if h == "localhost" or h.endswith(".localhost"):
+        return True
+    try:
+        ip = ipaddress.ip_address(h)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_unspecified
 
 
 def _motivo_bloqueio(host: str, rotulo: str) -> str:

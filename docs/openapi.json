@@ -1297,6 +1297,79 @@
         "title": "SummaryOut",
         "type": "object"
       },
+      "TargetCheckIn": {
+        "properties": {
+          "asset_type": {
+            "$ref": "#/components/schemas/AssetType"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset_type",
+          "value"
+        ],
+        "title": "TargetCheckIn",
+        "type": "object"
+      },
+      "TargetCheckOut": {
+        "properties": {
+          "detalhe": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalhe"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "liberavel": {
+            "default": false,
+            "title": "Liberavel",
+            "type": "boolean"
+          },
+          "loopback": {
+            "default": false,
+            "title": "Loopback",
+            "type": "boolean"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "TargetCheckOut",
+        "type": "object"
+      },
       "TargetIn": {
         "properties": {
           "asset_type": {
@@ -3363,6 +3436,56 @@
           }
         ],
         "summary": "Create Target",
+        "tags": [
+          "targets"
+        ]
+      }
+    },
+    "/targets/check": {
+      "post": {
+        "description": "Diz se o alvo passa no escopo, sem criar nada.\n\nÉ a mesma validação do `POST /targets`, chamada pela tela no passo do alvo para\nexplicar o bloqueio antes da revisão, e não com um \"não foi possível iniciar\" no\núltimo clique.",
+        "operationId": "check_target_targets_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TargetCheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Check Target",
         "tags": [
           "targets"
         ]

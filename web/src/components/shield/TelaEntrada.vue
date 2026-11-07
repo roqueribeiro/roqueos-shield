@@ -53,7 +53,10 @@
         <p v-if="etapa === 'setup'" id="entrada-senha-dica" class="entrada__dica">
           {{ t('shield.entrada.senhaDica') }}
         </p>
-        <template v-if="etapa === 'setup'">
+        <p v-if="etapa === 'setup' && codigoVeioDoInstalador" class="entrada__ok" role="status">
+          <q-icon name="verified" size="16px" /> {{ t('shield.entrada.codigoPreenchido') }}
+        </p>
+        <template v-if="etapa === 'setup' && !codigoVeioDoInstalador">
           <ROSFormField
             v-model="codigo"
             name="setup_code"
@@ -86,6 +89,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { post } from 'src/services/http'
+import { tomarCodigoDeSetup } from 'src/services/codigoDeSetup'
 import ROSCard from '../roqueos/ROSCard.vue'
 import ROSButton from '../roqueos/ROSButton.vue'
 import ROSFormField from '../roqueos/ROSFormField.vue'
@@ -101,7 +105,10 @@ const { t } = useI18n()
 const email = ref('')
 const nome = ref('')
 const senha = ref('')
-const codigo = ref('')
+// O instalador abre a tela com o código no fragmento: o campo some e a pessoa só
+// escolhe e-mail e senha. Se o código estiver errado, o campo volta (ver `enviar`).
+const codigo = ref(tomarCodigoDeSetup())
+const codigoVeioDoInstalador = ref(!!codigo.value)
 const erro = ref('')
 const enviando = ref(false)
 
@@ -138,6 +145,7 @@ async function enviar() {
       429: 'shield.entrada.muitasTentativas',
     }
     erro.value = t(porStatus[e?.status] || 'shield.entrada.erroGenerico')
+    if (e?.status === 403) codigoVeioDoInstalador.value = false
   } finally {
     enviando.value = false
   }
@@ -202,6 +210,14 @@ async function enviar() {
   text-align: center;
   color: var(--ros-text-muted);
   padding: var(--ros-space-4) 0;
+}
+.entrada__ok {
+  display: flex;
+  align-items: center;
+  gap: var(--ros-space-2);
+  margin: 0;
+  color: var(--ros-success);
+  font-size: var(--ros-text-sm);
 }
 .entrada__erro {
   margin: 0;

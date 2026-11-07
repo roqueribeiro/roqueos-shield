@@ -67,6 +67,16 @@ async function entrar(p) {
 try {
   const setup = await (await fetch(`${BASE}/setup`)).json()
   if (setup.needs_setup) {
+    // Como o install.sh abre a tela: código no fragmento, campo escondido, barra limpa.
+    {
+      const { ctx, p } = await abrir(VIEWPORTS[0][1], 'instalador')
+      await p.goto(`${BASE}/#setup=${process.env.SETUP_CODE || ''}`)
+      await p.waitForSelector('.entrada__ok')
+      assert.equal(await p.locator('input[name=setup_code]').count(), 0, 'campo do código à vista')
+      assert.ok(!p.url().includes('setup='), `o código ficou no endereço: ${p.url()}`)
+      await ctx.close()
+      ok('o código do instalador vem pelo fragmento e some da barra')
+    }
     const { ctx, p } = await abrir(VIEWPORTS[0][1], 'setup')
     await p.goto(`${BASE}/`)
     await p.waitForSelector('input[name=name]')
@@ -92,6 +102,46 @@ try {
     await entrar(p)
     await p.screenshot({ path: `${SHOTS}/${nome}-entrou.png` })
     ok(`${nome} login`)
+
+    if (nome === '1440') {
+      // Alvo que o escopo recusa: explicado no passo 1, com o caminho certo.
+      await p.getByRole('button', { name: 'Novo scan' }).filter({ visible: true }).first().click()
+      await espera(p, 600)
+      const alvo = p.locator('input').filter({ visible: true }).first()
+      const avancar = p.getByRole('button', { name: /Avançar/ }).filter({ visible: true }).last()
+      await alvo.fill('http://localhost:3000')
+      await avancar.click()
+      await p.waitForSelector('.ros-pentest__bloqueio')
+      await p.screenshot({ path: `${SHOTS}/${nome}-alvo-localhost.png` })
+      await p.getByRole('button', { name: /Usar host\.docker\.internal/ }).click()
+      await espera(p, 800)
+      assert.equal(await alvo.inputValue(), 'http://host.docker.internal:3000', 'a troca do host não aconteceu')
+      await alvo.fill('http://app.localhost:5173/')
+      await avancar.click()
+      await p.getByRole('button', { name: /Usar host\.docker\.internal/ }).click()
+      await espera(p, 800)
+      assert.equal(await alvo.inputValue(), 'http://host.docker.internal:5173/', 'app.localhost não foi trocado')
+      ok(`${nome} localhost explicado e trocado por host.docker.internal`)
+
+      await alvo.fill('http://10.20.30.40/')
+      await avancar.click()
+      await p.waitForSelector('.ros-pentest__bloqueio')
+      await espera(p, 800)
+      await p.screenshot({ path: `${SHOTS}/${nome}-alvo-rede-interna.png` })
+      await p.getByRole('button', { name: /Liberar 10\.20\.30\.40/ }).first().click()
+      await espera(p, 400)
+      await p.locator('.ros-modal').getByRole('button', { name: /Liberar 10\.20\.30\.40/ }).last().click()
+      await p.waitForSelector('text=Qual a profundidade da varredura?', { timeout: 5000 })
+      await p.getByRole('button', { name: 'Voltar' }).filter({ visible: true }).last().click()
+      await espera(p, 500)
+      assert.equal(await p.locator('.ros-pentest__bloqueio').count(), 0, 'o aviso de antes de liberar continuou na tela')
+      await avancar.click()
+      await p.waitForSelector('text=Qual a profundidade da varredura?', { timeout: 5000 })
+      const cookie = (await ctx.cookies()).map((c) => `${c.name}=${c.value}`).join('; ')
+      const escopo = await (await fetch(`${BASE}/settings/scope`, { headers: { cookie } })).json()
+      assert.ok(escopo.allowlist.includes('10.20.30.40'), 'liberar não gravou no escopo')
+      ok(`${nome} rede interna liberada no escopo pela tela, e o assistente segue`)
+    }
 
     for (const secao of SECOES) {
       await irPara(p, nome, secao)
