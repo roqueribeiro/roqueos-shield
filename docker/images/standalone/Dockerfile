@@ -18,7 +18,7 @@
 ARG ENGINE=roqueos-shield-engine:local
 
 # --- a tela (web/) -------------------------------------------------------------
-FROM node:22.20.0-bookworm-slim AS web
+FROM node:22.20.0-bookworm-slim@sha256:b21fe589dfbe5cc39365d0544b9be3f1f33f55f3c86c87a76ff65a02f8f5848e AS web
 WORKDIR /src/web
 COPY web/package.json web/yarn.lock ./
 RUN yarn install --frozen-lockfile --ignore-scripts --network-timeout 600000
