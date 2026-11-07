@@ -148,11 +148,31 @@ def check_afirmacoes_vencidas() -> None:
                         falha("doc-vencida", f"{doc}:{linha_n} — {motivo}")
 
 
+def check_versao_do_instalador() -> None:
+    """O `install.sh` sobe a imagem da versão do repo.
+
+    O comando de um passo que o README manda rodar lê o script da `main`. Se a versão
+    fixa nele ficar para trás, quem instala hoje recebe a imagem de meses atrás, e
+    nada dá erro: só fica velho. Sobe junto com o `pyproject.toml` ou o gate reprova.
+    """
+    m = re.search(r'^version = "([^"]+)"', _ler("pyproject.toml"), re.MULTILINE)
+    s = re.search(r'^VERSAO_PADRAO="v([^"]+)"', _ler("install.sh"), re.MULTILINE)
+    if not m or not s:
+        falha("instalador", "não achei a versão no pyproject.toml ou o VERSAO_PADRAO no install.sh")
+    elif m.group(1) != s.group(1):
+        falha(
+            "instalador",
+            f"install.sh sobe v{s.group(1)}, o pyproject está em {m.group(1)}: "
+            "atualize VERSAO_PADRAO",
+        )
+
+
 def main() -> int:
     check_scanners()
     check_contagem_de_adapters()
     check_env_documentado()
     check_afirmacoes_vencidas()
+    check_versao_do_instalador()
 
     if not FALHAS:
         print("doc em dia: scanners, variáveis e afirmações batem com o código.")

@@ -8,21 +8,45 @@ Swagger, o servidor MCP, o Redis e o OWASP ZAP. Sem RoqueOS.
 > autorização escrita para testar, dentro da janela combinada. O RoqueShield ajuda a
 > registrar isso (referência de autorização em cada scan), mas não decide por você.
 
+## Instalar em um comando
+
+No Mac, no Linux ou no WSL do Windows, com o Docker aberto:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/install.sh | sh
+```
+
+O [install.sh](../install.sh) confere se o Docker responde e se tem pelo menos 6 GB de
+memória, baixa a imagem, sobe o container escutando só em `127.0.0.1:8080`, espera o
+healthcheck e abre o navegador com o código de primeiro uso no endereço. Rodar de novo
+é seguro: se o container existe, ele só é religado. `ROQUESHIELD_PORTA=8081` troca a
+porta, `ROQUESHIELD_NAO_ABRIR=1` não abre o navegador.
+
+O código vai no fragmento do endereço (`#setup=...`), que o navegador não manda ao
+servidor: não aparece em log de acesso, e a tela apaga ele da barra assim que lê.
+
+**À mão, ou no Windows sem WSL** (PowerShell igual, trocando `\` por `` ` ``):
+
 ```bash
 docker run -d --name roqueshield \
-  -p 127.0.0.1:8080:8080 --shm-size=1g --stop-timeout 30 \
+  -p 127.0.0.1:8080:8080 --shm-size=1g --stop-timeout 30 --restart unless-stopped \
+  --add-host host.docker.internal:host-gateway \
   -v roqueshield:/data \
   roqueribeiro1988/roqueos-shield:<versão>-standalone
 ```
 
-A tag é a versão com `v` mais `-standalone`, por exemplo `v0.5.0-standalone`.
+A tag é a versão com `v` mais `-standalone`, por exemplo `v0.5.0-standalone`. O
+`--add-host` faz `host.docker.internal` apontar para o seu computador também no Linux.
 
 ![Lista de scans do RoqueShield standalone](assets/screens/pt-BR/02-scans.webp)
 
 ## Primeiro uso
 
-1. Abra `http://localhost:8080`. A primeira tela cria a conta de administrador.
-2. Ela pede o **código de primeiro uso**, que prova que você tem acesso ao container:
+1. Abra `http://localhost:8080` (o instalador já abre). A primeira tela cria a conta de
+   administrador: e-mail e senha.
+2. Ela precisa do **código de primeiro uso**, que prova que você tem acesso ao
+   container. Pelo instalador ele chega preenchido (a tela diz isso no lugar do campo).
+   À mão, ele sai de:
 
    ```bash
    docker exec roqueshield cat /data/secrets/SETUP_CODE
@@ -31,7 +55,7 @@ A tag é a versão com `v` mais `-standalone`, por exemplo `v0.5.0-standalone`.
    Sem o código (ou o `APP_TOKEN` no cabeçalho `X-API-Token`), o `POST /setup` é
    recusado. Isso impede que alguém que alcance a porta antes de você vire admin.
 
-   <img src="assets/screens/pt-BR/00-primeiro-uso.webp" alt="Primeiro uso, com o campo do código" width="720">
+   <img src="assets/screens/pt-BR/00-primeiro-uso-instalador.webp" alt="Primeiro uso aberto pelo instalador, com o código já preenchido" width="720">
 
 3. Depois disso a tela é de login. API e Swagger ficam em `/docs`.
 
@@ -64,9 +88,10 @@ CPU e memória de cada um, lidos de dentro do container.
 ![Execução](assets/screens/pt-BR/04-detalhe-execucao.webp)
 
 **Triagem de IA.** O que o modelo fez com os achados, chamada a chamada. Nesta captura
-não há chave de provedor configurada: a aba diz que a triagem falhou e mostra o erro de
-cada chamada, em vez de fingir que não havia o que analisar. Os achados ficam com a
-classificação da ferramenta.
+não há chave de provedor configurada: o shield nem chama o modelo, a aba diz "IA não
+configurada" com o atalho para configurar, e os achados ficam com a classificação da
+ferramenta. A IA é opcional; os scanners rodam sem ela. Com chave e erro do provedor, a
+aba mostra o erro de cada chamada.
 
 ![Triagem de IA](assets/screens/pt-BR/05-detalhe-ia.webp)
 
@@ -160,8 +185,20 @@ Nunca publique a porta 8080 em HTTP aberto numa rede que não é sua.
 
 `LAB_ONLY=true` é o padrão: alvo em rede privada ou loopback (`192.168.x`, `10.x`,
 `localhost`, nome de container) só é escaneado se estiver na lista de alvos
-autorizados. Para testar o seu lab, ponha o host na seção **Escopo** antes do
-primeiro scan.
+autorizados. A tela confere isso no primeiro passo do **Novo scan**, antes da revisão:
+
+- **`localhost` ou `127.0.0.1`**: dentro do container, é o próprio RoqueShield. Para
+  testar um app que roda no seu computador, use `host.docker.internal`; o botão
+  **Usar host.docker.internal** troca o endereço.
+- **Rede interna** (`host.docker.internal`, `192.168.x`, `10.x`): o admin vê **Liberar
+  no escopo**, que pede confirmação e põe o host na lista. Quem não é admin vê o
+  pedido para um admin liberar. Loopback e metadata de nuvem (`169.254.169.254`) não
+  têm esse atalho.
+
+![Alvo localhost no Novo scan](assets/screens/pt-BR/12-alvo-localhost.webp)
+
+A lista também se edita na seção **Escopo**. Quando ela vem da variável
+`TARGET_ALLOWLIST`, a tela mostra o campo travado e diz isso.
 
 ![Escopo](assets/screens/pt-BR/09-escopo.webp)
 

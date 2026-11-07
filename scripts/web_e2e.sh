@@ -29,6 +29,10 @@ trap limpar EXIT
 umask 077
 export DATA_DIR="$tmp/data" DATABASE_URL="sqlite+aiosqlite:///$tmp/shield.db"
 export REDIS_URL="redis://127.0.0.1:1/0" LOG_FORMAT=json
+# O litellm, em modo DEV (o padrão), faz load_dotenv() do .env da pasta no import: o
+# .env de quem desenvolve virava "ambiente do container" e travava o escopo inteiro na
+# tela (medido em 07/11/2026). O e2e tem que ver o shield como ele sai na imagem.
+export LITELLM_MODE=PRODUCTION
 mkdir -p "$DATA_DIR"
 (cd "$raiz" && "$py" -m orchestrator.standalone.segredos "$tmp/env" >/dev/null)
 for f in "$tmp"/env/*; do export "$(basename "$f")=$(cat "$f")"; done

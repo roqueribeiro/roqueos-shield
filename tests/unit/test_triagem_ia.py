@@ -53,6 +53,9 @@ def llm(monkeypatch):
         return resposta
 
     monkeypatch.setattr(analyzer, "complete_json", complete_json)
+    # Sem credencial a triagem nem chama a LLM (ver test_primeiro_uso.py); aqui o
+    # assunto é o que acontece quando ela é chamada.
+    monkeypatch.setattr(analyzer.settings, "ANTHROPIC_API_KEY", "sk-teste")
     return fila
 
 

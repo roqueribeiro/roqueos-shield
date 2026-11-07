@@ -20,8 +20,8 @@ mkdirSync(SAIDA, { recursive: true })
 
 // Rótulos da navegação por idioma (os mesmos de src/i18n).
 const NAV = {
-  'pt-BR': { scans: 'Scans', ia: 'IA', escopo: 'Escopo', usuarios: 'Usuários', novo: 'Novo scan' },
-  'en-US': { scans: 'Scans', ia: 'AI', escopo: 'Scope', usuarios: 'Users', novo: 'New scan' },
+  'pt-BR': { scans: 'Scans', ia: 'IA', escopo: 'Escopo', usuarios: 'Usuários', novo: 'Novo scan', avancar: /Avançar/ },
+  'en-US': { scans: 'Scans', ia: 'AI', escopo: 'Scope', usuarios: 'Users', novo: 'New scan', avancar: /Next/ },
 }[IDIOMA]
 
 const b = await chromium.launch()
@@ -66,7 +66,16 @@ if (process.env.CAPTURA_PRIMEIRO_USO === '1') {
   await p.waitForSelector('input[name=setup_code]')
   await espera(p, 600)
   await foto(p, '00-primeiro-uso')
+  // Como o install.sh abre a tela: código no fragmento, campo escondido. O código aqui
+  // é falso (só zeros): a tela não o mostra, e o shield nem chega a vê-lo.
+  // Página nova: o código só é lido no carregamento, como quando o instalador abre.
   await ctx.close()
+  const novo = await contexto(1440, 900)
+  await novo.p.goto(`${BASE}/#setup=${'0'.repeat(24)}`)
+  await novo.p.waitForSelector('.entrada__ok')
+  await espera(novo.p, 600)
+  await foto(novo.p, '00-primeiro-uso-instalador')
+  await novo.ctx.close()
   await b.close()
   process.exit(0)
 }
@@ -96,6 +105,12 @@ if (!EMAIL || !SENHA) throw new Error('defina E2E_EMAIL e E2E_SENHA')
   await p.getByRole('button', { name: NAV.novo }).filter({ visible: true }).first().click()
   await espera(p, 1000)
   await foto(p, '07-novo-scan')
+  // O erro mais comum de quem começa: testar o app da própria máquina por localhost.
+  await p.locator('.ros-pentest__alvo-input input, input.ros-pentest__alvo-input').first().fill('http://localhost:3000')
+  await p.getByRole('button', { name: NAV.avancar }).filter({ visible: true }).last().click()
+  await p.waitForSelector('.ros-pentest__bloqueio')
+  await espera(p, 600)
+  await foto(p, '12-alvo-localhost')
 
   await ir(p, false, NAV.ia)
   await foto(p, '08-ia')

@@ -107,17 +107,21 @@ termina a instalação com `|| true`, e nada no pipeline chama ele.
 
 ## Quickstart
 
-**Um container, mais nada.** O motor, a tela, a API com Swagger, o servidor MCP, o
-Redis e o OWASP ZAP:
+**Um comando, um container.** O motor, a tela, a API com Swagger, o servidor MCP, o
+Redis e o OWASP ZAP. No Mac, no Linux ou no WSL do Windows, com o Docker aberto:
 
 ```bash
-docker run -d --name roqueshield -p 127.0.0.1:8080:8080 --shm-size=1g \
-  -v roqueshield:/data roqueribeiro1988/roqueos-shield:<versão>-standalone
-docker exec roqueshield cat /data/secrets/SETUP_CODE   # código de primeiro uso
+curl -fsSL https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/install.sh | sh
 ```
 
-Abra `http://localhost:8080`, crie o admin na primeira tela com esse código e varra o
-que você tem autorização para testar. Segredos, TLS, backup, memória, CLI, MCP e o
+Ele confere o Docker e a memória, sobe o container, espera ficar pronto e abre o
+navegador em `http://localhost:8080` com o código de primeiro uso já preenchido: você
+só escolhe e-mail e senha. Depois é **Novo scan**, o endereço, e o que você tem
+autorização para testar. Para testar um app da sua própria máquina, use
+`host.docker.internal` no lugar de `localhost` (a tela explica e troca por você).
+
+Prefere ver antes o que vai rodar? O [install.sh](install.sh) tem 190 linhas, e o
+caminho à mão (um `docker run`), o Windows sem WSL, segredos, TLS, backup, CLI, MCP e o
 compose de produção estão em **[docs/standalone.pt-BR.md](docs/standalone.pt-BR.md)**.
 
 ![RoqueShield standalone: detalhe do scan](docs/assets/screens/pt-BR/03-detalhe-resumo.webp)

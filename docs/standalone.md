@@ -8,21 +8,46 @@ API with Swagger, the MCP server, Redis and OWASP ZAP. No RoqueOS needed.
 > permission to test, inside the agreed window. RoqueShield helps you record it (an
 > authorization reference on every scan), but it does not decide for you.
 
+## Install in one command
+
+On Mac, Linux or Windows WSL, with Docker running:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/install.sh | sh
+```
+
+[install.sh](../install.sh) checks that Docker answers and has at least 6 GB of memory,
+pulls the image, starts the container listening only on `127.0.0.1:8080`, waits for the
+healthcheck and opens your browser with the first-run code in the address. Running it
+again is safe: if the container exists, it is only started again. `ROQUESHIELD_PORTA=8081`
+changes the port, `ROQUESHIELD_NAO_ABRIR=1` skips opening the browser.
+
+The code goes in the address fragment (`#setup=...`), which the browser never sends to
+the server: it does not land in any access log, and the screen removes it from the bar
+as soon as it reads it.
+
+**By hand, or on Windows without WSL** (same in PowerShell, with `` ` `` instead of `\`):
+
 ```bash
 docker run -d --name roqueshield \
-  -p 127.0.0.1:8080:8080 --shm-size=1g --stop-timeout 30 \
+  -p 127.0.0.1:8080:8080 --shm-size=1g --stop-timeout 30 --restart unless-stopped \
+  --add-host host.docker.internal:host-gateway \
   -v roqueshield:/data \
   roqueribeiro1988/roqueos-shield:<version>-standalone
 ```
 
 The tag is the version with a `v` plus `-standalone`, for example `v0.5.0-standalone`.
+`--add-host` makes `host.docker.internal` point at your computer on Linux too.
 
 ![RoqueShield standalone scan list](assets/screens/en-US/02-scans.webp)
 
 ## First run
 
-1. Open `http://localhost:8080`. The first screen creates the administrator account.
-2. It asks for the **first-run code**, which proves you have access to the container:
+1. Open `http://localhost:8080` (the installer opens it for you). The first screen
+   creates the administrator account: e-mail and password.
+2. It needs the **first-run code**, which proves you have access to the container.
+   Through the installer it arrives filled in (the screen says so instead of showing
+   the field). By hand, get it with:
 
    ```bash
    docker exec roqueshield cat /data/secrets/SETUP_CODE
@@ -31,7 +56,7 @@ The tag is the version with a `v` plus `-standalone`, for example `v0.5.0-standa
    Without the code (or the `APP_TOKEN` in the `X-API-Token` header), `POST /setup`
    is refused. This stops anyone who reaches the port before you from becoming admin.
 
-   <img src="assets/screens/en-US/00-primeiro-uso.webp" alt="First run, with the code field" width="720">
+   <img src="assets/screens/en-US/00-primeiro-uso-instalador.webp" alt="First run opened by the installer, with the code already filled in" width="720">
 
 3. After that the UI is a login screen. API and Swagger live at `/docs`.
 
@@ -64,9 +89,10 @@ CPU and memory of each, read from inside the container.
 ![Execution](assets/screens/en-US/04-detalhe-execucao.webp)
 
 **AI triage.** What the model did with the findings, call by call. In this capture
-there is no provider key configured: the tab says the triage failed and shows each
-call's error, instead of pretending there was nothing to analyze. Findings keep the
-tool's own classification.
+there is no provider key configured: the shield does not call the model at all, the tab
+says "AI not configured" with a shortcut to set it up, and findings keep the tool's own
+classification. AI is optional; the scanners run without it. With a key and a provider
+error, the tab shows each call's error.
 
 ![AI triage](assets/screens/en-US/05-detalhe-ia.webp)
 
@@ -162,8 +188,21 @@ Never publish port 8080 as plain HTTP on a network that is not yours.
 
 `LAB_ONLY=true` is the default: a target on a private or loopback network
 (`192.168.x`, `10.x`, `localhost`, a container name) is only scanned if it is on the
-authorized target list. To test your lab, add the host in the **Scope** section before
-the first scan.
+authorized target list. The screen checks this on the first step of **New scan**, before
+the review:
+
+- **`localhost` or `127.0.0.1`**: inside the container, that is RoqueShield itself. To
+  test an app running on your computer, use `host.docker.internal`; the **Use
+  host.docker.internal** button swaps the address.
+- **Internal network** (`host.docker.internal`, `192.168.x`, `10.x`): an admin sees
+  **Allow in the scope**, which asks for confirmation and adds the host to the list.
+  Non-admins are told to ask an admin. Loopback and cloud metadata (`169.254.169.254`)
+  get no such shortcut.
+
+![localhost target in New scan](assets/screens/en-US/12-alvo-localhost.webp)
+
+The list can also be edited in the **Scope** section. When it comes from the
+`TARGET_ALLOWLIST` variable, the screen shows the field locked and says so.
 
 ![Scope](assets/screens/en-US/09-escopo.webp)
 

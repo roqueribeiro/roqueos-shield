@@ -111,6 +111,17 @@ async def triage_batch(
     skipped = len(findings) - len(eligible)
 
     used_model = model or settings.LLM_MODEL
+    if eligible and not ia_tem_credencial(used_model):
+        # Sem chave e sem servidor local, cada lote falhava com erro de autenticação e a
+        # aba de IA ficava vermelha em todo scan de quem só quer usar os scanners. Não
+        # chamar é a resposta honesta: o evento diz por quê, e a tela mostra "IA não
+        # configurada" com o atalho para configurar, em vez de "a triagem falhou". Antes do
+        # `ai.triage_start`, que anunciaria os achados indo para um modelo que não é chamado.
+        log.warning("ai.triage_skipped_no_credentials", eligible=len(eligible), model=used_model)
+        for f in eligible:
+            f.ai_triage = _triagem_deterministica(f, "IA não configurada")
+        return findings
+
     log.info(
         "ai.triage_start",
         total=len(findings),
@@ -203,6 +214,26 @@ async def triage_batch(
 
 
 TRIAGEM_DETERMINISTICA = "deterministico (IA indisponível)"
+
+# Provedor cuja chave o shield conhece pelo nome. Modelo de outro provedor (gemini/,
+# bedrock/...) lê a chave do próprio ambiente via litellm, que o shield não enxerga:
+# nesse caso a chamada é tentada e o erro, se houver, vira `ai_run` de falha.
+_CHAVE_DO_PROVEDOR = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+}
+
+
+def ia_tem_credencial(modelo: str | None = None) -> bool:
+    """True se a chamada ao modelo tem com que se autenticar (ou não precisa)."""
+    if settings.LLM_API_BASE or settings.LLM_API_KEY:
+        return True
+    provedor = (modelo or settings.LLM_MODEL or "").split("/", 1)[0].lower()
+    env = _CHAVE_DO_PROVEDOR.get(provedor)
+    if env is None:
+        return True
+    return bool(getattr(settings, env, ""))
 
 
 def _reconciliar(batch: list[Finding], triages: list[Any]) -> dict[str, dict[str, Any]]:

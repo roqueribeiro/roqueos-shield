@@ -17,7 +17,9 @@ from orchestrator.api.deps import (
 from orchestrator.audit import log_audit_event
 from orchestrator.domain.schemas import AssetType, Severity
 from orchestrator.domain.target_validator import (
+    AlvoForaDoEscopo,
     TargetValidationError,
+    liberavel_pela_tela,
     validate_target_value,
 )
 from orchestrator.persistence.models import TargetRow
@@ -41,6 +43,52 @@ class TargetOut(BaseModel):
     label: str | None
     criticality: str
     contains_pii: bool
+
+
+class TargetCheckIn(BaseModel):
+    asset_type: AssetType
+    value: str
+
+
+class TargetCheckOut(BaseModel):
+    ok: bool
+    # `invalido` (formato), `rede_local` (rede interna fora do escopo) ou
+    # `nao_resolve` (DNS não achou). Vazio quando `ok`.
+    motivo: str | None = None
+    host: str | None = None
+    # Host é o próprio container: a tela sugere `host.docker.internal`.
+    loopback: bool = False
+    # A tela pode oferecer "liberar no escopo" para este host (ver
+    # `liberavel_pela_tela`). Quem libera ainda precisa ser admin.
+    liberavel: bool = False
+    detalhe: str | None = None
+
+
+@router.post("/check", response_model=TargetCheckOut)
+async def check_target(
+    body: TargetCheckIn,
+    principal: Principal = RequireScansRun,
+) -> TargetCheckOut:
+    """Diz se o alvo passa no escopo, sem criar nada.
+
+    É a mesma validação do `POST /targets`, chamada pela tela no passo do alvo para
+    explicar o bloqueio antes da revisão, e não com um "não foi possível iniciar" no
+    último clique.
+    """
+    try:
+        validate_target_value(body.value, asset_type=body.asset_type.value)
+    except AlvoForaDoEscopo as e:
+        return TargetCheckOut(
+            ok=False,
+            motivo=e.motivo,
+            host=e.host,
+            loopback=e.loopback,
+            liberavel=liberavel_pela_tela(e),
+            detalhe=str(e),
+        )
+    except TargetValidationError as e:
+        return TargetCheckOut(ok=False, motivo="invalido", detalhe=str(e))
+    return TargetCheckOut(ok=True)
 
 
 @router.post("", response_model=TargetOut, status_code=status.HTTP_201_CREATED)

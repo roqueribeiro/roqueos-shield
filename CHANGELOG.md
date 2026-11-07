@@ -7,12 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **One-command install**: `curl -fsSL https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/install.sh | sh` checks Docker and its memory (6 GB), starts the standalone container on `127.0.0.1`, waits for the healthcheck and opens the browser with the first-run code in the address fragment (never sent to the server). Messages in Portuguese or English by `LANG`. The version in the script is checked against `pyproject.toml` by `scripts/check_docs_fresh.py`.
+- **First run without copy and paste**: the UI reads `#setup=<code>`, fills the code, hides the field and removes the code from the address bar and history.
+- **`POST /targets/check`**: the same scope validation as `POST /targets`, without creating anything, returning why a target is refused (`rede_local`, `nao_resolve`, `invalido`), whether it is the container itself (`loopback`) and whether the UI may offer to allow it (`liberavel`).
+- **New scan explains a refused target on the first step**: `localhost` gets "that is RoqueShield itself" and a button to switch to `host.docker.internal`; an internal address gets **Allow in the scope** for admins (with confirmation), never for loopback or cloud metadata.
+- **Scan list marks "Coverage incomplete"** on finished scans where a scanner was skipped (`coverage_state` in `GET /ui/api/scans`).
+
 ### Fixed
 
 - **Dates in the future on SQLite.** SQLite stores no time zone, so the API returned `started_at` without one and the browser read it as local time: in São Paulo a scan just run showed "in 3 hours". Datetimes read from the database are now always UTC-aware.
 - **Dates in Portuguese on the English UI.** The standalone UI did not publish the active locale for the date helpers.
 - **AI triage tab said "the AI was not called"** when the model call failed before reaching the provider (missing or rejected key). The gateway now records any failed call as an `AIRun`, and the tab reads a failed batch as a failed triage.
 - **nuclei failures now log the exit code and the end of stderr** (`rc=-9` is the OOM killer), instead of only "status failed".
+- **AI triage without a key is "AI not configured", not a failure.** With no provider key and no local server, triage no longer calls the model (every batch failed with an auth error and every scan showed a red "triage failed"); it logs `ai.triage_skipped_no_credentials` and keeps the tool's classification. The tab shows the neutral state with a shortcut to configure AI, and no longer counts the default model name as "configured".
+- **A queued scan looked finished in the standalone UI**: the shield calls it `pending`, the UI only knew `queued`, so it showed "Coverage incomplete" and did not follow it live.
+- **"Start scan" on a refused target said only "Could not start the scan"**; it now shows the shield's reason.
+- `scripts/web_e2e.sh` sets `LITELLM_MODE=PRODUCTION`: litellm's import-time `load_dotenv()` loaded the developer's `.env`, and every scope field showed as locked by the environment.
 
 ### Documentation
 
