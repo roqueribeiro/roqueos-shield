@@ -240,7 +240,7 @@ python3.13 -m venv .venv
 | `uv lock --check` | o `uv.lock` bate com o `pyproject.toml` | `lockfile` |
 | `scripts/web_e2e.sh` | a tela web contra um shield de verdade | `web` |
 
-O CI pina `ruff==0.16.5` (o extra `dev` pina o mesmo). Outra versão do ruff pode discordar da formatação.
+O CI pina `ruff==0.17.4` (o extra `dev` pina o mesmo). Outra versão do ruff pode discordar da formatação.
 
 **O que você deve ver** dos três gates em Python numa árvore limpa:
 
