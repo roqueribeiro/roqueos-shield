@@ -2499,7 +2499,7 @@
     },
     "/reports/{scan_id}/ai-bundle": {
       "get": {
-        "description": "AI Fix Bundle — JSON estruturado pra outra IA consumir e patchar código.\n\nSchema versionado em `docs/ai-fix-bundle-spec.md`. Patcher externo\n(Claude Code, Cursor, Copilot) recebe esse JSON e produz patches.",
+        "description": "AI Fix Bundle — JSON estruturado pra outra IA consumir e patchar código.\n\nSchema versionado em `docs/AI-FIX-BUNDLE.md`. Patcher externo\n(Claude Code, Cursor, Copilot) recebe esse JSON e produz patches.",
         "operationId": "download_ai_bundle_reports__scan_id__ai_bundle_get",
         "parameters": [
           {

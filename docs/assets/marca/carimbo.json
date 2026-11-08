@@ -1,6 +1,22 @@
 {
-  "en": ["15 scanners", "AI triage", "one command", "v0.5.0"],
-  "pt": ["15 scanners", "triagem IA", "um comando", "v0.5.0"],
+  "$comment": "Fonte dos textos do banner e do social preview. A versão NÃO mora aqui: o gen.py lê do pyproject.toml e grava em versao_gerada; o scripts/check_docs_fresh.py reprova quando versao_gerada difere do pyproject (banner com versão velha).",
+  "versao_gerada": "0.5.1",
+  "eyebrow": {
+    "en": "OPEN SOURCE · APACHE 2.0 · SECURITY",
+    "pt": "CÓDIGO ABERTO · APACHE 2.0 · SEGURANÇA"
+  },
+  "chips": {
+    "en": [
+      "15 scanners",
+      "AI triage",
+      "one command"
+    ],
+    "pt": [
+      "15 scanners",
+      "triagem IA",
+      "um comando"
+    ]
+  },
   "lema": {
     "en": [
       "A scan that didn't run is not a clean scan.",
@@ -10,5 +26,9 @@
       "Scan que não rodou não é scan limpo.",
       "Zero achado tem que provar que rodou."
     ]
+  },
+  "descricao": {
+    "en": "Continuous security testing for regulated environments, from scan to AI fix.",
+    "pt": "Teste de segurança contínuo para ambientes regulados, do scan ao fix por IA."
   }
 }

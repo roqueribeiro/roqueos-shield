@@ -67,10 +67,11 @@ jobs:
     name: Diagramas em dia
     runs-on: ubuntu-latest
     # Diagrama versionado que ninguem consegue refazer vira uma foto antiga da
-    # arquitetura pendurada no README. As 18 figuras sao GERADAS por
-    # scripts/diagrams/; este gate confere que o SVG em disco e o que o codigo
-    # produz agora. Mutacao confirmada, tres plantios: SVG editado a mao, SVG
-    # apagado e SVG orfao na pasta — os tres dao exit 1; arvore limpa da exit 0.
+    # arquitetura pendurada no README. As 36 figuras (9 diagramas x PT/EN x
+    # claro/escuro, em docs/assets/diagramas/) sao GERADAS por scripts/diagrams/;
+    # este gate confere que o SVG em disco e o que o codigo produz agora. Mutacao
+    # confirmada: texto mudado num modulo sem regerar e arquivo orfao na pasta
+    # dao exit 1; arvore regerada da exit 0.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

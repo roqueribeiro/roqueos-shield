@@ -365,7 +365,7 @@ def main() -> int:
         print(
             "\nA pergunta é sempre: zero achados aqui significa LIMPO, ou significa "
             "NÃO RODOU? Se não dá para distinguir, falta um sinal.\n"
-            "Ver docs/architecture.md § O contrato do silêncio."
+            "Ver .claude/rules/60-contrato-do-silencio.md e docs/ARCHITECTURE.md."
         )
         return 1
 

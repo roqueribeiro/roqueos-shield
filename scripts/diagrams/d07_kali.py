@@ -2,7 +2,7 @@
 
 from .c4lib import *
 
-SAIDA = "kali-cai-agente"
+SAIDA = "agente-kali"
 
 
 def draw(theme):
@@ -11,10 +11,18 @@ def draw(theme):
     t = theme
     title_block(
         c,
-        "RoqueShield — O Kali e o agente CAI dentro dele",
-        "Um sidecar Kali com as ferramentas, e um agente que executa nele sob coleira. "
-        "O que está pintado como stub é stub: a coleira e o executor existem e são "
-        "testados; o container cai-expert, não.",
+        tr(
+            "RoqueShield: o Kali e o agente CAI dentro dele",
+            "RoqueShield: Kali and the CAI agent inside it",
+        ),
+        tr(
+            "Um sidecar Kali com as ferramentas, e um agente que executa nele sob coleira. "
+            "O que está pintado como stub é stub: a coleira e o executor existem e são "
+            "testados; o container cai-expert, não.",
+            "A Kali sidecar with the tools, and an agent that runs commands in it on a leash. "
+            "What is drawn as a stub is a stub: the leash and the executor exist and are "
+            "tested; the cai-expert container is not.",
+        ),
     )
     brand(c)
 
@@ -32,29 +40,45 @@ def draw(theme):
                 title="kalilinux/kali-rolling",
                 tech="docker/images/kali-toolbox/Dockerfile",
                 color=P["kali"],
-                desc="A base é a rolling, não a kali-linux-large: o metapacote grande passa de "
-                "12 GB e traz centenas de ferramentas que ninguém chama. Aqui entram 19, "
-                "escolhidas uma a uma.",
+                desc=tr(
+                    "A base é a rolling, não a kali-linux-large: o metapacote grande passa de "
+                    "12 GB e traz centenas de ferramentas que ninguém chama. Aqui entram 19, "
+                    "escolhidas uma a uma.",
+                    "The base is rolling, not kali-linux-large: the large metapackage is over "
+                    "12 GB and brings hundreds of tools nobody calls. Here 19 go in, picked "
+                    "one by one.",
+                ),
             ),
         ],
         gap=0,
     )
     for titulo, itens, cor in [
         (
-            "Descoberta e rede",
+            tr("Descoberta e rede", "Discovery and network"),
             "nmap · masscan · naabu 2.3.3 · amass · subfinder 2.6.6 · whois · dnsutils",
             P["kali"],
         ),
         (
-            "Web e aplicação",
+            tr("Web e aplicação", "Web and application"),
             "ffuf · gobuster · dirsearch · sqlmap · nikto · httpx 1.6.9 · nuclei 3.3.5",
             P["amber"],
         ),
-        ("Segredo em código", "gitleaks 8.21.2 · trufflehog 3.83.7", P["rose"]),
-        ("IaC, imagem e cluster", "checkov · trivy 0.57.1 · kube-bench 0.10.5", P["green"]),
         (
-            "Domínio e scanner de rede",
-            "dnstwist · gvm-tools + python-gvm (cliente GMP do Greenbone)",
+            tr("Segredo em código", "Secrets in code"),
+            "gitleaks 8.21.2 · trufflehog 3.83.7",
+            P["rose"],
+        ),
+        (
+            tr("IaC, imagem e cluster", "IaC, image and cluster"),
+            "checkov · trivy 0.57.1 · kube-bench 0.10.5",
+            P["green"],
+        ),
+        (
+            tr("Domínio e scanner de rede", "Domain and network scanner"),
+            tr(
+                "dnstwist · gvm-tools + python-gvm (cliente GMP do Greenbone)",
+                "dnstwist · gvm-tools + python-gvm (Greenbone GMP client)",
+            ),
             P["violet"],
         ),
     ]:
@@ -65,7 +89,7 @@ def draw(theme):
     c.text(
         X1 + 38,
         y + 24,
-        "GATE DE BUILD",
+        tr("GATE DE BUILD", "BUILD GATE"),
         size=10,
         weight=700,
         fill=P["green"],
@@ -75,15 +99,30 @@ def draw(theme):
     c.para(
         X1 + 38,
         y + 44,
-        "ARG NUCLEI_TEMPLATES_MIN=2000 — o build conta os templates e "
-        "falha abaixo do piso. Imagem que sobe sem template é um scanner "
-        "que não acha nada e não avisa.",
+        tr(
+            "ARG NUCLEI_TEMPLATES_MIN=2000: o build conta os templates e "
+            "falha abaixo do piso. Imagem que sobe sem template é um scanner "
+            "que não acha nada e não avisa.",
+            "ARG NUCLEI_TEMPLATES_MIN=2000: the build counts the templates and "
+            "fails below the floor. An image that ships without templates is a "
+            "scanner that finds nothing and says nothing.",
+        ),
         size=10.5,
         fill=t["ink_soft"],
         max_w=W1 - 76,
     )
     y += 98
-    c.into(sA, boundary, X1, 202, W1, y - 202, "a imagem", "19 ferramentas", color=P["kali"])
+    c.into(
+        sA,
+        boundary,
+        X1,
+        202,
+        W1,
+        y - 202,
+        tr("a imagem", "the image"),
+        tr("19 ferramentas", "19 tools"),
+        color=P["kali"],
+    )
     y1 = y
 
     # ---------------- coluna 2: a coleira
@@ -97,8 +136,13 @@ def draw(theme):
         W2 - 44,
         1,
         "resolve_executor(container=…)",
-        "_kali_available() confere o docker e sonda o container. Sem Kali, cai para o "
-        "modo local — o orchestrator já embute nmap, nuclei e gitleaks.",
+        tr(
+            "_kali_available() confere o docker e sonda o container. Sem Kali, cai para o "
+            "modo local: o orchestrator já embute nmap, nuclei e gitleaks.",
+            "_kali_available() checks docker and probes the container. Without Kali it "
+            "falls back to local mode: the orchestrator already bundles nmap, nuclei and "
+            "gitleaks.",
+        ),
         color=P["kali"],
     )
     y = s1.y + s1.h + 26
@@ -109,9 +153,14 @@ def draw(theme):
         W2 - 44,
         2,
         "check_command(cmd, phase, scope)",
-        "A coleira. Recusa comando fora da fase declarada, alvo fora do escopo e "
-        "tentativa de injeção. Devolve ExecDecision, e to_audit() coloca a decisão na "
-        "trilha — inclusive as recusas.",
+        tr(
+            "A coleira. Recusa comando fora da fase declarada, alvo fora do escopo e "
+            "tentativa de injeção. Devolve ExecDecision, e to_audit() coloca a decisão na "
+            "trilha, inclusive as recusas.",
+            "The leash. Rejects commands outside the declared phase, targets out of scope "
+            "and injection attempts. Returns ExecDecision, and to_audit() puts the decision "
+            "in the trail, rejections included.",
+        ),
         color=P["red"],
     )
     y = s2.y + s2.h + 26
@@ -122,9 +171,14 @@ def draw(theme):
         W2 - 44,
         3,
         "run_in_kali(...)",
-        'argv = ["docker", "exec", container, *command] entregue a '
-        "asyncio.create_subprocess_exec como LISTA. Nunca shell=True, nunca string "
-        "concatenada: não existe metacaractere para o agente escapar.",
+        tr(
+            'argv = ["docker", "exec", container, *command] entregue a '
+            "asyncio.create_subprocess_exec como LISTA. Nunca shell=True, nunca string "
+            "concatenada: não existe metacaractere para o agente escapar.",
+            'argv = ["docker", "exec", container, *command] handed to '
+            "asyncio.create_subprocess_exec as a LIST. Never shell=True, never a "
+            "concatenated string: there is no metacharacter for the agent to escape.",
+        ),
         color=P["kali"],
     )
     y = s3.y + s3.h + 26
@@ -134,9 +188,13 @@ def draw(theme):
         y,
         W2 - 44,
         4,
-        "lab_only_active() e dry_run",
-        "Com lab-only ligado, só os alvos de laboratório passam. Em dry_run a decisão "
-        "é calculada e registrada, e nada executa.",
+        tr("lab_only_active() e dry_run", "lab_only_active() and dry_run"),
+        tr(
+            "Com lab-only ligado, endereço interno só passa se estiver na allow-list. Em dry_run a decisão "
+            "é calculada e registrada, e nada executa.",
+            "With lab-only on, an internal address passes only if allow-listed. In dry_run the decision is computed "
+            "and recorded, and nothing runs.",
+        ),
         color=P["red"],
     )
     y = s4.y + s4.h + 26
@@ -149,7 +207,7 @@ def draw(theme):
         202,
         W2,
         y - 202 - 4,
-        "a coleira",
+        tr("a coleira", "the leash"),
         "ai/agentic/executor.py",
         color=P["red"],
     )
@@ -166,8 +224,12 @@ def draw(theme):
         W3 - 44,
         "▸",
         "POST /investigate/{finding_id}",
-        "Sai do pipeline de scan. Pega UM achado e investiga a fundo, em vez de "
-        "triar todos por igual.",
+        tr(
+            "Sai do pipeline de scan. Pega UM achado e investiga a fundo, em vez de "
+            "triar todos por igual.",
+            "Steps out of the scan pipeline. Takes ONE finding and digs into it, instead "
+            "of triaging all of them the same way.",
+        ),
         color=P["cyan"],
     )
     y = l1.y + l1.h + 22
@@ -177,10 +239,15 @@ def draw(theme):
         y,
         W3 - 44,
         "↻",
-        "laço de até max_steps",
-        "O modelo propõe um comando, parse_command interpreta, check_command decide, "
-        "run_in_kali executa, a saída volta ao contexto. Repete até concluir ou "
-        "estourar o teto.",
+        tr("laço de até max_steps", "loop of up to max_steps"),
+        tr(
+            "O modelo propõe um comando, parse_command interpreta, check_command decide, "
+            "run_in_kali executa, a saída volta ao contexto. Repete até concluir ou "
+            "estourar o teto.",
+            "The model proposes a command, parse_command parses it, check_command decides, "
+            "run_in_kali runs it, the output goes back into context. Repeats until done or "
+            "the cap is hit.",
+        ),
         color=P["cyan"],
     )
     y = l2.y + l2.h + 22
@@ -191,13 +258,24 @@ def draw(theme):
         W3 - 44,
         "↓",
         "_investigate_fallback()",
-        "Sem agente disponível, um prompt só, sem execução. Continua respondendo — "
-        "e diz que foi por aqui.",
+        tr(
+            "Sem agente disponível, um prompt só, sem execução. Continua respondendo, "
+            "e diz que foi por aqui.",
+            "With no agent available, a single prompt, no execution. It still answers, "
+            "and says it took this path.",
+        ),
         color=P["gray"],
     )
     y = l3.y + l3.h + 22
     edge(c, (l1.cx, l1.y + l1.h), (l2.cx, l2.y - 2))
-    edge(c, (l2.cx, l2.y + l2.h), (l3.cx, l3.y - 2), "sem agente", dash="5 4", color=P["gray"])
+    edge(
+        c,
+        (l2.cx, l2.y + l2.h),
+        (l3.cx, l3.y - 2),
+        tr("sem agente", "no agent"),
+        dash="5 4",
+        color=P["gray"],
+    )
     c.into(
         sC,
         boundary,
@@ -205,7 +283,7 @@ def draw(theme):
         202,
         W3,
         y - 202 - 4,
-        "a investigação",
+        tr("a investigação", "the investigation"),
         "ai/agentic/cai_expert.py",
         color=P["cyan"],
     )
@@ -217,7 +295,10 @@ def draw(theme):
     c.text(
         X1 + 24,
         yb + 32,
-        "O QUE AINDA NÃO É — dito aqui para não ser descoberto em produção",
+        tr(
+            "O QUE AINDA NÃO É: dito aqui para não ser descoberto em produção",
+            "WHAT IT IS NOT YET: said here so nobody finds out in production",
+        ),
         size=11.5,
         weight=700,
         fill=P["red"],
@@ -229,21 +310,41 @@ def draw(theme):
         X1 + 24,
         yb + 48,
         1740,
-        ["peça", "estado medido no código", "consequência prática"],
+        [
+            tr("peça", "piece"),
+            tr("estado medido no código", "state measured in the code"),
+            tr("consequência prática", "practical consequence"),
+        ],
         [
             [
-                "container cai-expert",
-                "docker/images/cai-expert/Dockerfile instala cai-framework com "
-                "|| true no final; o compose.agent.yml se declara stub no cabeçalho e o "
-                "CMD é um print de idle",
-                "A imagem sobe mesmo se a instalação falhar. Não conte com ela para operar.",
+                tr("container cai-expert", "cai-expert container"),
+                tr(
+                    "docker/images/cai-expert/Dockerfile instala cai-framework com "
+                    "|| true no final; o compose.agent.yml se declara stub no cabeçalho e o "
+                    "CMD é um print de idle",
+                    "docker/images/cai-expert/Dockerfile installs cai-framework with "
+                    "|| true at the end; compose.agent.yml declares itself a stub in its "
+                    "header and the CMD just prints idle",
+                ),
+                tr(
+                    "A imagem sobe mesmo se a instalação falhar. Não conte com ela para operar.",
+                    "The image builds even if the install fails. Do not rely on it in operation.",
+                ),
             ],
             [
                 "_cai_framework_available()",
-                "hoje devolve apenas bool(settings.AGENT_ENABLED) — não verifica se o "
-                "framework está de fato instalado",
-                "Com a flag ligada e o framework ausente, o caminho agêntico é tentado e "
-                "cai no fallback.",
+                tr(
+                    "hoje devolve apenas bool(settings.AGENT_ENABLED). Não verifica se o "
+                    "framework está de fato instalado",
+                    "today it only returns bool(settings.AGENT_ENABLED). It does not check "
+                    "whether the framework is actually installed",
+                ),
+                tr(
+                    "Com a flag ligada e o framework ausente, o caminho agêntico é tentado e "
+                    "cai no fallback.",
+                    "With the flag on and the framework missing, the agentic path is tried "
+                    "and falls back.",
+                ),
             ],
         ],
         [230, 700, 810],
@@ -253,7 +354,8 @@ def draw(theme):
 
     footer(
         c,
-        "fonte: docker/images/kali-toolbox/Dockerfile · orchestrator/ai/agentic/executor.py · "
+        tr("fonte: ", "source: ")
+        + "docker/images/kali-toolbox/Dockerfile · orchestrator/ai/agentic/executor.py · "
         "orchestrator/ai/agentic/cai_expert.py · docker/compose.agent.yml",
         "github.com/roqueribeiro/roqueos-shield",
         y=yy + 66,

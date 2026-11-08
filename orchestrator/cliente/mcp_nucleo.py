@@ -6,7 +6,7 @@ fecha com uma terceira exigência. O que o RoqueShield precisa do protocolo é p
 (initialize, ping, tools/list, tools/call), e cabe aqui com teste.
 
 Cada ferramenta chama a API REST com a credencial de quem chamou, então vale o RBAC
-de sempre. Duas regras que a proposta em docs/integrations.md já pedia:
+de sempre. Duas regras que a proposta em docs/INTEGRATIONS.md já pedia:
 
 1. **Ferramenta não devolve vazio quando o scan falhou.** Achados e bundle de um scan
    que falhou ou que veio com cobertura incompleta voltam com `isError: true` e o

@@ -66,7 +66,7 @@ async def download_ai_bundle(
 ) -> JSONResponse:
     """AI Fix Bundle — JSON estruturado pra outra IA consumir e patchar código.
 
-    Schema versionado em `docs/ai-fix-bundle-spec.md`. Patcher externo
+    Schema versionado em `docs/AI-FIX-BUNDLE.md`. Patcher externo
     (Claude Code, Cursor, Copilot) recebe esse JSON e produz patches.
     """
     from orchestrator.reporting.exporters.ai_bundle import build_bundle

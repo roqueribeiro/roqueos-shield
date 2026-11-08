@@ -1,419 +1,243 @@
 <p align="center">
-  <a href="https://github.com/roqueribeiro/roqueos-shield"><img src="docs/assets/marca/banner.pt.jpg" alt="RoqueShield — teste de segurança contínuo para ambientes regulados. Scan que não rodou não é scan limpo; zero achado tem que provar que rodou." width="100%"></a>
+  <a href="https://github.com/roqueribeiro/roqueos-shield"><img src="docs/assets/marca/banner.pt.jpg" alt="RoqueShield: teste de segurança contínuo para ambientes regulados. Scan que não rodou não é scan limpo; zero achado tem que provar que rodou." width="100%"></a>
 </p>
 
 <p align="center">
   <a href="https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="LICENSE"><img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-007aff"></a>
+  <a href="https://github.com/roqueribeiro/roqueos-shield/tags"><img alt="Versão" src="https://img.shields.io/github/v/tag/roqueribeiro/roqueos-shield?label=vers%C3%A3o&sort=semver&color=007aff"></a>
+  <a href="LICENSE"><img alt="Apache 2.0" src="https://img.shields.io/badge/licen%C3%A7a-Apache%202.0-007aff"></a>
   <img alt="Python 3.13" src="https://img.shields.io/badge/python-3.13-5856d6">
-  <a href="#limitações-conhecidas"><img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-f59e0b"></a>
-  <img alt="15 scanners" src="https://img.shields.io/badge/scanners-15-007aff">
+  <img alt="15 adapters de scanner" src="https://img.shields.io/badge/scanners-15-007aff">
+  <img alt="Mac, Linux e Windows WSL" src="https://img.shields.io/badge/os-macOS%20%C2%B7%20Linux%20%C2%B7%20WSL-667eea">
+  <a href="#estado-do-projeto"><img alt="Estado: alpha" src="https://img.shields.io/badge/estado-alpha-f59e0b"></a>
 </p>
 
 <p align="center">
-  <a href="docs/standalone.pt-BR.md"><b>Começar</b></a> ·
-  <a href="docs/integrations.pt-BR.md"><b>Integrações</b></a> ·
-  <a href="docs/architecture.md">Arquitetura</a> ·
-  <a href="docs/c4-model.pt-BR.md">Modelo C4</a> ·
+  <a href="docs/pt-BR/COMECAR.md"><b>Começar</b></a> ·
+  <a href="docs/pt-BR/INTEGRACOES.md"><b>Integrações</b></a> ·
+  <a href="docs/pt-BR/INDEX.md">Documentação</a> ·
+  <a href="docs/pt-BR/REFERENCIA.md">Referência</a> ·
+  <a href="docs/pt-BR/ARQUITETURA.md">Arquitetura</a> ·
   <a href="README.md">English</a>
 </p>
 
-**Teste de segurança contínuo que se recusa a ficar calado.** Quinze scanners atrás de um contrato de adapter, triagem por LLM sobre evidência higienizada, um agente que confirma o achado dentro de um Kali sob coleira, e um **AI Fix Bundle** que outro agente consome para corrigir o código.
-
 ---
 
-## Por que isto existe
+> [!TIP]
+> **Chegou agora?** O [COMECAR.md](docs/pt-BR/COMECAR.md) leva de um comando a um scan Web terminado num alvo de laboratório, com as telas que você deve ver em cada passo. Um primeiro scan leva de 8 a 13 minutos.
 
-Um scanner quebrado e um alvo limpo produzem **exatamente a mesma saída: zero
-achados.** Num relatório que vai para a auditoria de um banco, essa é a única
-diferença que importa — e era a diferença que esta ferramenta não sabia fazer.
+**O RoqueShield roda quinze scanners atrás de um contrato de adapter, faz a triagem do que eles acham com um LLM sobre evidência higienizada, deixa um agente confirmar o achado dentro de um sidecar Kali sob coleira, e entrega a correção a outro agente como um AI Fix Bundle.** Ele se instala como um container só, com tela web, API REST, CLI e servidor MCP, e se recusa a chamar de limpo um scan em que um scanner não rodou de verdade.
 
-Nove adapters tinham a mesma forma de defeito: exceção engolida, report vazio lido
-como `{}`, um `poll()` que chamava de "concluído" um processo morto, um scanner que
-recebia URL onde esperava diretório. Todos fechavam o scan com zero achados e um
-tique verde.
-
-Daí a regra que governa o projeto, e os dois gates de CI que a executam:
-
-> **Zero achados aqui significa *limpo*, ou significa *não rodou*?
-> Se não houver como distinguir, falta um sinal.**
-
-Todo o resto deste repositório existe para servir a essa frase.
-
----
-
-## O sistema em uma figura
+> [!NOTE]
+> **Versão 0.5.1, alpha.** Tudo o que está descrito aqui existe e tem teste; o que foi medido, quando e em quê está em [Estado do projeto](#estado-do-projeto). Interfaces e o schema do banco ainda podem quebrar entre versões menores. Use contra ativo real só com autorização por escrito, sob os controles do [SECURITY.md](SECURITY.md) (em inglês).
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagrams/c1-context-dark.svg">
-  <img alt="Contexto do sistema" src="docs/assets/diagrams/c1-context-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagramas/contexto.escuro.svg">
+  <img alt="Contexto do RoqueShield: quem usa, o que ele varre e do que ele depende." src="docs/assets/diagramas/contexto.claro.svg">
 </picture>
 
-Mais quatro níveis de detalhe — containers, componentes, ciclo de vida do adapter,
-infraestrutura, esteira do scan, o Kali com o agente e as telas — em
-**[docs/c4-model.pt-BR.md](docs/c4-model.pt-BR.md)**.
+## Sumário
 
----
+- [Começar em um minuto](#começar-em-um-minuto)
+- [Por que existe](#por-que-existe)
+- [Como funciona](#como-funciona)
+- [A coleira é a parte que importa](#a-coleira-é-a-parte-que-importa)
+- [Ligando em agentes, APIs e esteiras](#ligando-em-agentes-apis-e-esteiras)
+- [Os scanners que vêm junto](#os-scanners-que-vêm-junto)
+- [O que mantém ele honesto](#o-que-mantém-ele-honesto)
+- [Dentro do RoqueOS](#dentro-do-roqueos)
+- [Estado do projeto](#estado-do-projeto)
+- [Limites conhecidos](#limites-conhecidos)
+- [Documentação](#documentação)
+- [Contribuir, segurança e licença](#contribuir-segurança-e-licença)
+- [Idiomas](#idiomas)
 
-## O que faz
+## Começar em um minuto
 
-| Etapa | O que acontece | Onde |
-| --- | --- | --- |
-| **Scan** | A ferramenta certa para o tipo de alvo. Semgrep lê o código-fonte; Gitleaks e Trufflehog caçam segredo; Trivy cobre CVE em imagem e dependência; Checkov cobre IaC; ZAP e Nuclei sondam a aplicação no ar; Nmap e Greenbone cobrem a rede. | `orchestrator/adapters/` |
-| **Dedupe** | Fusão determinística por `deduped_key`, mantendo a maior severidade. Credencial rotacionada não colapsa em um achado só, porque o fingerprint discrimina. | `orchestrator/domain/dedup.py` |
-| **Triagem** | Um LLM reordena severidade, marca falso positivo provável, mapeia OWASP e CWE e propõe remediação — sobre evidência que o scrubber de PII/PCI limpou antes. | `orchestrator/ai/analyzer.py` |
-| **Investigação** | Sob demanda, um agente ReAct pega **um** achado e tenta confirmá-lo: roda ferramenta de verdade no Kali, lê a saída, decide o próximo passo. Todo comando passa pela coleira antes. | `orchestrator/ai/agentic/` |
-| **Entrega** | Um **AI Fix Bundle** — id estável, prioridade, arquivo e linha, pista de stack, passos de verificação — que Claude Code, Cursor ou um passo de CI consome para propor o patch. | `orchestrator/reporting/exporters/` |
-
-### A esteira, fase a fase
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagrams/esteira-scan-dark.svg">
-  <img alt="A esteira de um scan" src="docs/assets/diagrams/esteira-scan-light.svg">
-</picture>
-
----
-
-## A coleira é a parte que importa
-
-Se você pretende apontar isto para alguma coisa real, leia esta seção antes do
-quickstart.
-
-O escopo do agente **não é uma frase no prompt.** Prompt não restringe processo que
-tem shell. É código em
-[`orchestrator/ai/agentic/executor.py`](orchestrator/ai/agentic/executor.py),
-conferido antes de cada comando: allowlist por fase, alvo validado pelo mesmo
-validador que os scanners usam, `argv` entregue como **lista** ao
-`asyncio.create_subprocess_exec` — nunca shell, então não existe metacaractere para
-escapar — recusa de flag que escreve em disco, timeout duro, um modo `lab_only` que
-vem **ligado**, e um `dry_run` que planeja e audita sem executar. Toda decisão,
-inclusive toda recusa, vai para a trilha por `ExecDecision.to_audit()`.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagrams/kali-cai-agente-dark.svg">
-  <img alt="Kali toolbox e a coleira do agente" src="docs/assets/diagrams/kali-cai-agente-light.svg">
-</picture>
-
-**De onde o agente veio, dito aqui para ninguém precisar cavar o histórico:** os
-agentes nasceram em cima do [CAI, o framework Cybersecurity AI](https://github.com/aliasrobotics/cai).
-Hoje o laço ReAct é do próprio projeto: `litellm` mais o executor acima, ligado por
-padrão e em `dry_run` até alguém dizer o contrário. O extra `agentic`, que instalava o
-`cai-framework`, saiu em 23/10/2026, porque a última versão dele (0.5.10) tem o
-GHSA-4996-996j-2m9r e fixava `openai==1.75`, o que prendia o `litellm` numa versão
-vulnerável; nada importa o pacote. O laço, o executor e a coleira são reais e
-testados. O container `cai-expert` é o que sobrou daquela fase: o Dockerfile ainda
-termina a instalação com `|| true`, e nada no pipeline chama ele.
-
----
-
-## Quickstart
-
-**Um comando, um container.** O motor, a tela, a API com Swagger, o servidor MCP, o
-Redis e o OWASP ZAP. No Mac, no Linux ou no WSL do Windows, com o Docker aberto:
+No macOS, no Linux ou no Windows com WSL, com o Docker rodando:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/install.sh | sh
 ```
 
-Ele confere o Docker e a memória, sobe o container, espera ficar pronto e abre o
-navegador em `http://localhost:8080` com o código de primeiro uso já preenchido: você
-só escolhe e-mail e senha. Depois é **Novo scan**, o endereço, e o que você tem
-autorização para testar. Para testar um app da sua própria máquina, use
-`host.docker.internal` no lugar de `localhost` (a tela explica e troca por você).
+Ele confere o Docker e a memória dele, sobe um container em `127.0.0.1`, espera ficar saudável e abre o navegador em `http://localhost:8080` com o código de primeiro uso já preenchido. Você escolhe um e-mail e uma senha, depois **Novo scan**, o endereço, e só o que você tem autorização para testar. Para testar uma aplicação na sua própria máquina, use `host.docker.internal` no lugar de `localhost`: a tela explica e troca para você.
 
-Prefere ver antes o que vai rodar? O [install.sh](install.sh) é curto e comentado, e o
-caminho à mão (um `docker run`), o Windows sem WSL, segredos, TLS, backup, CLI, MCP e o
-compose de produção estão em **[docs/standalone.pt-BR.md](docs/standalone.pt-BR.md)**.
+Esse container é o produto inteiro: o motor, a tela, a API com Swagger, o servidor MCP, o Redis e o OWASP ZAP. Nada mais para instalar.
 
-![RoqueShield standalone: detalhe do scan](docs/assets/screens/pt-BR/03-detalhe-resumo.webp)
+Prefere ler o que vai rodar antes? O [install.sh](install.sh) é curto e comentado. O caminho passo a passo, com o que você deve ver na tela, é o [COMECAR.md](docs/pt-BR/COMECAR.md); atualizar, backup, o compose de produção e o `docker run` manual estão no [OPERACAO.md](docs/pt-BR/OPERACAO.md).
 
-**Do código-fonte**, para mexer no projeto. Pré-requisitos: Docker Desktop (WSL2 no Windows) ou Docker Engine, 8 GB de RAM livre,
-e opcionalmente uma chave Anthropic/OpenAI — ou nenhuma, se apontar para um modelo
-local.
+![RoqueShield: o resumo de um scan terminado](docs/assets/screens/pt-BR/03-detalhe-resumo.webp)
 
-```bash
-git clone https://github.com/roqueribeiro/roqueos-shield.git
-cd roqueos-shield
-cp .env.example .env
-# preencha APP_TOKEN, POSTGRES_PASSWORD, ZAP_API_KEY (strings aleatórias)
-# opcional: ANTHROPIC_API_KEY ou OPENAI_API_KEY
+**Soberania de dados é um interruptor, não uma esperança.** Com um modelo local (Ollama ou LM Studio) e `ALLOW_CLOUD_FALLBACK=false`, um modelo local que falha derruba a triagem em vez de mandar seus achados para um provedor de nuvem. Sem modelo nenhum configurado, o scan roda do mesmo jeito, sem triagem.
 
-make build       # constrói a imagem do orchestrator
-make up          # postgres + redis + orchestrator + worker + zap + alvos de lab
-make migrate     # alembic upgrade head
-make smoke       # ponta a ponta: varre o Juice Shop e produz um relatório HTML
-```
+## Por que existe
 
-Depois, `http://127.0.0.1:8080/` para a tela, ou `/docs` para o OpenAPI. A tela das
-capturas é buildada de `web/` (`cd web && yarn install && yarn build`); sem esse build a
-API serve o dashboard antigo de `orchestrator/static/`.
+Um scanner quebrado e um alvo limpo produzem **exatamente a mesma saída: zero achados.** Num relatório que vai para o comitê de auditoria de um banco, essa é a única diferença que importa, e era a diferença que esta ferramenta não sabia fazer.
 
-**Soberania de dado é um interruptor, não uma esperança.** Com modelo local (Ollama
-ou LM Studio) e `ALLOW_CLOUD_FALLBACK=false`, um modelo local que falha faz o scan
-falhar, em vez de mandar seus achados para um provedor na nuvem.
+Nove adapters tinham a mesma forma de defeito: exceção engolida, report vazio lido como `{}`, um `poll()` que chamava de "pronto" um processo morto, um scanner recebendo URL onde esperava diretório. Todos fechavam o scan com zero achados e um visto verde.
 
----
+Então o projeto tem uma regra que governa tudo, e dois gates na CI que a executam:
 
-## Dentro do RoqueOS
+> **Zero achados aqui: significa *limpo*, ou significa *não rodou*? Se não dá para distinguir, falta um sinal.**
 
-O RoqueShield também é um app de primeira classe dentro do
-[RoqueOS](https://roqueos.com.br): admin-only, provisionado em container, com stepper
-de scan ao vivo por SSE, configuração guiada de provedor de IA, trilha de auditoria
-imutável e segredo cifrado em AES. O roqueos-server provisiona a stack inteira por
-Docker e faz proxy reverso da API injetando o token server-side — **o browser nunca
-vê a credencial.**
+Todo o resto deste repositório existe para servir essa frase.
+
+## Como funciona
+
+| Etapa | O que acontece | Onde |
+| --- | --- | --- |
+| **Varrer** | A ferramenta certa para o tipo de alvo. Semgrep lê o código; Gitleaks e Trufflehog caçam segredo; Trivy cobre CVE em imagem e dependência; Checkov cobre IaC; ZAP e Nuclei sondam a aplicação rodando; Nmap e Greenbone cobrem a rede. | `orchestrator/adapters/` |
+| **Deduplicar** | Junção determinística por `deduped_key`, ficando a severidade mais alta. Uma credencial rotacionada não vira um achado só, porque a impressão digital diferencia. | `orchestrator/domain/dedup.py` |
+| **Triar** | Um LLM reclassifica a severidade, marca provável falso positivo, mapeia para OWASP e CWE e propõe remediação, sobre evidência que um scrubber de PII/PCI limpou antes. | `orchestrator/ai/analyzer.py` |
+| **Investigar** | Sob demanda, um agente pega um achado e tenta **confirmá-lo**: planeja comandos reais para o sidecar Kali, lê a saída, decide o próximo passo. Todo comando passa pela coleira antes. | `orchestrator/ai/agentic/` |
+| **Entregar** | Um **AI Fix Bundle** (IDs estáveis, prioridade, arquivo e linha, dicas de stack, passos de verificação) que o Claude Code, o Cursor ou um passo de CI consome para propor o patch. | `orchestrator/reporting/exporters/` |
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagrams/telas-roqueos-dark.svg">
-  <img alt="Telas do RoqueShield dentro do RoqueOS" src="docs/assets/diagrams/telas-roqueos-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagramas/esteira.escuro.svg">
+  <img alt="A esteira do scan, fase por fase." src="docs/assets/diagramas/esteira.claro.svg">
 </picture>
 
-> A figura acima é **diagrama de interface, não captura de tela.**
+Containers, componentes, o ciclo de vida do adapter e a implantação estão no [ARQUITETURA.md](docs/pt-BR/ARQUITETURA.md).
 
----
+## A coleira é a parte que importa
 
-## Plugando em agente, API e esteira
+Se você pretende apontar isto para algo real, leia esta seção antes.
 
-Três superfícies existem hoje, e elas bastam para fechar o laço
-scan → conserto → re-scan sem humano no meio:
+O escopo do agente **não é uma frase no prompt.** Prompt não segura um processo que tem shell. É código em [`orchestrator/ai/agentic/executor.py`](orchestrator/ai/agentic/executor.py), conferido antes de cada comando:
 
-| Superfície | Entrada | Boa para |
+- uma lista de binários permitidos por fase, e para o `curl` uma lista de opções permitidas;
+- todo host, URL, IP e caminho no **argv inteiro** tem que ser o próprio alvo, conferido pelo mesmo validador que os scanners usam (loopback, metadado de nuvem e outras faixas internas são recusados mesmo que um nome da allowlist resolva para eles);
+- o `argv` vai como **lista** para o `asyncio.create_subprocess_exec`, nunca por shell, então não existe metacaractere para escapar;
+- flags que leem ou escrevem arquivo, redirecionam a conexão ou rodam script são recusadas, e o comando roda com ambiente mínimo e timeout duro.
+
+Por cima disso, a execução ao vivo vem **desligada**: com `AGENT_LIVE_EXECUTION=false` o agente só planeja e audita. Ligada, executar de verdade (`dry_run=false`) continua exigindo admin. Toda decisão, inclusive cada recusa, vai para a trilha de auditoria.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagramas/agente-kali.escuro.svg">
+  <img alt="O sidecar Kali e a coleira do agente." src="docs/assets/diagramas/agente-kali.claro.svg">
+</picture>
+
+**De onde o agente veio**, dito aqui para ninguém precisar cavar o histórico: os agentes começaram em cima do [CAI, o framework Cybersecurity AI](https://github.com/aliasrobotics/cai). Hoje o laço é deste projeto: `litellm` mais o executor acima. O extra `agentic` que instalava o `cai-framework` saiu em 23/10/2026, porque a última versão dele (0.5.10) carrega a GHSA-4996-996j-2m9r e fixava `openai==1.75`, o que prendia o `litellm` numa versão vulnerável; nada importa o pacote mais. O container `cai-expert` é o que sobrou daquela época, e nada na esteira chama ele.
+
+## Ligando em agentes, APIs e esteiras
+
+Três superfícies existem hoje, e elas bastam para fechar o laço varrer, corrigir, varrer de novo sem humano no meio:
+
+| Superfície | Ponto de entrada | Serve para |
 | --- | --- | --- |
-| **CLI** | `roqueshield scan start … --wait --fail-on high` (cliente) · `cai scan` (in-process) | passo de CI, ou agente que já tem shell |
-| **REST** | OpenAPI em `/docs` (fotografia em `docs/openapi.json`), SSE em `/ui/api/events` | serviço integrando pela rede |
-| **MCP** | `roqueshield mcp` (stdio) · `POST /mcp` (HTTP) | Claude Code, Claude Desktop, Cursor |
+| **CLI** | `roqueshield scan start … --wait --fail-on high` | um passo de CI, ou um agente que já tem shell |
+| **REST** | OpenAPI em `/docs` (fotografia em [`docs/openapi.json`](docs/openapi.json)), SSE em `/ui/api/events` | um serviço integrando pela rede |
+| **MCP** | `roqueshield mcp` (stdio) e `POST /mcp` (HTTP) | Claude Code, Claude Desktop, Cursor |
 | **AI Fix Bundle** | `GET /reports/{scan_id}/ai-bundle`, schema `1.0.0` | o agente que escreve o patch |
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagrams/integracoes-agente-dark.svg">
-  <img alt="Superfícies de integração e o laço do agente" src="docs/assets/diagrams/integracoes-agente-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagramas/integracoes.escuro.svg">
+  <img alt="Superfícies de integração e o laço do agente." src="docs/assets/diagramas/integracoes.claro.svg">
 </picture>
 
-O critério de parada não é "o agente disse que acabou". É o **scan seguinte** não
-achar o que o anterior achou, com `coverage_complete` ainda verdadeiro. Scanner que
-deixou de rodar entre as rodadas invalida os dois — e aparece em `scanners_skipped`
-em vez de virar zero achados.
+A condição de parada não é "o agente disse que terminou". É o **próximo scan** não achar o que o anterior achou, com `coverage_complete` ainda verdadeiro. Um scanner que parou de rodar entre as rodadas invalida as duas, e aparece em `scanners_skipped` em vez de virar zero achados. Uma GitHub Action reutilizável ainda não existe. Detalhes, comandos e o contrato do bundle: [INTEGRACOES.md](docs/pt-BR/INTEGRACOES.md) e [AI-FIX-BUNDLE.md](docs/pt-BR/AI-FIX-BUNDLE.md).
 
-O **servidor MCP** existe desde 06/11/2026 (`orchestrator/cliente/`): ferramentas que
-leem scans, achados e o bundle, e `start_scan` só com as ações ligadas. Scan que falhou
-ou veio incompleto volta como erro, nunca como lista vazia. A **GitHub Action
-reutilizável** continua só desenhada, em
-[docs/integrations.pt-BR.md](docs/integrations.pt-BR.md), e marcada como roadmap na figura.
+## Os scanners que vêm junto
 
----
-
-## Adapters
-
-Quinze adapters implementam um `ScannerAdapter` Protocol. Nove são alcançáveis pela
-factory do scan; outros seis são instanciados direto pela trilha OSINT.
+Quinze adapters implementam um mesmo Protocol `ScannerAdapter`. Nove são construídos pela fábrica do scan; mais quatro só pela trilha OSINT (que também roda Gitleaks e Trufflehog); dois estão implementados e testados mas não ligados.
 
 | Adapter | Scanner | Tipo | Ligado por |
 | --- | --- | --- | --- |
-| `semgrep_adapter` | Semgrep | **SAST** — lê o código-fonte | factory |
-| `nmap_adapter` | Nmap | Rede | factory |
-| `zap_adapter` | OWASP ZAP | Aplicação web (DAST) | factory |
-| `nuclei_adapter` | Nuclei | Scan por template | factory |
-| `trivy_adapter` | Trivy | Container / IaC / FS | factory |
-| `checkov_adapter` | Checkov | Má configuração de IaC | factory |
-| `gitleaks_adapter` | Gitleaks | Segredo | factory · OSINT |
-| `trufflehog_adapter` | Trufflehog | Segredo verificado | factory · OSINT |
-| `greenbone_adapter` | Greenbone / OpenVAS | Vulnerabilidade de rede | factory |
+| `semgrep_adapter` | Semgrep | **SAST**: lê o código | fábrica do scan |
+| `nmap_adapter` | Nmap | Rede | fábrica do scan |
+| `zap_adapter` | OWASP ZAP | Aplicação web (DAST) | fábrica do scan |
+| `nuclei_adapter` | Nuclei | Varredura por templates | fábrica do scan |
+| `trivy_adapter` | Trivy | Container, IaC, sistema de arquivos | fábrica do scan |
+| `checkov_adapter` | Checkov | IaC mal configurado | fábrica do scan |
+| `gitleaks_adapter` | Gitleaks | Segredos | fábrica do scan e OSINT |
+| `trufflehog_adapter` | Trufflehog | Segredos verificados | fábrica do scan e OSINT |
+| `greenbone_adapter` | Greenbone / OpenVAS | Vulnerabilidades de rede | fábrica do scan |
 | `dnstwist_adapter` | dnstwist | Typosquatting | OSINT |
-| `subdomain_takeover_adapter` | subfinder + httpx + nuclei | Subdomain takeover | OSINT |
+| `subdomain_takeover_adapter` | subfinder, httpx, nuclei | Tomada de subdomínio | OSINT |
 | `shodan_adapter` | Shodan | Exposição na internet | OSINT |
-| `github_exposure_adapter` | GitHub Search | Vazamento em código | OSINT |
+| `github_exposure_adapter` | GitHub Search | Vazamento de código e segredo | OSINT |
 | `censys_adapter` | Censys | Exposição na internet | **não ligado** |
 | `kube_bench_adapter` | kube-bench | CIS Kubernetes | **não ligado** |
 
-Os dois últimos são contabilidade honesta: estão implementados e têm teste unitário,
-e **nenhum caminho de produção os constrói hoje** — nem `_build_adapters()` nem a
-trilha OSINT os referencia. Versões anteriores desta tabela os listavam como se
-rodassem.
+Os dois últimos são contabilidade honesta: implementados e com teste unitário, e **nenhum caminho de produção constrói eles hoje**. Quais scanners cada perfil roda, e as opções que cada um aceita: [REFERENCIA.md](docs/pt-BR/REFERENCIA.md). Para adicionar um: [ESTENDER.md](docs/pt-BR/ESTENDER.md).
 
----
+**O SAST funciona com a saída de rede fechada.** O `--config auto` do Semgrep é incompatível com o `--metrics off` que este projeto usa por soberania de dados, e os pacotes `p/...` são baixados a cada scan, o que dá **zero regras** em silêncio numa rede restrita. A imagem leva o conjunto `semgrep-rules` (Semgrep Rules License v1.0, veja o [NOTICE](NOTICE)) em `/opt/semgrep-rules`, fixado por commit e validado no build. O Nuclei recebe o mesmo tratamento pelo outro lado: o build da imagem conta os templates e **reprova abaixo de 2000**.
 
-## O que segura a honestidade
+## O que mantém ele honesto
 
 | Situação | O que o adapter faz | O que o relatório diz |
 | --- | --- | --- |
-| Rodou e não achou | devolve `[]` | achado nenhum, cobertura completa |
-| Não deu para verificar | levanta `ScanIntegrityError` | entra em `scanners_skipped`, `coverage_complete: false` |
-| Verificou em parte | preenche `RawResults.coverage_gaps` | um achado **INFO** nomeando a lacuna |
+| Rodou, não achou nada | devolve `[]` | nenhum achado, cobertura completa |
+| Não deu para verificar | levanta `ScanIntegrityError` | listado em `scanners_skipped`, `coverage_complete: false` |
+| Verificou só em parte | preenche `RawResults.coverage_gaps` | um achado **INFO** dando nome à lacuna |
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagrams/c4-code-dark.svg">
-  <img alt="Ciclo de vida do adapter e o contrato do silêncio" src="docs/assets/diagrams/c4-code-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagramas/codigo.escuro.svg">
+  <img alt="O ciclo de vida do adapter e o contrato do silêncio." src="docs/assets/diagramas/codigo.claro.svg">
 </picture>
 
-Dois gates de CI seguram as duas metades dessa promessa, e **os dois foram validados
-por teste de mutação** — quebrando o código de propósito e confirmando que o gate
-reprova:
+Dois gates na CI seguram as duas metades dessa promessa, e **os dois foram validados por teste de mutação** (quebrar o código de propósito e confirmar que o gate reprova):
 
-- **`silencio`** ([`scripts/check_no_silence.py`](scripts/check_no_silence.py)) lê a
-  AST dos adapters e reprova `except` no ciclo de vida do scan que termina em
-  resultado vazio, `poll()` que decide por `task.done()` sem ler `task.result()`, e
-  payload de sucesso fabricado. `# silencio-ok: motivo` é a única passagem — e o
-  motivo escrito é o que denuncia se um dia um silêncio de verdade for liberado.
-- **`efetividade`** (`tests/integration/test_efetividade_e2e.py`) monta um
-  repositório com defeitos conhecidos — injeção de comando, SQLi por taint, `pickle`,
-  MD5, Flask `debug=True`, bucket S3 público, security group `0.0.0.0/0`, disco sem
-  cifra — roda o pipeline inteiro e exige achado real de cada camada, conferindo que
-  scanner ausente aparece como pulado. Sem ele, uma ferramenta que só levantasse
-  exceção passaria em todo o resto, porque "zero achados" é a saída natural de um
-  scanner quebrado.
+- **`silencio`** ([`scripts/check_no_silence.py`](scripts/check_no_silence.py)) lê a AST dos adapters e recusa um `except` no ciclo do scan que termina em resultado vazio, um `poll()` que decide por `task.done()` sem ler `task.result()`, e um payload de sucesso fabricado. `# silencio-ok: motivo` é a única passagem, e o motivo escrito é o que denuncia se um silêncio de verdade passar um dia.
+- **`efetividade`** (`tests/integration/test_efetividade_e2e.py`) monta um repositório com defeitos conhecidos (injeção de comando, SQL por taint, `pickle`, MD5, Flask com `debug=True`, bucket S3 público, security group `0.0.0.0/0`, disco sem cifra), roda a esteira inteira e exige achado real de cada camada, enquanto confere que um scanner ausente aparece como pulado.
 
-**E o gate tem gate.** Uma auditoria adversarial burlou a primeira versão de quatro
-formas e reintroduziu o silêncio no adapter do nmap com o CI verde. Um controle que o
-autor contorna em quatro tentativas não é controle. As quatro viraram
-`tests/unit/test_gate_do_silencio.py`, e o gate foi endurecido contra cada uma.
+**E o gate tem gate.** Uma auditoria adversarial burlou a primeira versão de quatro jeitos e reintroduziu o silêncio no adapter do nmap com a CI verde. As quatro viraram `tests/unit/test_gate_do_silencio.py`, e o gate foi endurecido contra cada uma. A regra inteira, com os nove casos históricos por trás dela, está em [`.claude/rules/60-contrato-do-silencio.md`](.claude/rules/60-contrato-do-silencio.md).
 
-A regra completa, com os nove casos históricos que a produziram, está em
-[`.claude/rules/60-contrato-do-silencio.md`](.claude/rules/60-contrato-do-silencio.md).
+## Dentro do RoqueOS
 
-### SAST funciona com egress fechado
-
-O `--config auto` do Semgrep é incompatível com o `--metrics off` que este projeto
-usa por soberania de dado, e os pacotes `p/...` são baixados do registro a cada scan
-— o que silenciosamente resulta em **zero regras** numa rede corporativa restrita,
-que é o ambiente normal do alvo desta ferramenta. Por isso a imagem embarca o
-conjunto `semgrep-rules` (Semgrep Rules License v1.0, ver o NOTICE) em `/opt/semgrep-rules`, pinado por commit e
-validado no build, e o adapter carrega só os diretórios de linguagem presentes.
-Aponte `SEMGREP_RULES_DIR` para outro lugar se quiser regra própria.
-
-O Nuclei recebe o mesmo tratamento pelo outro lado: o build conta os templates e
-**falha abaixo do piso de 2000**, porque imagem que sobe sem template é um scanner
-que não acha nada e não avisa.
-
----
-
-## Implantação
+O RoqueShield também é um app dentro do [RoqueOS](https://roqueos.com.br): só para admin, rodando em container, com acompanhamento do scan ao vivo por SSE, configuração guiada do provedor de IA, trilha de auditoria imutável e segredos cifrados. O servidor do RoqueOS sobe a stack pelo Docker e faz proxy reverso da API, injetando o token de serviço do lado do servidor, então **o navegador nunca vê uma credencial.**
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagrams/infra-deploy-dark.svg">
-  <img alt="Infraestrutura e implantação" src="docs/assets/diagrams/infra-deploy-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagramas/telas.escuro.svg">
+  <img alt="As telas do RoqueShield dentro do RoqueOS (diagrama de interface, não captura de tela)." src="docs/assets/diagramas/telas.claro.svg">
 </picture>
 
-Dois caminhos, uma imagem: o roqueos-server provisiona a stack e **não publica porta
-nenhuma** no host, ou o `docker compose` sobe com a `8080` publicada para trabalho
-local. Portas, volumes e profiles em [docs/runbook.md](docs/runbook.md).
+## Estado do projeto
 
----
+| Item | Estado | Como foi medido |
+| --- | --- | --- |
+| Suíte de testes (`pytest`) | **610 passam, 0 falham**, 8 pulados | Linux, Python 3.13, 08/11/2026 |
+| Integração contínua | verde na `main`: lint, tipos, testes, os gates de silêncio e efetividade, docs, diagramas, as duas imagens buildando, a tela standalone de ponta a ponta | GitHub Actions em todo pull request |
+| Imagens publicadas | `v0.5.1` e `v0.5.1-standalone`, amd64 e arm64, Trivy sem CRITICAL/HIGH com correção | `scripts/release-docker.sh`, 08/11/2026 |
+| Instalação em um comando e primeiro uso | instalador, código de primeiro uso, liberar um alvo de laboratório, scan Web no OWASP Juice Shop (49 achados, de 8m35s a 13m), as quatro abas do resultado, o PDF, `--update` mantendo dados e porta | macOS, imagem candidata, 07/11/2026 |
+| Dentro do RoqueOS | o servidor do RoqueOS 1.37.3, que implanta a `v0.5.1`, está no ar nos servidores do RoqueOS | `/health` respondendo 1.37.3 em cada um, 08/11/2026 |
+| Cada conserto de segurança da revisão da 0.5.1 | cada um com um teste que reprova quando o conserto sai (teste de mutação) | [CHANGELOG.md](CHANGELOG.md) (em inglês) |
+| Instalador em Linux com desktop e no Windows WSL | **não rodado numa máquina de verdade** | a abertura do navegador usa `xdg-open` e `wslview`/`explorer.exe`, lida só no código |
 
-## Estrutura do projeto
+Ainda não há promessa de compatibilidade entre versões menores.
 
-```
-roqueos-shield/
-├── CLAUDE.md                    # overview para o Claude Code
-├── README.md / README.pt-BR.md
-├── docs/
-│   ├── c4-model.md              # os nove diagramas, nível a nível (EN)
-│   ├── integrations.md          # CLI, REST, bundle, laço do agente (EN)
-│   ├── architecture.md          # arquitetura detalhada (pt-BR)
-│   ├── usage.md                 # cookbook (pt-BR)
-│   ├── runbook.md               # operação dia a dia (pt-BR)
-│   ├── threat-model.md
-│   ├── ai-fix-bundle-spec.md
-│   └── assets/                  # logo + os 18 SVGs gerados
-├── orchestrator/
-│   ├── main.py                  # FastAPI + StaticFiles da UI
-│   ├── cli.py                   # cai scan/exposure/serve/bundle
-│   ├── config.py                # pydantic-settings
-│   ├── adapters/                # 15 ScannerAdapters + base.py + _cleanup.py
-│   ├── ai/
-│   │   ├── gateway.py           # litellm + telemetria em AIRun
-│   │   ├── analyzer.py          # triage_batch
-│   │   ├── agentic/             # executor (a coleira) + cai_expert (o laço)
-│   │   └── prompts/
-│   ├── api/routers/             # os routers da API (contrato em docs/openapi.json)
-│   ├── domain/                  # Finding canônico, scrubber, dedup, validador
-│   ├── jobs/                    # workers arq + pipelines + fases
-│   ├── persistence/             # SQLModel e as migrations (alembic)
-│   ├── reporting/               # HTML, compliance, coverage, exporters
-│   ├── standalone/              # supervisor e segredos do container único
-│   ├── web_dist/                # a tela buildada de web/ (fora do git)
-│   └── static/                  # dashboard antigo, usado sem o web_dist
-├── docker/
-│   ├── compose.yml + 6 arquivos de profile
-│   └── images/{orchestrator,standalone,kali-toolbox,cai-expert}/Dockerfile
-├── web/                         # a tela (Vue 3 + Quasar), yarn
-├── tests/                       # unitários e integração; gate de cobertura no CI
-├── scripts/
-│   ├── check_no_silence.py      # o gate do contrato do silêncio (AST)
-│   ├── check_docs_fresh.py      # doc x código
-│   ├── gen_diagrams.py          # regenera os 18 SVGs
-│   └── diagrams/                # os diagramas como código
-└── .claude/                     # 10 skills + 13 commands + rules
-```
+## Limites conhecidos
 
-
----
-
-## Limitações conhecidas
-
-- **`render_pdf()` não tem chamador** — o extra `[pdf]` instala o WeasyPrint e nada
-  o invoca. PDF e CSV que aparecem na tela do RoqueShield são montados no front.
-- **`cai-expert` é legado** — sobrou da fase do `cai-framework`; nada no pipeline
-  chama o container, e o laço do agente roda no próprio orchestrator, na rota de
-  investigação.
-- **O dashboard antigo** (`orchestrator/static/`, servido quando a tela de `web/` não foi
-  buildada) usa token na URL ou no localStorage. A tela nova usa login com cookie de
-  sessão.
-- **Log ao vivo reinicia com o processo** — ring buffer em memória; o histórico fica
-  no `docker logs`.
-- **Feed inicial do Greenbone** leva de 30 min a 3 h e ocupa ~5 GB.
-- **Cancelamento de scan** por `DELETE` REST; WebSocket bidirecional não existe.
-- **Modelos de raciocínio** (Qwen 3.x, DeepSeek-R1) consomem `max_tokens` dentro de
-  `<think>`; suba para 8192+ se a saída vier vazia.
-
----
+- **A ajuda da CLI e as mensagens de erro da API estão em português.** A tela e a documentação estão em inglês e em português do Brasil.
+- **Dentro do container standalone, todos os processos rodam com o mesmo usuário.** O isolamento entre motor, ZAP e Redis é por processo, não por usuário; veja o [SECURITY.md](SECURITY.md).
+- **A coleira do agente é defesa em profundidade, não sandbox.** Ligue o `AGENT_LIVE_EXECUTION` só num ambiente isolado.
+- **O Nuclei é o passo lento**: uns 8 minutos no Juice Shop.
+- **Dois adapters não estão ligados** (Censys, kube-bench), e a renderização de PDF no servidor (`render_pdf()`) não tem quem chame: o PDF da tela é montado no navegador.
 
 ## Documentação
 
-| Documento | Idioma | O que cobre |
-| --- | --- | --- |
-| [docs/standalone.pt-BR.md](docs/standalone.pt-BR.md) | pt-BR | a instalação em um container: primeiro uso, segredos, TLS, backup, CLI, MCP |
-| [docs/c4-model.pt-BR.md](docs/c4-model.pt-BR.md) | pt-BR | os nove diagramas, nível a nível |
-| [docs/integrations.pt-BR.md](docs/integrations.pt-BR.md) | pt-BR | CLI, REST, bundle, laço do agente, roadmap |
-| [docs/architecture.md](docs/architecture.md) | pt-BR | layout interno, fluxos, segurança e compliance |
-| [docs/usage.md](docs/usage.md) | pt-BR | receitas ponta a ponta |
-| [docs/runbook.md](docs/runbook.md) | pt-BR | operação, troubleshooting, armadilhas |
-| [docs/threat-model.md](docs/threat-model.md) | pt-BR | atores, cenários, mitigações |
-| [docs/ai-fix-bundle-spec.md](docs/ai-fix-bundle-spec.md) | pt-BR | o contrato do bundle, schema 1.0.0 |
-| [docs/criterios-de-teste.md](docs/criterios-de-teste.md) | pt-BR | os critérios de teste que todo relatório tem que passar, camada por camada |
+Tudo começa no [docs/pt-BR/INDEX.md](docs/pt-BR/INDEX.md). Todo documento existe em inglês e em português do Brasil.
 
-### Regerando os diagramas
+| Quero... | Leia |
+| --- | --- |
+| Instalar e rodar o primeiro scan | [COMECAR.md](docs/pt-BR/COMECAR.md) |
+| Operar no dia a dia ou em produção | [OPERACAO.md](docs/pt-BR/OPERACAO.md) |
+| Entender uma falha | [QUANDO-QUEBRA.md](docs/pt-BR/QUANDO-QUEBRA.md) |
+| Ver como ele é por dentro | [ARQUITETURA.md](docs/pt-BR/ARQUITETURA.md) |
+| Consultar um comando, rota, variável ou opção | [REFERENCIA.md](docs/pt-BR/REFERENCIA.md) |
+| Ligar num agente ou numa esteira | [INTEGRACOES.md](docs/pt-BR/INTEGRACOES.md) e [AI-FIX-BUNDLE.md](docs/pt-BR/AI-FIX-BUNDLE.md) |
+| Saber o que ele protege | [MODELO-DE-AMEACAS.md](docs/pt-BR/MODELO-DE-AMEACAS.md) |
+| Mexer no código | [DESENVOLVIMENTO.md](docs/pt-BR/DESENVOLVIMENTO.md), [CRITERIOS-DE-TESTE.md](docs/pt-BR/CRITERIOS-DE-TESTE.md), [ESTENDER.md](docs/pt-BR/ESTENDER.md) |
+| Achar um termo | [GLOSSARIO.md](docs/pt-BR/GLOSSARIO.md) |
 
-Toda figura desta documentação é gerada a partir de código em
-[`scripts/diagrams/`](scripts/diagrams/), não desenhada à mão:
+**Sobre o nome.** O produto é **RoqueShield**, a imagem é `roqueribeiro1988/roqueos-shield` e o cliente é `roqueshield`. Algumas partes internas ainda levam o nome antigo `cai`: o pacote Python (`cai-orchestrator`), o comando de desenvolvimento `cai`, e o prefixo `cai-` dos containers do compose de desenvolvimento. Instalações do RoqueOS referenciam esses nomes, então eles só mudam com um caminho de migração.
 
-```bash
-python scripts/gen_diagrams.py           # regenera os 18 SVGs
-python scripts/gen_diagrams.py --check   # CI: reprova se algum estiver atrasado, faltando ou órfão
-```
+## Contribuir, segurança e licença
 
-Diagrama que só existe como imagem morre no primeiro refactor: ninguém sabe refazer,
-e ele vira uma foto antiga da arquitetura pendurada no README. O `--check` é o que
-impede isso, e ele está no CI.
+Issue e pull request são bem-vindos: leia antes o [CONTRIBUTING.md](docs/pt-BR/CONTRIBUTING.md) e o [Código de Conduta](CODE_OF_CONDUCT.md) (em inglês). Relato de segurança vai pelo canal privado do [SECURITY.md](SECURITY.md), nunca por issue pública.
 
----
+Apache License 2.0: veja [LICENSE](LICENSE) e [NOTICE](NOTICE). O RoqueShield empacota ou chama software de terceiros sob as licenças deles, listadas no `NOTICE`.
 
-## Sobre o nome
+## Idiomas
 
-O produto é **RoqueShield**, a imagem é `roqueribeiro1988/roqueos-shield` e o cliente é
-`roqueshield`. Algumas partes internas ainda carregam o nome antigo `cai`: o pacote
-Python (`cai-orchestrator`), o comando de desenvolvimento `cai` (roda o pipeline no
-próprio processo) e o prefixo `cai-` dos containers do compose de desenvolvimento.
-Instalações do RoqueOS usam esses nomes, então eles só mudam com caminho de migração.
-A renomeação está registrada, não esquecida.
-
-## Contribuindo
-
-Issues e PRs são bem-vindos — leia [CONTRIBUTING.md](CONTRIBUTING.md) e o
-[Código de Conduta](CODE_OF_CONDUCT.md) antes. Para relato de segurança, siga o
-[SECURITY.md](SECURITY.md) (canal privado).
-
-## Licença
-
-Apache License 2.0 — veja [LICENSE](LICENSE) e [NOTICE](NOTICE). O RoqueShield
-embarca ou invoca software de terceiros sob as respectivas licenças; veja `NOTICE` e
-`pyproject.toml`.
+Este README e todo documento em [`docs/`](docs/pt-BR/INDEX.md) existem em inglês (a versão principal, [README.md](README.md)) e em português do Brasil.

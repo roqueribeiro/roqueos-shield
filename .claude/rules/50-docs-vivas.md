@@ -18,8 +18,8 @@ Já aconteceu aqui, e custou caro:
 
 **Mudança de comportamento sai no mesmo commit que a documentação dela.** Scanner
 novo, variável de ambiente nova, contrato com o RoqueShield alterado, capacidade do
-agente mudada: o README e/ou `docs/architecture.md` mudam junto. Não em seguida, não
-"na próxima" — junto.
+agente mudada: o README e/ou `docs/ARCHITECTURE.md` (com o par em `docs/pt-BR/`) mudam
+junto. Não em seguida, não "na próxima": junto.
 
 ## O mecanismo (senão isto aqui é decoração)
 
@@ -36,6 +36,25 @@ lê intenção; compara doc com código e reprova quando divergem:
 Teste de mutação, rodado ao criar o gate — os três dão `exit 1`: adapter novo sem
 documentar, `Settings` novo sem `.env.example`, e a doc voltando a chamar o agente de
 stub. Com a árvore limpa, `exit 0`.
+
+4. **Versão**: `pyproject.toml`, `orchestrator/__init__.py`, `web/package.json`,
+   `install.sh` e o banner do README (`docs/assets/marca/carimbo.json`, campo
+   `versao_gerada`, escrito pelo `docs/assets/marca/gen.py`) dizem a mesma versão.
+5. **A forma da documentação** (padrão do aidlc-harness, desde 08/11/2026): todo doc
+   em inglês tem o par em português pela tabela `PARES` (EN em `docs/`, PT em
+   `docs/pt-BR/`), cada um com a linha de idioma apontando para o outro; doc fora da
+   tabela reprova; o INDEX de cada idioma leva a todos os docs dele; todo link, âncora,
+   `src` e `srcset` dos docs resolve; e todo `docs/<nome>.md` citado em código, script
+   ou regra existe.
+
+Teste de mutação das regras 4 e 5, nove plantios, todos reprovam pelo motivo certo e
+somem ao restaurar: linha de idioma removida no EN; linha de volta removida no PT;
+âncora quebrada; link para arquivo que não existe; doc tirado do INDEX; doc novo fora
+de `PARES`; par apagado; código citando doc inexistente; diagrama do `<picture>`
+apagado. E o banner: `versao_gerada` velho reprova.
+
+**Doc novo:** entra em `PARES` com o par em `docs/pt-BR/`, nos dois INDEX, e com as
+duas linhas de idioma. A versão em inglês é a principal.
 
 ## Quando o gate reclamar
 

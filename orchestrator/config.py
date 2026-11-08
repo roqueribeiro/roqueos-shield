@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 20
 
     # Scanners
-    # Ruleset do Semgrep embarcado na imagem (semgrep-rules, LGPL-2.1, pinado no
+    # Ruleset do Semgrep embarcado na imagem (semgrep-rules, Semgrep Rules License v1.0, ver NOTICE; pinado no
     # Dockerfile). Preferido sobre os packs `p/...` do registry porque funciona SEM
     # egress — num banco a rede é restrita, e sem alcançar o registry o semgrep sai
     # com código 0 e ZERO regras. Aponte para outro caminho se você mantém um

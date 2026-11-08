@@ -16,7 +16,7 @@ make scan TARGET=... # CLI síncrono
 make down            # desce tudo
 ```
 
-API REST: `http://127.0.0.1:8080` com header `X-API-Token`. Docs em [docs/runbook.md](docs/runbook.md).
+API REST: `http://127.0.0.1:8080` com header `X-API-Token`. Documentação em [docs/INDEX.md](docs/INDEX.md); a stack de desenvolvimento em [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Arquitetura
 
@@ -26,7 +26,7 @@ API REST: `http://127.0.0.1:8080` com header `X-API-Token`. Docs em [docs/runboo
 - **`orchestrator/api/`** — FastAPI routers (targets, scans, findings, reports, exposure, investigate, audit)
 - **`orchestrator/jobs/`** — arq workers + pipelines síncronos
 - **`orchestrator/persistence/`** — SQLModel (SQLite dev, Postgres prod) + alembic
-- **`orchestrator/audit/`** — append-only log (DB + arquivo)
+- **`orchestrator/audit/`** — append-only log no banco (trigger no Postgres)
 - **`orchestrator/reporting/`** — HTML técnico + executivo + DefectDojo export
 
 ## Convenções de código
@@ -85,4 +85,4 @@ Antes de "consertar" algo no orchestrator, verifique se não é problema de infr
 3. `docker exec cai-postgres psql -U cai -d cai -c '\dt'` — tabelas criadas?
 4. `make migrate` rodou?
 
-Bugs históricos comuns estão em [docs/runbook.md#troubleshooting](docs/runbook.md).
+Sintoma, causa e conserto em [docs/WHEN-IT-BREAKS.md](docs/WHEN-IT-BREAKS.md).

@@ -140,7 +140,7 @@ Após código + teste prontos:
 
 6. **README.md** — linha na tabela de adapters
 
-7. **`docs/architecture.md`** — atualizar tabela
+7. **`docs/ARCHITECTURE.md`** e o par `docs/pt-BR/ARQUITETURA.md`: atualizar tabela
 
 ## Saída esperada
 

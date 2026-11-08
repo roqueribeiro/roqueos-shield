@@ -143,7 +143,7 @@ Não é automático: explicitamente listado.
 ## 7. Documentar
 
 - README.md: adicionar linha na tabela de adapters
-- `docs/architecture.md`: tabela de adapters
+- `docs/ARCHITECTURE.md` e `docs/pt-BR/ARQUITETURA.md`: tabela de adapters
 - `.claude/skills/cai-scan/SKILL.md`: mencionar novo adapter como opção
 
 ## 8. Validar
