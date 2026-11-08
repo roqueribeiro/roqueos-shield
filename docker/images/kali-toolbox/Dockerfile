@@ -37,10 +37,11 @@ RUN curl -sL https://github.com/gitleaks/gitleaks/releases/latest/download/gitle
 RUN curl -sL https://github.com/trufflesecurity/trufflehog/releases/latest/download/trufflehog_3.83.7_linux_amd64.tar.gz | tar -xz -C /usr/local/bin/ trufflehog || true
 
 # Cloud / IaC
-RUN pip install --break-system-packages --no-cache-dir \
+# --ignore-installed: o kali-rolling traz `packaging` instalado pelo apt, sem RECORD,
+# e o pip não consegue desinstalar para atualizar (uninstall-no-record-file).
+RUN pip install --break-system-packages --ignore-installed --no-cache-dir \
         checkov \
-        dnstwist \
-    || pip install --no-cache-dir checkov dnstwist
+        dnstwist
 
 # Trivy CLI (cliente — server roda em outro container)
 RUN curl -sL https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.57.1_Linux-64bit.tar.gz | tar -xz -C /usr/local/bin/ trivy || true
