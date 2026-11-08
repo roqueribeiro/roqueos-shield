@@ -41,7 +41,7 @@ FROM ${ENGINE}
 USER root
 # redis-server: a fila do worker, só em 127.0.0.1.
 # openjdk + firefox-esr: o ZAP e o navegador do AJAX spider (o que acha rota de SPA).
-RUN apt-get update \
+RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends redis-server openjdk-21-jre-headless firefox-esr \
     && rm -rf /var/lib/apt/lists/* \
     && redis-server --version && java -version 2>&1 | head -1 && firefox-esr --version
