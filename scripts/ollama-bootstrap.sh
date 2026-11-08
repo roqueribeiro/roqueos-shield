@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Baixa modelos default no Ollama. Use após `make up`.
+# Baixa modelos default no Ollama. Use após `make ollama-up` (o Ollama saiu do profile
+# default e tem o profile `ollama`), ou com o Ollama nativo do host em 127.0.0.1:11434.
 # RTX 4090 (24GB) suporta confortavelmente modelos 32B q4_K_M (~19GB).
 
 set -euo pipefail

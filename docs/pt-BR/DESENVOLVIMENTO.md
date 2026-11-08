@@ -97,8 +97,10 @@ Depois confira:
 curl http://127.0.0.1:8080/health
 # {"status":"ok","version":"..."}
 
-TOKEN="$(grep '^APP_TOKEN=' .env | cut -d= -f2)"
-curl -s http://127.0.0.1:8080/health/full -H "X-API-Token: $TOKEN"
+# o token vai num arquivo de cabeçalho 0600, não no argv do curl (que aparece no ps)
+H="$(mktemp)"; chmod 600 "$H"
+printf 'X-API-Token: %s\n' "$(grep '^APP_TOKEN=' .env | cut -d= -f2)" > "$H"
+curl -s http://127.0.0.1:8080/health/full -H @"$H"
 ```
 
 `/health` é liveness, sem autenticação. `/health/full` pede o token e confere Postgres, Redis, ZAP, o LLM e se cada binário de scanner existe na imagem. Scanner listado em `ausentes` não roda, e o vetor dele fica sem verificação.
@@ -173,18 +175,20 @@ Os alvos de CLI (`scan`, `scan-no-ai`, `exposure`) trocam o entrypoint por `pyth
 Um scan pela API, de ponta a ponta:
 
 ```bash
-TOKEN="$(grep '^APP_TOKEN=' .env | cut -d= -f2)"
+# o token vai num arquivo de cabeçalho 0600, não no argv do curl (que aparece no ps)
+H="$(mktemp)"; chmod 600 "$H"
+printf 'X-API-Token: %s\n' "$(grep '^APP_TOKEN=' .env | cut -d= -f2)" > "$H"
 
 TARGET_ID=$(curl -s -X POST http://127.0.0.1:8080/targets \
-  -H "Content-Type: application/json" -H "X-API-Token: $TOKEN" \
+  -H "Content-Type: application/json" -H @"$H" \
   -d '{"asset_type":"url","value":"http://juice-shop:3000","criticality":"medium"}' | jq -r .id)
 
 SCAN_ID=$(curl -s -X POST http://127.0.0.1:8080/scans \
-  -H "Content-Type: application/json" -H "X-API-Token: $TOKEN" \
+  -H "Content-Type: application/json" -H @"$H" \
   -d "{\"target_id\":\"$TARGET_ID\",\"scanners\":[\"nmap\",\"zap\"]}" | jq -r .id)
 
-curl -s http://127.0.0.1:8080/scans/$SCAN_ID -H "X-API-Token: $TOKEN" | jq .state
-curl -s http://127.0.0.1:8080/reports/$SCAN_ID -H "X-API-Token: $TOKEN" -o report.html
+curl -s http://127.0.0.1:8080/scans/$SCAN_ID -H @"$H" | jq .state
+curl -s http://127.0.0.1:8080/reports/$SCAN_ID -H @"$H" -o report.html
 ```
 
 A CLI de administração dentro da imagem é a `cai` (`python -m orchestrator.cli` é o entrypoint da imagem, então `run --rm orchestrator <subcomando>` chama ela). Os comandos são `scan`, `exposure`, `serve` e `bundle`; `cai scan --help` lista `--asset-type`, `--criticality`, `--contains-pii`, `--skip-ai`, `--active-zap` e `--ajax`.

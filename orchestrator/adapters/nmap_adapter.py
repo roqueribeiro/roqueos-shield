@@ -32,7 +32,8 @@ class NmapAdapter:
 
     name = "nmap"
 
-    DEFAULT_ARGS = ["-sV", "-T4", "--top-ports", "1000", "-Pn"]
+    # -sT explícito: connect scan, que não precisa de NET_RAW nem de root (decisão da #12).
+    DEFAULT_ARGS = ["-sT", "-sV", "-T4", "--top-ports", "1000", "-Pn"]
 
     def __init__(self, nmap_bin: str | None = None) -> None:
         self.nmap_bin = nmap_bin or shutil.which("nmap") or "nmap"

@@ -108,8 +108,9 @@ scan-no-ai: ## scan sem triagem AI (não precisa de chave de LLM)
 	$(COMPOSE_FULL) $(CLI) scan "$(TARGET)" --asset-type url --skip-ai \
 		$(if $(AUTH_REF),--authorization-ref "$(AUTH_REF)") $(EXTRA)
 
-exposure: ## scan OSINT/Exposure externa (configura via config/exposure_targets.yml)
-	$(COMPOSE_FULL) $(CLI) exposure $(EXTRA)
+exposure: ## scan OSINT/Exposure externa: make exposure COMPANY="Acme" EXTRA="--domains acme.com"
+	@test -n "$(COMPANY)" || { echo 'falta COMPANY: make exposure COMPANY="Acme" EXTRA="--domains acme.com"'; exit 2; }
+	$(COMPOSE_FULL) $(CLI) exposure "$(COMPANY)" $(EXTRA)
 
 smoke: ## E2E: sobe lab e roda scan no Juice Shop
 	@bash scripts/smoke.sh

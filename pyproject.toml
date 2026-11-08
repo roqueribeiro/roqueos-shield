@@ -103,7 +103,9 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
     "ruff==0.16.5",   # pinado: formatação do ruff muda entre releases e quebra o gate
-    "mypy>=1.13.0",
+    "mypy==2.4.1",    # pinado: o typecheck é gate e regra nova do mypy não pode quebrar o CI sozinha
+    "types-defusedxml>=0.7.0",
+    "types-PyYAML>=6.0.0",
     "semgrep>=1.100.0",               # roda o e2e do semgrep_adapter no CI
 ]
 
@@ -173,17 +175,29 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.13"
-# Backlog de tipos zerado em 2026-11-06 (`mypy orchestrator` = 0 erros): as queries
-# SQLModel passaram a usar `col()` nas expressões de coluna, os enums de Target são
-# construídos explicitamente, e os `type: ignore` órfãos saíram. strict ainda OFF: ligar
-# é um passo à parte (traz uma leva nova de regras), não parte deste cleanup.
-strict = false
-warn_return_any = false
+# strict ligado em 2026-11-08 (issue #7). O escopo é o mesmo do job Typecheck do CI
+# (`mypy orchestrator`). Não há relaxamento global: lib sem stub entra nominalmente
+# no override abaixo, e `type: ignore` só pontual, com o código e o motivo na linha.
+strict = true
+warn_unreachable = true
+
+# Libs sem stub nem py.typed. Só elas ignoram import ausente; o resto do código é
+# checado contra os tipos reais. censys, openinference e weasyprint são extras
+# opcionais (podem nem estar instalados); shodan e authlib não publicam tipos.
+[[tool.mypy.overrides]]
+module = [
+    "shodan",
+    "shodan.*",
+    "censys",
+    "censys.*",
+    "openinference",
+    "openinference.*",
+    "authlib",
+    "authlib.*",
+    "weasyprint",
+    "weasyprint.*",
+]
 ignore_missing_imports = true
-# Mantemos opções uteis sem o strict pesado
-warn_unused_ignores = true
-warn_redundant_casts = true
-disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

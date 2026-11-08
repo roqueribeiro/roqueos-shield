@@ -83,7 +83,7 @@ ROQUESHIELD_VERSION=dev sh install.sh   # installs your local build, same as a u
 
 ### Tests, lint and gates without Docker
 
-`make test` and `make lint` run inside the orchestrator image, which is built without the development dependencies and without `tests/`; use the local environment instead, the same way the CI does:
+`make test`, `make lint` and `make typecheck` run on your checkout, not in the orchestrator image (the image is built without the development dependencies and without `tests/`): they call `uv run --frozen --extra dev`, which installs the dev extra from `uv.lock`. Without uv, the same checks in a plain venv, the way the CI runs them:
 
 ```bash
 python3.13 -m venv .venv

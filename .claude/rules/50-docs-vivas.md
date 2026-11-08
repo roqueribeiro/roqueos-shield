@@ -1,3 +1,7 @@
+---
+description: Documentação viva. Mudança de comportamento sai no mesmo commit que a doc dela, e o gate scripts/check_docs_fresh.py (job Documentação em dia) reprova quando doc e código divergem
+---
+
 # Documentação viva — a regra e o mecanismo que a executa
 
 Este repositório é **público** e é a cara da ferramenta. Quem chega decide em cinco

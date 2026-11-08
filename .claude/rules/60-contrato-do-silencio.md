@@ -1,3 +1,7 @@
+---
+description: Contrato do silêncio. Adapter nunca devolve zero achados quando não rodou; os três níveis ([], ScanIntegrityError, coverage_gaps) e os gates scripts/check_no_silence.py e efetividade que os executam
+---
+
 # O contrato do silêncio — a regra e os dois mecanismos que a executam
 
 Um scanner quebrado produz **exatamente a mesma saída** de um alvo seguro: zero

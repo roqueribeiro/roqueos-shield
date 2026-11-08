@@ -97,8 +97,10 @@ Ollama local é à parte: make ollama-up (GPU NVIDIA) ou o Ollama nativo do host
 curl http://127.0.0.1:8080/health
 # {"status":"ok","version":"..."}
 
-TOKEN="$(grep '^APP_TOKEN=' .env | cut -d= -f2)"
-curl -s http://127.0.0.1:8080/health/full -H "X-API-Token: $TOKEN"
+# the token goes in a 0600 header file, not in curl's argv (visible in ps)
+H="$(mktemp)"; chmod 600 "$H"
+printf 'X-API-Token: %s\n' "$(grep '^APP_TOKEN=' .env | cut -d= -f2)" > "$H"
+curl -s http://127.0.0.1:8080/health/full -H @"$H"
 ```
 
 `/health` is liveness, with no auth. `/health/full` asks for the token and checks Postgres, Redis, ZAP, the LLM and whether each scanner binary exists in the image. A scanner listed under `ausentes` (missing) does not run, and its vector stays unchecked.
@@ -173,18 +175,20 @@ The CLI targets (`scan`, `scan-no-ai`, `exposure`) override the entrypoint with 
 A scan through the API, end to end:
 
 ```bash
-TOKEN="$(grep '^APP_TOKEN=' .env | cut -d= -f2)"
+# the token goes in a 0600 header file, not in curl's argv (visible in ps)
+H="$(mktemp)"; chmod 600 "$H"
+printf 'X-API-Token: %s\n' "$(grep '^APP_TOKEN=' .env | cut -d= -f2)" > "$H"
 
 TARGET_ID=$(curl -s -X POST http://127.0.0.1:8080/targets \
-  -H "Content-Type: application/json" -H "X-API-Token: $TOKEN" \
+  -H "Content-Type: application/json" -H @"$H" \
   -d '{"asset_type":"url","value":"http://juice-shop:3000","criticality":"medium"}' | jq -r .id)
 
 SCAN_ID=$(curl -s -X POST http://127.0.0.1:8080/scans \
-  -H "Content-Type: application/json" -H "X-API-Token: $TOKEN" \
+  -H "Content-Type: application/json" -H @"$H" \
   -d "{\"target_id\":\"$TARGET_ID\",\"scanners\":[\"nmap\",\"zap\"]}" | jq -r .id)
 
-curl -s http://127.0.0.1:8080/scans/$SCAN_ID -H "X-API-Token: $TOKEN" | jq .state
-curl -s http://127.0.0.1:8080/reports/$SCAN_ID -H "X-API-Token: $TOKEN" -o report.html
+curl -s http://127.0.0.1:8080/scans/$SCAN_ID -H @"$H" | jq .state
+curl -s http://127.0.0.1:8080/reports/$SCAN_ID -H @"$H" -o report.html
 ```
 
 The admin CLI inside the image is `cai` (`python -m orchestrator.cli` is the image entrypoint, so `run --rm orchestrator <subcommand>` calls it). Its commands are `scan`, `exposure`, `serve` and `bundle`; `cai scan --help` lists `--asset-type`, `--criticality`, `--contains-pii`, `--skip-ai`, `--active-zap` and `--ajax`.

@@ -262,7 +262,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ## 11. AI provider and a local model
 
-AI is optional. Without it, the scanners run and the findings keep their own classification. With it, the model triages the findings (adjusted severity, false-positive likelihood, remediation) and writes the executive narrative. Before anything goes to an external model, the scrubber redacts personal and card data from the evidence and descriptions: CPF and CNPJ, card numbers and CVV, e-mails, Brazilian phone numbers, JWTs, AWS keys, and `Authorization` and `Cookie` headers.
+AI is optional. Without it, the scanners run and the findings keep their own classification. With it, the model triages the findings (adjusted severity, false-positive likelihood, remediation) and writes the executive narrative. Before anything goes to an external model, the scrubber redacts personal and card data from the evidence and descriptions: CPF and CNPJ, card numbers (Luhn-checked) and CVV, e-mails, Brazilian phone numbers, JWTs, AWS keys, GitHub tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), Slack tokens (`xoxb-`, `xoxp-`, `xoxa-`, `xoxr-`, `xoxs-`), the value of password and secret assignments (`password=`, `senha:`, `api_key=`, `client_secret` and the like; the key stays, only the value goes), and `Authorization` and `Cookie` headers.
 
 Configure it in **AI**: Anthropic, OpenAI, OpenRouter, or a local OpenAI-compatible server. The key is stored encrypted and never comes back to the UI. The same fields can be locked by the environment (`LLM_MODEL`, `LLM_FALLBACK_MODEL`, `LLM_API_BASE`, `LLM_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`).
 

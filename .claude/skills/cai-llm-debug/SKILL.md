@@ -24,7 +24,7 @@ Identifique qual cenário está ativo:
 |---|---|
 | **A — Anthropic Cloud** | `LLM_MODEL=anthropic/...` + `ANTHROPIC_API_KEY=<set>` + `LLM_API_BASE` vazio |
 | **B — LM Studio** | `LLM_MODEL=openai/...` + `LLM_API_BASE=http://host.docker.internal:1234/v1` + `LLM_API_KEY=lm-studio` |
-| **C — Ollama em container** | `LLM_MODEL=ollama/...` + `LLM_API_BASE=http://ollama:11434/v1` (profile `ollama`, fora do default: `make ollama-up`, pede GPU NVIDIA) |
+| **C: Ollama em container** | `LLM_MODEL=ollama/...` + `LLM_API_BASE=http://ollama:11434/v1` (profile `ollama`, fora do default: `make ollama-up`, pede GPU NVIDIA) |
 | **D — OpenAI Cloud** | `LLM_MODEL=openai/...` + `OPENAI_API_KEY=<set>` |
 
 ## 2. Health check do LLM

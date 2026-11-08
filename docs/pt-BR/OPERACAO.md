@@ -262,7 +262,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ## 11. Provedor de IA e modelo local
 
-A IA é opcional. Sem ela, os scanners rodam e os achados ficam com a classificação deles. Com ela, o modelo faz a triagem dos achados (severidade ajustada, chance de falso positivo, remediação) e escreve a narrativa executiva. Antes de qualquer coisa ir para um modelo externo, o scrubber redige dado pessoal e de cartão da evidência e da descrição: CPF e CNPJ, número de cartão e CVV, e-mails, telefones brasileiros, JWTs, chaves da AWS, e os cabeçalhos `Authorization` e `Cookie`.
+A IA é opcional. Sem ela, os scanners rodam e os achados ficam com a classificação deles. Com ela, o modelo faz a triagem dos achados (severidade ajustada, chance de falso positivo, remediação) e escreve a narrativa executiva. Antes de qualquer coisa ir para um modelo externo, o scrubber redige dado pessoal e de cartão da evidência e da descrição: CPF e CNPJ, número de cartão (validado por Luhn) e CVV, e-mails, telefones brasileiros, JWTs, chaves da AWS, tokens do GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), tokens do Slack (`xoxb-`, `xoxp-`, `xoxa-`, `xoxr-`, `xoxs-`), o valor de atribuições de senha e segredo (`password=`, `senha:`, `api_key=`, `client_secret` e afins; a chave fica, só o valor some), e os cabeçalhos `Authorization` e `Cookie`.
 
 Configure em **IA**: Anthropic, OpenAI, OpenRouter, ou um servidor local compatível com OpenAI. A chave fica guardada cifrada e nunca volta para a tela. Os mesmos campos podem ser travados pelo ambiente (`LLM_MODEL`, `LLM_FALLBACK_MODEL`, `LLM_API_BASE`, `LLM_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`).
 

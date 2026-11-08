@@ -17,13 +17,13 @@ docker compose --env-file .env --project-directory docker -f docker/compose.yml 
 ```
 
 Esperado pra modo "scan completo":
-- `cai-orchestrator` — UP e `healthy` (healthcheck no `/health`)
+- `cai-orchestrator`: UP e `healthy` (healthcheck no `/health`)
 - `cai-worker` — UP (se modo API)
 - `cai-postgres` — UP
 - `cai-redis` — UP
-- `cai-zap` — UP e `healthy` (`starting` nos primeiros dois minutos é normal: `start_period: 120s`)
+- `cai-zap`: UP e `healthy` (`starting` nos primeiros dois minutos é normal: `start_period: 120s`)
 - `cai-juice-shop` — UP
-- `cai-ollama` — só se subiu à parte: profile `ollama`, fora do default (`make ollama-up`, pede GPU NVIDIA)
+- `cai-ollama`: só se subiu à parte: profile `ollama`, fora do default (`make ollama-up`, pede GPU NVIDIA)
 
 Se faltar algo crítico, sugerir `make up`.
 
