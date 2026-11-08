@@ -29,3 +29,8 @@ updates:
       interval: weekly
       day: monday
     labels: ["dependencies", "docker"]
+    # A base python acompanha o requires-python, o mypy e o CI. Subir de 3.13 é
+    # mudança do repo inteiro, não da imagem sozinha (PR #5 fechado por isso).
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
