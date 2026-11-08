@@ -27,10 +27,13 @@ $COMPOSE build orchestrator worker kali-toolbox
 echo "==> [3/5] Subindo stack"
 $COMPOSE $PROFILES up -d
 
-echo "==> [4/5] Aguardando serviços (até 2min)..."
-for i in {1..60}; do
+echo "==> [4/5] Aguardando serviços (até 3min)..."
+# O ZAP é esperado pelo healthcheck do container, não pela URL com `apikey=`: a chave
+# apareceria no argv do curl, e este script nem lê o .env (caía sempre no `changeme`).
+# 3min porque o healthcheck do ZAP tem start_period de 120s.
+for i in {1..90}; do
   if curl -sf http://127.0.0.1:3000 >/dev/null 2>&1 \
-     && curl -sf "http://127.0.0.1:8090/JSON/core/view/version/?apikey=${ZAP_API_KEY:-changeme}" >/dev/null 2>&1 \
+     && [[ "$(docker inspect -f '{{.State.Health.Status}}' cai-zap 2>/dev/null)" == healthy ]] \
      && curl -sf http://127.0.0.1:8080/health >/dev/null 2>&1; then
     echo "  serviços prontos."
     break

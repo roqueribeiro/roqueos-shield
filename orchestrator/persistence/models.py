@@ -78,7 +78,7 @@ class ScanRow(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     target_id: UUID = Field(foreign_key="targets.id", index=True)
     state: str = Field(default=ScanState.PENDING.value, index=True)
-    profile: str = "web"  # web | network | exposure | cloud | full
+    profile: str = "web"  # web | network | full | active | exposure (PERFIS_DO_SCAN)
     requested_scanners: list[str] = Field(default_factory=list, sa_type=JSON)
     options: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
     actor: str | None = None
