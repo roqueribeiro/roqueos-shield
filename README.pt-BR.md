@@ -1,23 +1,24 @@
-<div align="center">
+<p align="center">
+  <a href="https://github.com/roqueribeiro/roqueos-shield"><img src="docs/assets/marca/banner.pt.jpg" alt="RoqueShield — teste de segurança contínuo para ambientes regulados. Scan que não rodou não é scan limpo; zero achado tem que provar que rodou." width="100%"></a>
+</p>
 
-<img src="docs/assets/logo-roqueos.png" alt="RoqueOS" width="96" />
+<p align="center">
+  <a href="https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-007aff"></a>
+  <img alt="Python 3.13" src="https://img.shields.io/badge/python-3.13-5856d6">
+  <a href="#limitações-conhecidas"><img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-f59e0b"></a>
+  <img alt="15 scanners" src="https://img.shields.io/badge/scanners-15-007aff">
+</p>
 
-# RoqueShield
+<p align="center">
+  <a href="docs/standalone.pt-BR.md"><b>Começar</b></a> ·
+  <a href="docs/integrations.pt-BR.md"><b>Integrações</b></a> ·
+  <a href="docs/architecture.md">Arquitetura</a> ·
+  <a href="docs/c4-model.pt-BR.md">Modelo C4</a> ·
+  <a href="README.md">English</a>
+</p>
 
-**Teste de segurança contínuo que se recusa a ficar calado.**
-
-Quinze scanners atrás de um contrato de adapter, triagem por LLM sobre evidência
-higienizada, um agente que confirma o achado dentro de um Kali sob coleira, e um
-**AI Fix Bundle** que outro agente consome para corrigir o código.
-
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/release/python-3130/)
-[![CI](https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml)
-[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#limitações-conhecidas)
-
-[English](README.md) · [Modelo C4](docs/c4-model.pt-BR.md) · [Integrações](docs/integrations.pt-BR.md) · [Arquitetura](docs/architecture.md)
-
-</div>
+**Teste de segurança contínuo que se recusa a ficar calado.** Quinze scanners atrás de um contrato de adapter, triagem por LLM sobre evidência higienizada, um agente que confirma o achado dentro de um Kali sob coleira, e um **AI Fix Bundle** que outro agente consome para corrigir o código.
 
 ---
 

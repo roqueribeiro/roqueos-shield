@@ -1,23 +1,24 @@
-<div align="center">
+<p align="center">
+  <a href="https://github.com/roqueribeiro/roqueos-shield"><img src="docs/assets/marca/banner.en.jpg" alt="RoqueShield — continuous security testing for regulated environments. A scan that didn't run is not a clean scan; zero findings has to prove it ran." width="100%"></a>
+</p>
 
-<img src="docs/assets/logo-roqueos.png" alt="RoqueOS" width="96" />
+<p align="center">
+  <a href="https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-007aff"></a>
+  <img alt="Python 3.13" src="https://img.shields.io/badge/python-3.13-5856d6">
+  <a href="#status"><img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-f59e0b"></a>
+  <img alt="15 scanners" src="https://img.shields.io/badge/scanners-15-007aff">
+</p>
 
-# RoqueShield
+<p align="center">
+  <a href="docs/standalone.md"><b>Get started</b></a> ·
+  <a href="docs/integrations.md"><b>Integrations</b></a> ·
+  <a href="docs/architecture.md">Architecture</a> ·
+  <a href="docs/c4-model.md">C4 model</a> ·
+  <a href="README.pt-BR.md">Português (Brasil)</a>
+</p>
 
-**Continuous security testing that refuses to be silent.**
-
-Fifteen scanners behind one adapter contract, LLM triage over scrubbed evidence,
-an agent that confirms findings inside a Kali sidecar under a leash, and an
-**AI Fix Bundle** another agent consumes to patch the code.
-
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/release/python-3130/)
-[![CI](https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/roqueribeiro/roqueos-shield/actions/workflows/ci.yml)
-[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#status)
-
-[Português (Brasil)](README.pt-BR.md) · [C4 model](docs/c4-model.md) · [Integrations](docs/integrations.md) · [Architecture](docs/architecture.md)
-
-</div>
+**Continuous security testing that refuses to be silent.** Fifteen scanners behind one adapter contract, LLM triage over scrubbed evidence, an agent that confirms findings inside a Kali sidecar under a leash, and an **AI Fix Bundle** another agent consumes to patch the code.
 
 ---
 

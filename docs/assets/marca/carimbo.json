@@ -1,0 +1,14 @@
+{
+  "en": ["15 scanners", "AI triage", "one command", "v0.5.0"],
+  "pt": ["15 scanners", "triagem IA", "um comando", "v0.5.0"],
+  "lema": {
+    "en": [
+      "A scan that didn't run is not a clean scan.",
+      "Zero findings has to prove it ran."
+    ],
+    "pt": [
+      "Scan que não rodou não é scan limpo.",
+      "Zero achado tem que provar que rodou."
+    ]
+  }
+}
