@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-08
+
 ### Security
 
 Found by an independent review before the community release (2026-11-07), each one reproduced first and covered by a test that fails when the fix is removed:
