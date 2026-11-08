@@ -13,17 +13,17 @@ Use quando algo não funciona ou antes de iniciar trabalho. Verifica em ordem:
 ## 1. Containers up
 
 ```bash
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml ps
+docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml ps
 ```
 
 Esperado pra modo "scan completo":
-- `cai-orchestrator` — UP
+- `cai-orchestrator` — UP e `healthy` (healthcheck no `/health`)
 - `cai-worker` — UP (se modo API)
 - `cai-postgres` — UP
 - `cai-redis` — UP
-- `cai-zap` — UP (mesmo se "unhealthy", checar API)
+- `cai-zap` — UP e `healthy` (`starting` nos primeiros dois minutos é normal: `start_period: 120s`)
 - `cai-juice-shop` — UP
-- `cai-ollama` — UP (se GPU disponível)
+- `cai-ollama` — só se subiu à parte: profile `ollama`, fora do default (`make ollama-up`, pede GPU NVIDIA)
 
 Se faltar algo crítico, sugerir `make up`.
 
@@ -37,13 +37,15 @@ Todos os containers conectados? Se algum está fora, rebuild ou recreate.
 
 ## 3. ZAP API
 
+Pelo healthcheck do container, sem a chave da API na URL (ela apareceria no argv e no histórico):
+
 ```bash
-ZAP_KEY=$(grep '^ZAP_API_KEY' .env | cut -d= -f2)
-curl -sf "http://127.0.0.1:8090/JSON/core/view/version/?apikey=$ZAP_KEY" | jq
+docker inspect -f '{{.State.Health.Status}}' cai-zap
 ```
 
-Se 401: chave errada — checar `.env`.
-Se 5xx ou nada: ZAP ainda subindo ou crashou — `docker logs cai-zap | tail -50`.
+`starting`: ZAP ainda subindo (até dois minutos).
+`unhealthy` ou container ausente: ZAP crashou, ver `docker logs cai-zap --tail 50`.
+Chave errada não aparece aqui: o healthcheck não usa a chave. Ela aparece no componente `zap` do `/health/full` (a API manda a chave no header `X-ZAP-API-Key`), como `HTTP 401`.
 
 ## 4. Postgres
 
@@ -66,8 +68,8 @@ Fila grande? Worker pode estar travado. Reiniciar `cai-worker`.
 ## 6. Orchestrator API
 
 ```bash
-TOKEN=$(grep '^APP_TOKEN' .env | cut -d= -f2)
-curl -sf http://127.0.0.1:8080/health | jq
+curl -sf http://127.0.0.1:8080/health | jq   # sem token: /health é público
+docker inspect -f '{{.State.Health.Status}}' cai-orchestrator
 ```
 
 Se conexão recusada: orchestrator parado. `docker logs cai-orchestrator | tail -50`.
@@ -92,7 +94,8 @@ Sem chave externa nem local, sugerir `--skip-ai` em scans.
 
 ### Greenbone (Fase 3)
 ```bash
-docker compose --env-file .env -f docker/compose.greenbone.yml ps
+docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.greenbone.yml ps
+# GSA web: http://127.0.0.1:9392 (http; porta 80 no container)
 # se rodando, checar feed
 docker logs cai-gvm-feeds --tail 20
 ```
@@ -111,15 +114,15 @@ Apresentar como tabela:
 |--------------|--------|----------------------------------|
 | orchestrator | UP     | API responde                     |
 | postgres     | UP     | 5 tabelas, 1 scan persistido    |
-| zap          | UP     | (unhealthy mas API OK)          |
-| ollama       | DOWN   | sem GPU detectada               |
+| zap          | UP     | healthy                          |
+| ollama       | -      | profile ollama não subiu (opcional) |
 | ANTHROPIC_API_KEY | OK | configurado                     |
 ```
 
 Sugestões de remediação no fim, em ordem:
 1. Críticas: o que precisa subir agora pra desbloquear o usuário
 2. Importantes: o que afeta funcionalidade
-3. Cosmético: warnings ignoráveis (ex.: "unhealthy" do ZAP)
+3. Cosmético: warnings ignoráveis (ex.: ZAP em `starting` logo após o `up`)
 
 ## Não fazer
 

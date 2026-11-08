@@ -30,7 +30,8 @@ cp config/exposure_targets.example.yml config/exposure_targets.yml
 ## 2. Validar credenciais
 
 ```bash
-grep -E '^GITHUB_TOKEN|^SHODAN_API_KEY|^CENSYS_API' .env
+# só se estão definidas, nunca o valor
+grep -E '^(GITHUB_TOKEN|SHODAN_API_KEY|CENSYS_API[A-Z_]*)=' .env | sed -E 's/=.+$/=(definida)/; s/=$/=(vazia)/'
 ```
 
 - `GITHUB_TOKEN` — necessário pra GitHub Search (PAT com scope `public_repo`)
@@ -39,36 +40,37 @@ grep -E '^GITHUB_TOKEN|^SHODAN_API_KEY|^CENSYS_API' .env
 
 Se faltar GitHub token, alertar — vai pular dorks no GitHub.
 
-## 3. Verificar binários OSINT (kali-toolbox)
+## 3. Verificar binários OSINT (imagem do orchestrator)
 
-Os adapters de OSINT (`gitleaks`, `trufflehog`, `dnstwist`) rodam dentro do container `cai-kali-toolbox`. Verificar se está no ar:
-
-```bash
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml ps kali-toolbox
-```
-
-Se não, build (pode demorar — ~3GB de download):
+Os adapters de OSINT (`gitleaks`, `trufflehog`, `dnstwist`) chamam o binário pelo `PATH` do processo que roda o scan: a CLI e o worker, os dois na imagem `cai-orchestrator:dev`, que já traz esses binários (ver `docker/images/orchestrator/Dockerfile`). O `kali-toolbox` não entra nesse caminho. Conferir na imagem:
 
 ```bash
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml build kali-toolbox
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml --profile scanners up -d kali-toolbox
+docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml \
+  run --rm --entrypoint sh orchestrator -c 'command -v gitleaks trufflehog dnstwist'
 ```
+
+Se faltar algum, rebuild: `make build`.
 
 ## 4. Disparar exposure scan
 
 CLI:
 
 ```bash
-MSYS_NO_PATHCONV=1 docker compose -f docker/compose.yml -f docker/compose.scanners.yml --env-file .env run --rm orchestrator exposure "$COMPANY" --config-file config/exposure_targets.yml [--skip-ai]
+# entrypoint trocado: o compose tem `entrypoint: uvicorn` no orchestrator
+MSYS_NO_PATHCONV=1 docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml \
+  run --rm --entrypoint python orchestrator -m orchestrator.cli \
+  exposure "$COMPANY" --config-file config/exposure_targets.yml [--skip-ai]
 ```
 
 Ou se for via API REST:
 
 ```bash
-TOKEN=$(grep '^APP_TOKEN' .env | cut -d= -f2)
+H=$(mktemp) && chmod 600 "$H"   # o token vai por arquivo de header, nunca no argv do curl
+sed -n 's/^APP_TOKEN=\(.*\)/X-API-Token: \1/p' .env > "$H"
 curl -X POST http://127.0.0.1:8080/exposure/scan \
-  -H "X-API-Token: $TOKEN" -H "Content-Type: application/json" \
+  -H @"$H" -H "Content-Type: application/json" \
   -d '{"company_name":"...", "domains":[...], "github_orgs":[...], "dorks":[...]}'
+rm -f "$H"
 ```
 
 ## 5. Pipeline esperado

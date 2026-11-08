@@ -25,31 +25,42 @@ Pentester comercial: confirme com o usuário que o alvo está **dentro do escopo
 ## 3. Verificar stack
 
 ```bash
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml ps
+docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml ps
 ```
 
 Se não tem `cai-zap`, `cai-postgres` rodando, suba:
 
 ```bash
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml --profile default --profile scanners up -d
+docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml --profile default --profile scanners up -d
 ```
 
-Aguarde ZAP ficar pronto:
+Aguarde o ZAP ficar pronto pelo healthcheck do container (a chave da API não vai na URL):
 
 ```bash
 for i in {1..30}; do
-  curl -sf "http://127.0.0.1:8090/JSON/core/view/version/?apikey=$(grep '^ZAP_API_KEY' .env | cut -d= -f2)" >/dev/null && echo OK && break
+  [ "$(docker inspect -f '{{.State.Health.Status}}' cai-zap 2>/dev/null)" = healthy ] && echo OK && break
   sleep 5
 done
 ```
 
 ## 4. Disparar scan
 
-CLI síncrono (gera HTML direto):
+CLI síncrono (gera HTML direto). O caminho curto é o Makefile:
 
 ```bash
-MSYS_NO_PATHCONV=1 docker compose -f docker/compose.yml -f docker/compose.scanners.yml --env-file .env run --rm orchestrator scan "$TARGET" --asset-type url --criticality medium [--skip-ai] [--active-zap] [--contains-pii]
+make scan TARGET="$TARGET" [AUTH_REF=<ticket>] [EXTRA="--skip-ai --active-zap --contains-pii"]
 ```
+
+O comando que ele roda. O orchestrator tem `entrypoint: uvicorn` no compose, então a CLI
+troca o entrypoint; sem isso `run orchestrator scan ...` vira `uvicorn scan ...`:
+
+```bash
+MSYS_NO_PATHCONV=1 docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml \
+  run --rm --entrypoint python orchestrator -m orchestrator.cli \
+  scan "$TARGET" --asset-type url --criticality medium [--authorization-ref <ticket>] [--skip-ai] [--active-zap] [--contains-pii]
+```
+
+Com `REQUIRE_AUTH_REF=true` o `--authorization-ref` é obrigatório.
 
 Se o usuário não tem `ANTHROPIC_API_KEY` nem `LLM_API_BASE` configurado, **adicione `--skip-ai`** automaticamente.
 
@@ -72,9 +83,9 @@ NÃO abrir o HTML pelo navegador — apenas reportar caminho.
 
 ## Edge cases
 
-- **ZAP unhealthy mas funcional**: container marca "unhealthy" porque healthcheck não está implementado, mas API responde. Se a API responde via curl, ignore o status do compose.
+- **ZAP `starting` por até dois minutos**: o healthcheck tem `start_period: 120s` porque o ZAP demora a abrir a porta. `unhealthy` depois disso é falha de verdade: `docker logs cai-zap`.
 - **Postgres sem schema**: erro "relation does not exist" → rodar `make migrate` primeiro.
-- **`.env` não lido**: sempre passar `--env-file .env` no docker compose.
+- **`.env` não lido**: com `-f docker/...`, sempre passar `--env-file .env --project-directory docker` no docker compose (ou usar o Makefile, que já passa).
 - **Target inacessível** (DNS, conexão recusada): NÃO insistir. Reportar erro e perguntar.
 
 ## Quando NÃO usar este skill

@@ -264,7 +264,7 @@ async def create_scan(
     persisted_options = apply_profile(persisted_options, perfil)
     # `effective_scanners` é a lista EFETIVA (pedido > profile > default do tipo). O
     # front não manda `scanners` e mostra `scanners_executed` no relatório: persistir
-    # [] deixaria a tela com "Scanners: —".
+    # [] deixaria a tela com a linha "Scanners" vazia.
     audit_body = redact_audit_auth(body.model_dump(mode="json"))
 
     scan = ScanRow(

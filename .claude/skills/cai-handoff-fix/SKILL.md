@@ -30,8 +30,9 @@ Via CLI (preferido — gera no FS local):
 
 ```bash
 SCAN_ID=$1
-docker compose -f docker/compose.yml -f docker/compose.scanners.yml --env-file .env \
-  run --rm orchestrator bundle $SCAN_ID
+# entrypoint trocado: o compose tem `entrypoint: uvicorn` no orchestrator
+docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml \
+  run --rm --entrypoint python orchestrator -m orchestrator.cli bundle "$SCAN_ID"
 ```
 
 Saída esperada:
@@ -44,9 +45,11 @@ AI Fix Bundle gerado: /app/reports/scan-<id>/ai-bundle.json
 Ou via API:
 
 ```bash
-TOKEN=$(grep '^APP_TOKEN' .env | cut -d= -f2)
-curl http://127.0.0.1:8080/reports/$SCAN_ID/ai-bundle \
-  -H "X-API-Token: $TOKEN" -o reports/scan-$SCAN_ID/ai-bundle.json
+H=$(mktemp) && chmod 600 "$H"   # o token vai por arquivo de header, nunca no argv do curl
+sed -n 's/^APP_TOKEN=\(.*\)/X-API-Token: \1/p' .env > "$H"
+curl -fsS http://127.0.0.1:8080/reports/$SCAN_ID/ai-bundle \
+  -H @"$H" -o reports/scan-$SCAN_ID/ai-bundle.json
+rm -f "$H"
 ```
 
 ## 3. Gerar `HANDOFF.md`

@@ -45,7 +45,7 @@ ls -lh backups/$(date +%Y%m%d)*/ | head -10
 
 ```bash
 GIT_SHA=$(git rev-parse --short HEAD)
-docker compose --env-file .env -f docker/compose.yml build orchestrator
+docker compose --env-file .env --project-directory docker -f docker/compose.yml build orchestrator
 docker tag cai-orchestrator:dev cai-orchestrator:$GIT_SHA
 ```
 
@@ -59,7 +59,7 @@ docker push $REGISTRY_URL/cai-orchestrator:$GIT_SHA
 ## 4. Aplicar migrations
 
 ```bash
-docker compose -f docker/compose.yml --env-file .env.${ENV} run --rm \
+docker compose --env-file .env.${ENV} --project-directory docker -f docker/compose.yml run --rm \
     --entrypoint alembic orchestrator upgrade head
 ```
 
@@ -68,22 +68,23 @@ docker compose -f docker/compose.yml --env-file .env.${ENV} run --rm \
 Worker primeiro (drena fila):
 
 ```bash
-docker compose -f docker/compose.yml --env-file .env.${ENV} stop worker
-docker compose -f docker/compose.yml --env-file .env.${ENV} up -d worker
+docker compose --env-file .env.${ENV} --project-directory docker -f docker/compose.yml stop worker
+docker compose --env-file .env.${ENV} --project-directory docker -f docker/compose.yml --profile default up -d worker
 ```
 
 Depois orchestrator:
 
 ```bash
-docker compose -f docker/compose.yml --env-file .env.${ENV} stop orchestrator
-docker compose -f docker/compose.yml --env-file .env.${ENV} up -d orchestrator
+docker compose --env-file .env.${ENV} --project-directory docker -f docker/compose.yml stop orchestrator
+docker compose --env-file .env.${ENV} --project-directory docker -f docker/compose.yml --profile default up -d orchestrator
 ```
 
 ## 6. Smoke test pós-deploy
 
 ```bash
-TOKEN=$(grep '^APP_TOKEN' .env.${ENV} | cut -d= -f2)
-curl -f -H "X-API-Token: $TOKEN" https://cai.${ENV}/api/health
+# /health é público (liveness); o token não vai para a linha de comando
+curl -f https://cai.${ENV}/health
+docker inspect -f '{{.State.Health.Status}}' cai-orchestrator   # healthcheck do compose
 ```
 
 ## Rollback
@@ -92,9 +93,9 @@ Se smoke pós-deploy falhar:
 
 ```bash
 PREV_SHA=$(git rev-parse --short HEAD~1)
-docker compose -f docker/compose.yml --env-file .env.${ENV} down orchestrator worker
+docker compose --env-file .env.${ENV} --project-directory docker -f docker/compose.yml stop orchestrator worker
 docker tag $REGISTRY_URL/cai-orchestrator:$PREV_SHA cai-orchestrator:dev
-docker compose -f docker/compose.yml --env-file .env.${ENV} up -d orchestrator worker
+docker compose --env-file .env.${ENV} --project-directory docker -f docker/compose.yml --profile default up -d orchestrator worker
 
 # Se migration mexeu schema: alembic downgrade -1
 # CUIDADO: data loss possível

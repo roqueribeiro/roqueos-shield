@@ -24,14 +24,15 @@ Identifique qual cenário está ativo:
 |---|---|
 | **A — Anthropic Cloud** | `LLM_MODEL=anthropic/...` + `ANTHROPIC_API_KEY=<set>` + `LLM_API_BASE` vazio |
 | **B — LM Studio** | `LLM_MODEL=openai/...` + `LLM_API_BASE=http://host.docker.internal:1234/v1` + `LLM_API_KEY=lm-studio` |
-| **C — Ollama em container** | `LLM_MODEL=ollama/...` + `LLM_API_BASE=http://ollama:11434/v1` |
+| **C — Ollama em container** | `LLM_MODEL=ollama/...` + `LLM_API_BASE=http://ollama:11434/v1` (profile `ollama`, fora do default: `make ollama-up`, pede GPU NVIDIA) |
 | **D — OpenAI Cloud** | `LLM_MODEL=openai/...` + `OPENAI_API_KEY=<set>` |
 
 ## 2. Health check do LLM
 
 ```bash
-TOKEN=$(grep '^APP_TOKEN' .env | cut -d= -f2)
-curl -sf "http://127.0.0.1:8080/health/full" -H "X-API-Token: $TOKEN" | jq '.components[] | select(.name | startswith("llm"))'
+H=$(mktemp) && chmod 600 "$H"   # o token vai por arquivo de header, nunca no argv do curl
+sed -n 's/^APP_TOKEN=\(.*\)/X-API-Token: \1/p' .env > "$H"
+curl -sf "http://127.0.0.1:8080/health/full" -H @"$H" | jq '.components[] | select(.name | startswith("llm"))'
 ```
 
 Saída esperada:
@@ -41,7 +42,7 @@ Saída esperada:
 ## 3. Teste E2E mínimo
 
 ```bash
-docker compose --env-file .env -f docker/compose.yml run --rm --entrypoint python orchestrator -c "
+docker compose --env-file .env --project-directory docker -f docker/compose.yml run --rm --entrypoint python orchestrator -c "
 import asyncio
 from orchestrator.ai.gateway import complete
 
@@ -80,7 +81,8 @@ LIMIT 20;
 ## 5. Estatísticas (via UI API)
 
 ```bash
-curl -sf "http://127.0.0.1:8080/ui/api/ai-runs/stats" -H "X-API-Token: $TOKEN" | jq
+curl -sf "http://127.0.0.1:8080/ui/api/ai-runs/stats" -H @"$H" | jq   # $H do passo 2
+rm -f "$H"
 ```
 
 Saída:
@@ -98,7 +100,7 @@ Causas possíveis:
 1. **`LLM_API_BASE` vazio** → gateway usa cloud direto. Fix: setar `.env`.
 2. **Scan rodou com `--skip-ai`** → gateway nunca foi chamado. Fix: rodar sem o flag.
 3. **Modelo no `.env` diferente do carregado** → LM Studio retorna 400 ("model not found"), gateway vai pro fallback cloud silenciosamente. Fix: `curl http://127.0.0.1:1234/v1/models` e bater com `LLM_MODEL`.
-4. **Container `cai-orchestrator` em rede que não alcança host** → testar `docker exec cai-orchestrator curl http://host.docker.internal:1234/v1/models`. Em Linux puro, precisa `extra_hosts` no compose.
+4. **Container `cai-orchestrator` em rede que não alcança host** → testar `docker exec cai-orchestrator curl http://host.docker.internal:1234/v1/models`. O `extra_hosts: host.docker.internal:host-gateway` já está no orchestrator e no worker do `docker/compose.yml`; se falhar no Linux, confira se o LM Studio escuta em `0.0.0.0` e não só em `127.0.0.1`.
 5. **Fallback automático silencioso** — primário (LM Studio) crashou, gateway foi pra Anthropic. Conferir `ai_runs` rows com `purpose='triage.fallback'`.
 
 ## Output esperado
