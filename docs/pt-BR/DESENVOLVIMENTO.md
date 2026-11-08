@@ -46,7 +46,8 @@ Existe também o `docker/compose.prod.yml` (projeto `roqueshield`): a imagem sta
 - **Python 3.13** para os testes e gates que rodam fora do Docker (`requires-python = ">=3.13"` no `pyproject.toml`).
 - **Node 22** e **yarn** se você mexer em `web/`. O CI usa Node 22.20.0. Nunca npm: o lockfile é `web/yarn.lock`.
 - **8 GB de RAM livre** para a stack completa. Só o container do ZAP tem teto de 6 GB (`mem_limit: 6g` em `docker/compose.scanners.yml`).
-- Uma **GPU NVIDIA** para o container `cai-ollama`. Veja o aviso na [seção 4](#4-os-containers).
+- Uma **GPU NVIDIA** só se você quiser o container `cai-ollama` (perfil `ollama`, fora do default). No Mac, ou numa máquina sem GPU, rode o Ollama nativo e aponte `LLM_LOCAL_BASE_URL` para `http://host.docker.internal:11434/v1`.
+- O **uv** para `make test` e `make lint`, que rodam no seu checkout, não na imagem.
 - Uma **chave da Anthropic ou da OpenAI** é opcional. Sem ela, faça scan com `make scan-no-ai`.
 
 ## 3. Primeira subida
@@ -84,9 +85,10 @@ Stack no ar:
   orchestrator API : http://127.0.0.1:8080  (X-API-Token: $APP_TOKEN)
   zap              : http://127.0.0.1:8090
   trivy            : http://127.0.0.1:4954
-  ollama           : http://127.0.0.1:11434
   juice-shop       : http://127.0.0.1:3000
   dvwa             : http://127.0.0.1:8000
+  webgoat          : http://127.0.0.1:8081
+Ollama local é à parte: make ollama-up (GPU NVIDIA) ou o Ollama nativo do host.
 ```
 
 Depois confira:
@@ -111,7 +113,7 @@ Todos escutam só em 127.0.0.1. Postgres e Redis não publicam porta: só são a
 | `cai-worker` | `compose.yml` | default, scanners | nenhuma | o worker arq que roda os scans |
 | `cai-postgres` | `compose.yml` | default, scanners | nenhuma | Postgres 16 |
 | `cai-redis` | `compose.yml` | default, scanners | nenhuma | a fila de jobs |
-| `cai-ollama` | `compose.yml` | default, ai-local | 11434 | modelos locais (reserva GPU NVIDIA) |
+| `cai-ollama` | `compose.yml` | ollama | 11434 | modelos locais (reserva GPU NVIDIA) |
 | `cai-zap` | `compose.scanners.yml` | scanners | 8090 | daemon do OWASP ZAP |
 | `cai-trivy` | `compose.scanners.yml` | scanners | 4954 | Trivy em modo servidor (cache de base compartilhado) |
 | `cai-kali-toolbox` | `compose.scanners.yml` | scanners | nenhuma | imagem Kali mantida de pé para `docker exec` |
@@ -120,21 +122,18 @@ Todos escutam só em 127.0.0.1. Postgres e Redis não publicam porta: só são a
 | `cai-webgoat` | `compose.lab.yml` | lab | 8081, 9090 | alvo vulnerável |
 | `cai-gvm-feeds`, `cai-gvm-redis`, `cai-gvm-postgres`, `cai-gvmd`, `cai-ospd-openvas` | `compose.greenbone.yml` | greenbone | nenhuma | Greenbone Community, mínimo |
 | `cai-gvm-gmp-tcp` | `compose.greenbone.yml` | greenbone | 9390 | GMP por TCP, para o orchestrator |
-| `cai-gsa` | `compose.greenbone.yml` | greenbone | 9392 | tela web do Greenbone |
+| `cai-gsa` | `compose.greenbone.yml` | greenbone | 9392 | tela web do Greenbone, em HTTP simples (`http://127.0.0.1:9392`; o container serve a porta 80) |
 | `cai-phoenix` | `compose.observability.yml` | obs | 6006, 4317 | tracing Phoenix (tela e OTLP gRPC) |
 | `cai-expert` | `compose.agent.yml` | ai-agent | nenhuma | container do agente, `sleep infinity` |
 | `cai-caddy` | `compose.proxy.yml` | proxy | 443 | proxy reverso TLS para `cai.local` |
 
 Os scanners rodam dentro do `cai-worker`, como subprocessos. A imagem do orchestrator leva nmap, nuclei, gitleaks, trufflehog, trivy, semgrep (com o ruleset offline em `/opt/semgrep-rules`), dnstwist e checkov (num venv próprio). O `cai-kali-toolbox` não é onde o scan roda.
 
-**O Ollama está no perfil `default` e reserva uma GPU NVIDIA** (`deploy.resources.reservations.devices`). Então `make up` e `make api` tentam subir ele. Numa máquina sem o runtime NVIDIA para containers, o Docker não consegue atender essa reserva. Suba o resto sem ele, nomeando os serviços:
+**O Ollama tem perfil próprio, `ollama`**, e reserva uma GPU NVIDIA (`deploy.resources.reservations.devices`). Até 08/11/2026 ele estava no `default`, e numa máquina sem o runtime NVIDIA para containers o `make up` e o `make api` paravam nele. Agora nenhum dos dois sobe o Ollama; quem sobe é o `make ollama-up`. Sem GPU, rode o Ollama nativo no host e defina `LLM_LOCAL_BASE_URL=http://host.docker.internal:11434/v1`.
 
-```bash
-docker compose --env-file .env --project-directory docker \
-  -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml \
-  --profile default --profile scanners --profile lab \
-  up -d orchestrator worker postgres redis zap trivy kali-toolbox juice-shop dvwa webgoat
-```
+**Endurecimento do `cai-orchestrator` e do `cai-worker`** (Issue #12): não-root (UID 1000), `cap_drop: ALL`, `no-new-privileges` e **raiz só de leitura** (`read_only: true`). O que eles escrevem tem lugar próprio: `reports/` e `data/` (bind mounts), `/tmp` em tmpfs (256 MiB na API, 2 GiB no worker, onde o repo escaneado é clonado) e a pasta home `/home/roqueos` em tmpfs (semgrep e nuclei guardam config e cache ali). Scanner que falha com `Read-only file system` está escrevendo em outro lugar: dê um tmpfs para esse caminho, não tire o `read_only`. O nmap faz connect scan (`-sT -Pn`), então nenhum container precisa de `NET_RAW`; um worker separado para o nmap, numa rede própria, foi considerado na #12 e descartado por isso.
+
+**A chave da API do ZAP não vai na linha de comando.** O `cai-zap` recebe `ZAP_API_KEY` pelo ambiente; o entrypoint grava um arquivo de propriedades `0600`, apaga a variável e sobe o ZAP com `-configfile`. A chave não aparece no `ps` nem no `docker inspect` (`Config.Cmd`). O `cai-zap` e o `cai-orchestrator` têm healthcheck; o `docker ps` mostra `healthy` quando o ZAP abre a porta (um a dois minutos).
 
 A configuração do Greenbone (feed sync, credenciais) e do LM Studio está em [OPERACAO.md](OPERACAO.md).
 
@@ -144,30 +143,32 @@ O Makefile esconde as flags do Compose. `make help` lista todos os alvos; são e
 
 | Alvo | O que faz |
 | --- | --- |
-| `make build` | builda `orchestrator`/`worker`, depois `kali-toolbox`, depois `cai-expert` (falha no último é ignorada) |
+| `make build` | builda `orchestrator`/`worker`, depois `kali-toolbox`, depois `cai-expert` (falha no último imprime um aviso e não para o alvo) |
 | `make up` | perfis default, scanners e lab |
-| `make api` | só o perfil default: orchestrator, worker, Postgres, Redis e Ollama (o texto de ajuda diz "só orchestrator + db + redis") |
-| `make down` | desce a stack, mantendo os volumes |
+| `make api` | perfil default: orchestrator, worker, Postgres e Redis, sem scanners externos nem lab |
+| `make ollama-up` | o container `cai-ollama` (perfil `ollama`, pede GPU NVIDIA) |
+| `make down` | desce todo serviço de todo arquivo de compose e perfil, mantendo os volumes |
 | `make ps` / `make logs` | estado dos containers / acompanha os logs do orchestrator e do worker |
 | `make shell` | bash num container descartável do orchestrator |
-| `make scan TARGET=<url>` | scan síncrono pela CLI `cai scan`, com triagem de IA; flags extras em `EXTRA=` |
+| `make scan TARGET=<url>` | scan síncrono pela CLI `cai scan`, com triagem de IA; `AUTH_REF=` quando `REQUIRE_AUTH_REF=true`; flags extras em `EXTRA=` |
 | `make scan-no-ai TARGET=<url>` | o mesmo, com `--skip-ai` |
-| `make scan-api TARGET_ID=<uuid>` | `POST /scans` com nmap e zap |
+| `make scan-api TARGET_ID=<uuid>` | `POST /scans`; os scanners saem do `asset_type` do alvo (`AUTH_REF=` acrescenta `authorization_ref`) |
 | `make exposure` | scan OSINT (`cai exposure`), configurado por `config/exposure_targets.yml` |
 | `make smoke` | `scripts/smoke.sh`: build, up e um scan ativo no Juice Shop |
 | `make migrate` / `make revision NAME=...` | `alembic upgrade head` / migration nova autogerada |
-| `make test` / `make lint` | pytest / ruff e mypy, dentro da imagem do orchestrator (veja o aviso abaixo) |
+| `make test` / `make lint` | pytest / `ruff check` e `ruff format --check`, no seu checkout por `uv run --frozen --extra dev` (`ARGS=tests/unit/test_x.py` para um alvo) |
+| `make typecheck` | mypy, que no CI ainda não bloqueia o merge |
 | `make ollama-pull` | baixa os modelos padrão do Ollama |
 | `make greenbone-up` / `make greenbone-down` | a stack do Greenbone (feed sync de 30 min a 3 h, uns 5 GB) |
 | `make obs-up` / `make agent-up` / `make proxy-up` | Phoenix / `cai-expert` / Caddy |
-| `make backup` | veja a [seção 9](#9-backup-e-atualização-da-stack-de-desenvolvimento) |
-| `make clean` | **apaga** os volumes e tudo em `reports/` e `data/` |
+| `make backup` | dump do Postgres (a trilha de auditoria é tabela dele) e `reports/`; veja a [seção 9](#9-backup-e-atualização-da-stack-de-desenvolvimento) |
+| `make clean` | desce tudo e **apaga** os volumes e tudo em `reports/` e `data/` |
 
 O `TARGET` padrão é `http://juice-shop:3000`: o nome dentro da `cai-net`, não `localhost`.
 
-**`make test` e `make lint` não funcionam como estão escritos.** Eles rodam pytest, ruff e mypy dentro da imagem do orchestrator, e essa imagem é buildada com `uv export --no-dev` e copia só `orchestrator/` e `alembic.ini`; o Compose monta só `reports/`, `data/` e `config/`. Então a imagem não tem pytest, ruff, mypy nem `tests/`. Isto foi lido no `docker/images/orchestrator/Dockerfile`, não executado aqui. Rode os testes e os linters na sua máquina, como o CI faz ([seção 7](#7-gates-locais)).
+Os alvos de CLI (`scan`, `scan-no-ai`, `exposure`) trocam o entrypoint por `python -m orchestrator.cli`: o entrypoint do orchestrator no compose é `uvicorn`, e antes de 08/11/2026 o `make scan` virava `uvicorn scan ...`.
 
-**`make down` não desce o Greenbone nem o Caddy.** Ele cita os perfis, mas a lista de arquivos dele não inclui `compose.greenbone.yml` nem `compose.proxy.yml`, então o Compose não conhece esses serviços. Use `make greenbone-down`, e desça o Caddy pelo arquivo dele.
+`make test` e `make lint` rodam no seu checkout, não na imagem. A imagem é buildada com `uv export --no-dev` e não tem `tests/`, pytest, ruff nem mypy. Até 08/11/2026 os dois alvos rodavam dentro dela e não tinham como funcionar.
 
 Um scan pela API, de ponta a ponta:
 
@@ -303,17 +304,17 @@ A pasta `.claude/` guarda o que o Claude Code carrega neste repositório.
 | --- | --- |
 | `/up`, `/down`, `/build`, `/migrate`, `/logs`, `/status` | a stack: compose up e down, build, alembic, logs, diagnóstico rápido |
 | `/dashboard` | sobe a stack se precisar e imprime a URL de `/ui/` com o token |
-| `/test`, `/lint` | pytest, ruff e mypy dentro da imagem do orchestrator (mesmo problema do `make test`, [seção 5](#5-dia-a-dia)) |
+| `/test`, `/lint` | pytest, e ruff com mypy, no seu checkout por `uv run` (como `make test` e `make lint`, [seção 5](#5-dia-a-dia)) |
 | `/smoke` | `scripts/smoke.sh` |
 | `/bundle <scan_id>` | `cai bundle`: o AI Fix Bundle de um scan |
 | `/backup` | `scripts/backup.sh` |
 | `/db-shell` | `psql` no `cai-postgres`, leitura e escrita |
 
-Vários deles chamam `docker compose -f docker/compose.yml` sem `--project-directory docker`. O `scripts/smoke.sh` explica por que o Makefile passa essa flag: no Compose v5 os caminhos relativos resolvem contra o diretório do projeto, e sem ela o contexto do build quebra.
+Toda chamada de `docker compose` neles passa `--env-file .env --project-directory docker`, como o Makefile. O `scripts/smoke.sh` explica por quê: no Compose v5 os caminhos relativos resolvem contra o diretório do projeto, e sem a flag o contexto do build quebra; e com `-f docker/...` o Compose procuraria o `.env` dentro de `docker/`.
 
 **Skills** (`.claude/skills/`): `cai-scan`, `cai-triage`, `cai-investigate`, `cai-exposure`, `cai-handoff-fix`, `cai-stack-status`, `cai-self-heal`, `cai-llm-debug`, `cai-add-adapter` e `cai-deploy` (que só roda quando pedido explicitamente). Cada uma é acionada pela descrição dela: "isso quebrou" chama a `cai-self-heal`, "testa o LLM" chama a `cai-llm-debug`.
 
-**Agentes** (`.claude/agents/`): `adapter-author` (escreve adapter novo), `findings-analyst` (explora achados no banco), `fix-bundle-author` (enriquece AI Fix Bundles) e `security-auditor` (revisa um diff como atacante e como defensor).
+**Agentes** (`.claude/agents/`): `adapter-author` (escreve adapter novo; o template dele, o da skill `cai-add-adapter` e o de `.claude/rules/scanners.md` seguem o contrato do silêncio), `findings-analyst` (explora achados no banco), `fix-bundle-author` (enriquece AI Fix Bundles) e `security-auditor` (revisa um diff como atacante e como defensor).
 
 **Regras** (`.claude/rules/`): `scanners.md`, `testing.md`, `api.md`, `docker.md`, `triage.md`, `50-docs-vivas.md` e `60-contrato-do-silencio.md`. As duas últimas são as que têm gate por trás: `check_docs_fresh.py` e `check_no_silence.py`.
 
@@ -323,7 +324,8 @@ Vários deles chamam `docker compose -f docker/compose.yml` sem `--project-direc
 
 ## 11. Quando algo não funciona
 
-- **`make up` para no `cai-ollama`**: não há runtime NVIDIA nesta máquina. Suba os serviços pelo nome, como na [seção 4](#4-os-containers).
+- **`make ollama-up` para em `could not select device driver "nvidia"`**: não há runtime NVIDIA nesta máquina. Rode o Ollama nativo no host, como na [seção 4](#4-os-containers).
+- **Um scanner falha com `Read-only file system`**: a raiz do `cai-worker` é só de leitura. Veja em que caminho ele escreve e dê um tmpfs para ele no `docker/compose.yml` ([seção 4](#4-os-containers)).
 - **A API reinicia em loop e o log fala de `APP_TOKEN`**: o token ainda é o de exemplo. Gere como na [seção 3](#3-primeira-subida).
 - **A API não autentica no Postgres**: `DATABASE_URL` e `POSTGRES_PASSWORD` discordam, ou o volume `pgdata` foi criado com outra senha. Alinhe os dois; para um volume novo, `make clean` apaga o atual (e `reports/` e `data/` junto).
 - **`relation does not exist`**: `make migrate`. Versão atual: `docker exec cai-postgres psql -U cai -d cai -c "SELECT version_num FROM alembic_version;"`.

@@ -14,7 +14,6 @@ from uuid import uuid4
 import structlog
 
 from orchestrator.adapters.base import ScanIntegrityError
-from orchestrator.domain.scrubber import scrub
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -26,6 +25,7 @@ from orchestrator.domain.schemas import (
     Severity,
     Target,
 )
+from orchestrator.domain.scrubber import scrub
 
 log = structlog.get_logger(__name__)
 

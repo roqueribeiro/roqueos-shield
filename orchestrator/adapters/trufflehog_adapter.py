@@ -16,7 +16,6 @@ from uuid import uuid4
 import structlog
 
 from orchestrator.adapters.base import read_jsonl
-from orchestrator.domain.scrubber import scrub
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -28,6 +27,7 @@ from orchestrator.domain.schemas import (
     Severity,
     Target,
 )
+from orchestrator.domain.scrubber import scrub
 
 log = structlog.get_logger(__name__)
 
@@ -47,7 +47,6 @@ def _to_git_uri(value: str) -> str:
     ):
         return v
     return Path(v).resolve().as_uri()
-
 
 
 def _hash_raw(item: dict[str, Any]) -> str | None:
@@ -72,6 +71,7 @@ def _snippet_redigido(item: dict[str, Any]) -> str:
     if not redigido:
         return "<REDACTED: valor omitido, o trufflehog não forneceu versão redigida>"
     return scrub(redigido)
+
 
 class TrufflehogAdapter:
     name = "trufflehog"

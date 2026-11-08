@@ -7,7 +7,12 @@ argument-hint: ""
 Desça a stack CAI sem apagar volumes (use `make clean` se quiser apagar dados):
 
 ```bash
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml -f docker/compose.greenbone.yml -f docker/compose.observability.yml -f docker/compose.agent.yml --profile default --profile scanners --profile lab --profile greenbone --profile obs --profile ai-agent down
+make down
 ```
 
-Reporte status ao final.
+O `make down` passa todos os arquivos de compose (base, scanners, lab, greenbone,
+observability, agent, proxy) e todos os profiles, com `--env-file .env
+--project-directory docker`. Compose só derruba serviço de arquivo que recebeu: com a
+lista incompleta, Greenbone e Caddy sobreviviam ao down.
+
+Reporte status ao final (`docker ps --filter name=cai-`).

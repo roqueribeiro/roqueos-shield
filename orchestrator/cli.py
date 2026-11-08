@@ -90,7 +90,7 @@ async def _gates_e_auditoria(
                     "via": "cai scan",
                 },
             )
-            await s.commit()
+            await s.rollback()
     except Exception as e:  # noqa: BLE001
         raise _ErroDeAuditoria(str(e)) from e
     return nomes

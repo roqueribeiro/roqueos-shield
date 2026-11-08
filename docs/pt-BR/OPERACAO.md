@@ -238,6 +238,9 @@ O `docker/compose.prod.yml` roda a **mesma imagem** do standalone, com cada peç
 - **Redis** com senha e **ZAP** como serviços separados. O supervisor vê `REDIS_URL` e `ZAP_BASE_URL` apontando para fora e não sobe os embutidos.
 - **`shield`** roda só a API (`SHIELD_SERVICES=orchestrator`) e é quem migra o banco. **`worker`** roda só workers e escala.
 - `REQUIRE_AUTH_REF` vem `true` por padrão e `ALLOW_CLOUD_FALLBACK`, `false`. Todo container tem `cap_drop: [ALL]` e `no-new-privileges`.
+- `shield` e `worker` rodam com a **raiz só de leitura** (`read_only: true`): escrevem só no volume `/data` (que também é o `HOME` deles) e em `/tmp`, um tmpfs de 2 GB onde os adapters guardam os temporários e o repo escaneado é clonado. `shield` e `zap` têm healthcheck; o do `shield` repete o `/health` da imagem.
+- **Nenhum segredo em linha de comando.** ZAP e Redis recebem a chave e a senha pelo ambiente; o entrypoint deles grava um arquivo `0600`, apaga a variável e passa só o caminho (`-configfile` no ZAP, o arquivo de config no Redis). Nenhuma das duas aparece no `ps`, no `/proc/<pid>/cmdline` nem no `docker inspect` (`Config.Cmd`): é o mesmo mecanismo que o supervisor usa no standalone. Antes de 08/11/2026 o compose passava `-config api.key=...` e `--requirepass ...`.
+- **Sem raw socket e sem worker separado para o nmap.** O adapter do nmap faz connect scan (`-sT -Pn`), que não precisa de `NET_RAW`. A Issue #12 considerou um worker só do nmap, numa rede própria, para segurar essa capability; sem capability para segurar, ele foi descartado (08/11/2026). Se um dia o SYN scan for necessário, a capability vai para um serviço próprio, nunca para o worker que roda os outros scanners.
 
 ```bash
 # .env na raiz do repositório, vindo do seu cofre de segredos:
@@ -291,7 +294,7 @@ GREENBONE_USERNAME=admin
 GREENBONE_PASSWORD=<a senha que você definiu>
 ```
 
-O repositório traz um compose mínimo para ele, feito para a stack de desenvolvimento: `make greenbone-up` sobe, `bash scripts/feed-sync.sh` acompanha o feed, o console web fica em `https://127.0.0.1:9392` e o GMP em `127.0.0.1:9390`. O login padrão é `admin/admin`: **troque** antes de qualquer scan. Para ambiente real, use o compose oficial do Greenbone. Os dois publicam no `127.0.0.1` do host, que o container standalone não alcança por `host.docker.internal` no Linux; ponha o shield e o Greenbone na mesma rede Docker, ou publique o GMP onde o container alcance. O lado de desenvolvimento está em [DESENVOLVIMENTO.md](DESENVOLVIMENTO.md).
+O repositório traz um compose mínimo para ele, feito para a stack de desenvolvimento: `make greenbone-up` sobe, `bash scripts/feed-sync.sh` acompanha o feed, o console web fica em `http://127.0.0.1:9392` (HTTP simples: o container `gsa` serve a porta 80, publicada só no `127.0.0.1`) e o GMP em `127.0.0.1:9390`. O login padrão é `admin/admin`: **troque** antes de qualquer scan. Para ambiente real, use o compose oficial do Greenbone. Os dois publicam no `127.0.0.1` do host, que o container standalone não alcança por `host.docker.internal` no Linux; ponha o shield e o Greenbone na mesma rede Docker, ou publique o GMP onde o container alcance. O lado de desenvolvimento está em [DESENVOLVIMENTO.md](DESENVOLVIMENTO.md).
 
 ## 13. Logs e saúde
 

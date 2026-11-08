@@ -5,7 +5,7 @@
 #   ollama       Ollama local com reserva de GPU NVIDIA (fora do default: numa máquina
 #                sem GPU NVIDIA o `up` inteiro falhava em "could not select device
 #                driver nvidia"). No Mac, rode o Ollama nativo e aponte
-#                OLLAMA_BASE_URL para http://host.docker.internal:11434.
+#                LLM_LOCAL_BASE_URL para http://host.docker.internal:11434/v1.
 #   scanners     ZAP + Trivy + kali-toolbox
 #   greenbone    stack Greenbone Community (~5GB feed sync inicial)
 #   lab          alvos vulneráveis (Juice Shop, DVWA, WebGoat)

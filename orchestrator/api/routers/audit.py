@@ -11,7 +11,7 @@ Não há escrita aqui, de propósito: o `audit_log` é append-only (trigger no P
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Query
@@ -52,7 +52,7 @@ async def list_audit(
     actor: str | None = None,
     resource_id: UUID | None = None,
     authorization_ref: str | None = None,
-    since: datetime | None = Query(default=None, description="ISO-8601; só depois disto"),
+    since: Annotated[datetime | None, Query(description="ISO-8601; só depois disto")] = None,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     _principal: Principal = RequireAuditRead,

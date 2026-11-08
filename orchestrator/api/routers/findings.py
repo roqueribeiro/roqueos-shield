@@ -163,8 +163,17 @@ async def findings_queue(
 
     total = (await session.exec(select(func.count()).select_from(base.subquery()))).one()
 
+    # `deduped_key` e `id` desempatam: sem eles, dois problemas da mesma severity e do
+    # mesmo instante trocavam de lugar entre páginas, e a fila repetia ou pulava item.
     page = (
-        base.order_by(_sev_case(), col(FindingRow.discovered_at).desc()).offset(offset).limit(limit)
+        base.order_by(
+            _sev_case(),
+            col(FindingRow.discovered_at).desc(),
+            col(FindingRow.deduped_key),
+            col(FindingRow.id),
+        )
+        .offset(offset)
+        .limit(limit)
     )
     rows = (await session.exec(page)).all()
 

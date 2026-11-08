@@ -48,7 +48,7 @@ A segunda forma de risco é a ferramenta se voltar contra si mesma: um alvo, uma
 | Dado | Onde aparece | Tratamento |
 | --- | --- | --- |
 | Cartão, CPF, e-mail, token no tráfego HTTP | `Finding.evidence` | `scrubber.py` antes do modelo e na evidência do AI Fix Bundle |
-| Segredos achados pelo gitleaks e pelo trufflehog | `evidence.snippet` do achado | **Não redigido** pelo scrubber quando o padrão não está na lista dele (tokens do GitHub e do Slack, senhas). Veja [AI-FIX-BUNDLE.md](AI-FIX-BUNDLE.md#2-garantias-e-onde-cada-uma-para) |
+| Segredos achados pelo gitleaks e pelo trufflehog | `evidence.snippet` do achado | Nunca guardado em claro: o gitleaks roda com `--redact` e o adapter troca qualquer `Secret` que ainda esteja no `Match`; a evidência do trufflehog vem do `Redacted`, nunca do `Raw`; o discriminador de dedupe guarda um hash. O scrubber também cobre tokens do GitHub e do Slack e atribuições de senha/segredo. Uma credencial num formato fora da lista dele ainda pode passar. Veja [AI-FIX-BUNDLE.md](AI-FIX-BUNDLE.md#2-garantias-e-onde-cada-uma-para) |
 | Cabeçalhos de scan autenticado | O job no Redis | Nunca gravados em `scans`; valores redigidos na entrada de auditoria (`redact_audit_auth`) |
 | `APP_TOKEN`, `SESSION_SECRET`, `SECRETS_KEY`, `ZAP_API_KEY`, `REDIS_PASSWORD`, `SETUP_CODE` | `/data/secrets` (standalone) ou o ambiente | Gerados no primeiro boot, nunca impressos; arquivos `0600` |
 | Chave de provedor de IA definida na tela | O banco | Cifrada com `SECRETS_KEY`; a trilha registra só "(trocado)" |
@@ -163,7 +163,7 @@ Não são vulnerabilidades, mas as bordas do que os controles fazem. Se achar um
 - **Na imagem standalone todo processo roda com o mesmo usuário.** A API, o worker, o ZAP e os scanners são UID 1000 e conseguem ler `/data/secrets` e o banco SQLite. O ambiente por processo tira os segredos mais valiosos do ambiente dos scanners, mas um scanner comprometido não está isolado dos arquivos. A stack de compose (`docker/compose.prod.yml`) separa Postgres, Redis e ZAP em containers próprios; a API e os workers continuam dividindo imagem e usuário.
 - **Os scanners herdam a `SECRETS_KEY`.** O worker precisa dela, e os adapters não passam um ambiente reduzido aos subprocessos.
 - **O DNS é resolvido mais de uma vez.** A checagem de escopo resolve quando o alvo é criado e quando o scan é enfileirado; o scanner resolve de novo depois. Loopback e link-local são recusados mesmo para nome na allowlist, mas um nome ainda pode ser reapontado para outro endereço privado nesse intervalo.
-- **O scrubber é uma lista de padrões.** O que não está nela chega ao modelo (na triagem) e à evidência do AI Fix Bundle como foi escrito, inclusive segredo achado pelos scanners de segredo.
+- **O scrubber é uma lista de padrões.** O que não está nela chega ao modelo (na triagem) e ao texto do AI Fix Bundle como foi escrito. Os scanners de segredo não entregam mais o segredo (gitleaks `--redact`, trufflehog `Redacted`), mas uma credencial citada por outro scanner num formato fora da lista ainda passa.
 - **A coleira não é sandbox** ([seção 6](#6-o-agente-de-ia-e-a-coleira-de-comandos)). No modo local, o comando roda no espaço de processo da API, com o usuário da API.
 - **O freio de login e de primeiro uso mora na memória** e zera com o container.
 - **A conexão GMP do Greenbone é TCP puro** (`GREENBONE_PORT`, padrão 9390). Mantenha em rede privada.

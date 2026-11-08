@@ -165,14 +165,32 @@ async def compliance_report(
 
 @router.post("/{scan_id}/export/defectdojo", status_code=202)
 async def export_defectdojo(
-    scan_id: UUID, session: SessionDep, _principal: Principal = RequireScansRun
+    scan_id: UUID, session: SessionDep, principal: Principal = RequireScansRun
 ) -> JSONResponse:
-    """Exporta findings desse scan pro DefectDojo via API."""
+    """Exporta findings desse scan pro DefectDojo via API.
+
+    Grava `scan.export.defectdojo` no audit_log ANTES de enviar, e comita: os achados
+    saem do RoqueShield para outro sistema, e saída de dado é o que a trilha existe
+    para registrar. Sem a linha gravada, nada sai (falha fechado).
+    """
+    from orchestrator.audit import log_audit_event
+    from orchestrator.config import settings
     from orchestrator.reporting.exporters.defectdojo import export_scan
 
     scan = await session.get(ScanRow, scan_id)
     if scan is None:
         raise HTTPException(404, "scan não encontrado")
+
+    await log_audit_event(
+        session,
+        action="scan.export.defectdojo",
+        actor=principal.email,
+        resource_type="scan",
+        resource_id=scan_id,
+        authorization_ref=scan.authorization_ref,
+        metadata={"destino": settings.DEFECTDOJO_URL},
+    )
+    await session.commit()
 
     try:
         result = await export_scan(scan_id)

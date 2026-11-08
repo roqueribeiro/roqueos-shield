@@ -101,9 +101,13 @@ FERRAMENTAS_DE_ACAO: list[dict[str, Any]] = [
                 },
                 "asset_type": {
                     "type": "string",
-                    "enum": ["url", "domain", "host", "image", "repo", "k8s_resource"],
+                    # Sem k8s_resource: nenhum scanner do pipeline aceita o tipo, e o
+                    # POST /scans o recusa com 422.
+                    "enum": ["url", "domain", "host", "port", "image", "repo"],
                 },
-                "profile": {"type": "string", "enum": ["web", "network", "full", "exposure"]},
+                # Os profiles que o pipeline executa (PERFIS_DO_SCAN). `exposure` saiu:
+                # o OSINT é POST /exposure/scan, e por aqui virava um scan web comum.
+                "profile": {"type": "string", "enum": ["web", "network", "full", "active"]},
                 "authorization_ref": {
                     "type": "string",
                     "minLength": 3,

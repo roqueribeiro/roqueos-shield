@@ -48,7 +48,7 @@ The second shape of risk is the tool turning on itself: a target, a scanner outp
 | Data | Where it appears | Treatment |
 | --- | --- | --- |
 | Card numbers, CPF, e-mail, tokens in HTTP traffic | `Finding.evidence` | `scrubber.py` before the model and in the AI Fix Bundle evidence |
-| Secrets found by gitleaks and trufflehog | `evidence.snippet` of the finding | **Not redacted** by the scrubber when the pattern is not on its list (GitHub and Slack tokens, passwords). See [AI-FIX-BUNDLE.md](AI-FIX-BUNDLE.md#2-guarantees-and-where-each-one-stops) |
+| Secrets found by gitleaks and trufflehog | `evidence.snippet` of the finding | Never stored in clear: gitleaks runs with `--redact` and the adapter replaces any `Secret` still inside `Match`; trufflehog evidence comes from `Redacted`, never `Raw`; the dedupe discriminator keeps a hash. The scrubber also covers GitHub and Slack tokens and password/secret assignments. A credential in a format outside its list can still pass. See [AI-FIX-BUNDLE.md](AI-FIX-BUNDLE.md#2-guarantees-and-where-each-one-stops) |
 | Headers for authenticated scans | The job in Redis | Never written to `scans`; values redacted in the audit entry (`redact_audit_auth`) |
 | `APP_TOKEN`, `SESSION_SECRET`, `SECRETS_KEY`, `ZAP_API_KEY`, `REDIS_PASSWORD`, `SETUP_CODE` | `/data/secrets` (standalone) or the environment | Generated on first boot, never printed; files `0600` |
 | AI provider key set in the UI | The database | Encrypted with `SECRETS_KEY`; the audit entry records only "(trocado)" ("changed") |
@@ -163,7 +163,7 @@ Not vulnerabilities, but the edges of what the controls do. If you find a way pa
 - **In the standalone image every process runs as the same user.** The API, the worker, ZAP and the scanners are UID 1000 and can read `/data/secrets` and the SQLite database. The per-process environment keeps the most valuable secrets out of the scanners' environment, but a compromised scanner is not isolated from the files. The compose stack (`docker/compose.prod.yml`) separates Postgres, Redis and ZAP into their own containers; the API and the workers still share an image and a user.
 - **Scanners inherit `SECRETS_KEY`.** The worker needs it and the adapters do not pass a reduced environment to their subprocesses.
 - **DNS is resolved more than once.** The scope check resolves when the target is created and when the scan is queued; the scanner resolves again later. Loopback and link-local are refused even for a name on the allowlist, but a name could still be re-pointed to another private address in between.
-- **The scrubber is a list of patterns.** Anything not on it reaches the model (in triage) and the AI Fix Bundle evidence as written, including secrets found by the secret scanners.
+- **The scrubber is a list of patterns.** Anything not on it reaches the model (in triage) and the AI Fix Bundle text as written. The secret scanners no longer hand it the secret (gitleaks `--redact`, trufflehog `Redacted`), but a credential quoted by another scanner in a format outside the list still passes.
 - **The leash is not a sandbox** ([section 6](#6-the-ai-agent-and-its-command-leash)). In the local mode a command runs in the API's process space, as the API's user.
 - **The login and setup throttle lives in memory** and resets with the container.
 - **The Greenbone GMP connection is plain TCP** (`GREENBONE_PORT`, default 9390). Keep it on a private network.

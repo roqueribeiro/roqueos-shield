@@ -36,6 +36,10 @@ _CATEGORY_BY_TOOL: dict[str, str] = {
     "zap": "web",
     "nuclei": "web",
     "trivy": "deps",
+    # SAST: o semgrep lê o código-fonte e o conserto é no código. Sem esta entrada o
+    # achado caía no default `infra`/`host_port`, com o arquivo em `host`, a linha em
+    # `port` e `config_change`, que ainda o contava como `patchable_automatically`.
+    "semgrep": "sast",
     "greenbone": "infra",
     "gitleaks": "secret",
     "trufflehog": "secret",
@@ -52,6 +56,7 @@ _LOCATION_KIND_BY_CATEGORY: dict[str, str] = {
     "web": "http_endpoint",
     "infra": "host_port",
     "deps": "container_layer",
+    "sast": "source_file",
     "secret": "repo_path",
     "osint": "domain",
     "misconfig": "file_path",
@@ -62,6 +67,7 @@ _DEFAULT_APPROACH_BY_CATEGORY: dict[str, str] = {
     "web": "code_change",
     "infra": "config_change",
     "deps": "dependency_upgrade",
+    "sast": "code_change",
     "secret": "secret_rotation",
     "osint": "manual",
     "misconfig": "config_change",
@@ -120,7 +126,11 @@ async def build_bundle(scan_id: UUID) -> dict[str, Any]:
                 "email",
                 "jwt",
                 "aws_keys",
+                "github_token",
+                "slack_token",
+                "secret_assignment",
                 "auth_header",
+                "cookie_header",
                 "phone_br",
             ],
             "patcher_instructions": (
@@ -436,7 +446,7 @@ def _finding_to_vuln(row: FindingRow) -> dict[str, Any]:
     return {
         "id": vuln_id,
         "deduped_key": row.deduped_key,
-        "title": row.title,
+        "title": scrub(row.title),
         "category": category,
         "severity": row.severity,
         "severity_original": payload.get("severity", row.severity),
@@ -454,16 +464,16 @@ def _finding_to_vuln(row: FindingRow) -> dict[str, Any]:
         "discovered_by": {
             "tool": row.source_tool,
             "rule_id": row.source_rule_id,
-            "rule_name": row.title,
+            "rule_name": scrub(row.title),
             "raw_output_ref": payload.get("raw_output_ref"),
         },
         "instances": instances,
         "remediation": _build_remediation(category, approach, triage, payload),
         "verification": _build_verification(row.source_tool, target_value),
         "ai_triage": {
-            "rationale": triage.get("rationale"),
+            "rationale": _scrub_opt(triage.get("rationale")),
             "is_likely_false_positive": bool(triage.get("is_likely_false_positive", False)),
-            "business_impact": triage.get("business_impact"),
+            "business_impact": _scrub_opt(triage.get("business_impact")),
             "model_used": triage.get("model_used"),
         }
         if triage
@@ -507,17 +517,34 @@ def _build_location(kind: str, target_value: str, payload: dict[str, Any]) -> di
         host = target_value.split(":")[0]
         port = target_value.split(":")[1] if ":" in target_value else None
         base.update({"host": host, "port": port, "protocol": None})
-    elif kind == "repo_path":
-        base.update({"path": target_value, "line": None})
+    elif kind in ("repo_path", "file_path", "source_file"):
+        path, line = _split_path_line(target_value)
+        base.update({"path": path, "line": line})
     elif kind == "domain":
         base.update({"domain": target_value})
-    elif kind == "file_path":
-        base.update({"path": target_value, "line": None})
     elif kind == "container_layer":
         base.update({"image": target_value, "package": None, "version": None})
     elif kind == "k8s_resource":
         base.update({"resource_id": target_value})
     return base
+
+
+def _split_path_line(value: str) -> tuple[str, int | None]:
+    """`src/db.py:41` -> (`src/db.py`, 41). Sem sufixo numérico, a linha é `None`.
+
+    Os adapters de código (semgrep, checkov, gitleaks, trufflehog) gravam o alvo do
+    Finding como `arquivo:linha`. Só um sufixo inteiro positivo conta como linha:
+    `arquivo:?` (o scanner não deu linha) e `C:\\x` ficam inteiros em `path`.
+    """
+    path, sep, tail = value.rpartition(":")
+    if sep and path and tail.isdigit() and int(tail) > 0:
+        return path, int(tail)
+    return value, None
+
+
+def _scrub_opt(value: Any) -> Any:
+    """Scrub em texto opcional; o que não é string passa intacto."""
+    return scrub(value) if isinstance(value, str) else value
 
 
 def _scrub_evidence(ev: dict[str, Any]) -> dict[str, Any]:
@@ -542,8 +569,10 @@ def _build_remediation(
 ) -> dict[str, Any]:
     summary = triage.get("suggested_remediation") or payload.get("remediation") or ""
     return {
-        "summary": summary,
-        "rationale": triage.get("rationale", ""),
+        # Texto livre do scanner e do LLM: passa pelo scrubber como a evidência. O
+        # modelo pode repetir na remediação o token que leu na evidência original.
+        "summary": scrub(summary) if isinstance(summary, str) else summary,
+        "rationale": scrub(triage.get("rationale") or ""),
         "patch_strategy": {
             "approach": approach,
             "confidence": "high"

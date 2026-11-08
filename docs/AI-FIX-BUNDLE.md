@@ -41,12 +41,14 @@ The route answers `404 scan não encontrado` ("scan not found") for an unknown i
 
 **Deduplicated.** Before persisting, the pipeline merges findings of the same scan with the same `deduped_key`, keeping the one with the highest severity (`orchestrator/domain/dedup.py`). The bundle has one entry per remaining row, so in practice one per problem.
 
-**Scrubbed evidence.** Every field of `instances[].evidence` (`description`, `request_sent`, `response_received_excerpt`, `payload_used`, `snippet`) goes through `orchestrator/domain/scrubber.py` before it is served. The scrubber replaces CPF, CNPJ, card numbers that pass Luhn, CVV, e-mail, JWT, AWS access keys, `Authorization` headers, `Cookie`/`Set-Cookie` headers and Brazilian phone numbers with placeholders such as `<EMAIL>` and `<PAN:****1234>`.
+**Scrubbed text.** Every field of `instances[].evidence` (`description`, `request_sent`, `response_received_excerpt`, `payload_used`, `snippet`), plus `title`, `discovered_by.rule_name`, `remediation.summary`, `remediation.rationale`, `ai_triage.rationale` and `ai_triage.business_impact`, goes through `orchestrator/domain/scrubber.py` before it is served. The scrubber replaces CPF, CNPJ, card numbers that pass Luhn, CVV, e-mail, JWT, AWS access keys, GitHub tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), Slack tokens (`xoxa-`, `xoxb-`, `xoxp-`, `xoxr-`, `xoxs-`), the value of a password or secret assignment (`password=`, `passwd:`, `secret:`, `api_key=`, `client_secret` and similar), `Authorization` headers, `Cookie`/`Set-Cookie` headers and Brazilian phone numbers with placeholders such as `<EMAIL>`, `<GITHUB_TOKEN>`, `<REDACTED_SECRET>` and `<PAN:****1234>`.
+
+**Secret scanners do not carry the secret.** gitleaks runs with `--redact`, so its report already has `REDACTED` in `Secret` and `Match`; if a report still has the secret in clear (an old version, or a report made without the flag), the adapter replaces it inside `Match` before it becomes evidence, and drops `Match` when it cannot tell where the secret is. trufflehog evidence comes from its `Redacted` field, never from `Raw`; when `Redacted` is empty the snippet says the value was omitted. The deduplication discriminator, when it falls back to the secret, stores a SHA-256 prefix of it, not the value.
 
 This guarantee has two limits, and both matter:
 
-- **It is a list of patterns, not a secret detector.** A GitHub token, a Slack token or a password in plain text is not on the list. Checked here: `scrub("token = ghp_…")` returns the token unchanged. And the secret scanners put the match itself in the snippet: gitleaks stores its `Match` field, trufflehog its `Raw` field. A bundle from a `repo` scan can carry a live credential in `instances[].evidence.snippet`. Treat the bundle as sensitive, like the repository it came from.
-- **Only the evidence is scrubbed.** `title`, `remediation.summary`, `remediation.rationale`, `ai_triage.*`, `instances[].location` and `target` are served as stored.
+- **It is a list of patterns, not a secret detector.** A credential with a format that is not on the list, written without a key name such as `password` or `secret` next to it, passes unchanged (a bare random string in a config file, a private key block). The secret scanners no longer put the secret in the snippet, but other scanners can still quote one. Treat the bundle as sensitive, like the repository it came from.
+- **Location and target are served as stored.** `instances[].location` and `target` are not scrubbed, because the patcher needs the real path and URL. A URL that carries a token in its query string reaches the bundle as it is.
 
 **Ordered.** `vulnerabilities` comes sorted by `patch_priority`, 1 first ([section 8](#8-patch_priority)).
 
@@ -177,12 +179,13 @@ One object per problem:
 | nmap, greenbone | `infra` | `host_port` | `host`, `port`, `protocol` | `config_change` |
 | trivy | `deps` | `container_layer` | `image`, `package`, `version` | `dependency_upgrade` |
 | gitleaks, trufflehog | `secret` | `repo_path` | `path`, `line` | `secret_rotation` |
+| semgrep | `sast` | `source_file` | `path`, `line` | `code_change` |
 | github_exposure, dnstwist, shodan, censys, subdomain_takeover | `osint` | `domain` | `domain` | `manual` |
 | checkov | `misconfig` | `file_path` | `path`, `line` | `config_change` |
 | kube_bench | `k8s` | `k8s_resource` | `resource_id` | `config_change` |
 | anything else | `infra` | `host_port` | `host`, `port`, `protocol` | `config_change` |
 
-Two limits in this map. **semgrep is not in it**, so a SAST finding comes out as `infra` / `host_port` with the file in `host` and the line in `port` (seen in a generated bundle: `"host": "src/db.py", "port": "41"`), and with `config_change`, which also counts it as `patchable_automatically`. And `line` is always `null`: the line, when the scanner gives one, stays inside `path` (`src/app/config.py:12`). A patcher should parse the path rather than trust `line`.
+For `repo_path`, `file_path` and `source_file`, the adapters record the target as `file:line` and the exporter splits it: `src/db.py:41` becomes `"path": "src/db.py", "line": 41`. When the scanner gave no line (`app.py:?`), `path` keeps the whole value and `line` is `null`. A SAST finding counts in `needs_human_review_count`, not in `patchable_automatically_count`, because `code_change` has `medium` confidence.
 
 **remediation:**
 
@@ -215,7 +218,7 @@ The severity used is the adjusted one. A finding the model marked as a likely fa
 | Field | Meaning |
 | --- | --- |
 | `raw_scan_artifacts` | `[{tool, path}]` pointing at the scan's HTML report on the shield's disk, or `[]` when there is none. At most one entry |
-| `scrubbing_applied` | `cpf`, `cnpj`, `pan_luhn`, `cvv`, `email`, `jwt`, `aws_keys`, `auth_header`, `phone_br`. The cookie header is also redacted, though it is not in this list |
+| `scrubbing_applied` | `cpf`, `cnpj`, `pan_luhn`, `cvv`, `email`, `jwt`, `aws_keys`, `github_token`, `slack_token`, `secret_assignment`, `auth_header`, `cookie_header`, `phone_br` |
 | `patcher_instructions` | A fixed sentence in English. It mentions `code_search_patterns` and `before_after_examples`, which are empty today |
 
 ## 10. How a patcher should consume it
