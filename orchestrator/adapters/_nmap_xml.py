@@ -20,7 +20,8 @@ from defusedxml.ElementTree import ParseError, fromstring
 # Nó da árvore. Sem importar o `xml` da stdlib em tempo de execução: tudo passa pelo
 # defusedxml. O import abaixo é só para o mypy (é o tipo que o `fromstring` devolve).
 if TYPE_CHECKING:
-    from xml.etree.ElementTree import Element
+    # Só tipo, nunca executa; o stub do defusedxml não reexporta o Element.
+    from xml.etree.ElementTree import Element  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml
 
 
 class NmapXmlError(ValueError):
