@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import shutil
 import tempfile
 from pathlib import Path
@@ -15,6 +16,7 @@ from uuid import uuid4
 import structlog
 
 from orchestrator.adapters.base import read_jsonl
+from orchestrator.domain.scrubber import scrub
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -46,6 +48,30 @@ def _to_git_uri(value: str) -> str:
         return v
     return Path(v).resolve().as_uri()
 
+
+
+def _hash_raw(item: dict[str, Any]) -> str | None:
+    """Discriminador de dedupe derivado do `Raw` sem guardar o `Raw`."""
+    raw = item.get("Raw") or ""
+    if not raw:
+        return None
+    return "sha256:" + hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _snippet_redigido(item: dict[str, Any]) -> str:
+    """Evidência do trufflehog a partir do campo `Redacted`.
+
+    Vários detectores deixam `Redacted` vazio. Nesse caso a evidência diz que o
+    valor foi omitido em vez de cair no `Raw`. Se algum detector devolver o próprio
+    segredo em `Redacted`, ele é trocado aqui também, e o scrubber passa por cima.
+    """
+    redigido = item.get("Redacted") or ""
+    raw = item.get("Raw") or ""
+    if raw and raw in redigido:
+        redigido = redigido.replace(raw, "<REDACTED>")
+    if not redigido:
+        return "<REDACTED: valor omitido, o trufflehog não forneceu versão redigida>"
+    return scrub(redigido)
 
 class TrufflehogAdapter:
     name = "trufflehog"
@@ -183,7 +209,7 @@ class TrufflehogAdapter:
                         .get("Data", {})
                         .get("Git", {})
                         .get("commit")
-                        or (item.get("Raw") or None)
+                        or _hash_raw(item)
                     ),
                     title=(
                         f"Secret VERIFICADO ({detector})"
@@ -199,7 +225,10 @@ class TrufflehogAdapter:
                     evidence=[
                         Evidence(
                             description=f"{detector} {'(verified)' if verified else ''}",
-                            snippet=(item.get("Raw") or "")[:300],
+                            # `Redacted`, nunca `Raw`: o `Raw` é a credencial em
+                            # claro, e a evidência vai para o banco, o LLM e o AI
+                            # Fix Bundle.
+                            snippet=_snippet_redigido(item)[:300],
                         )
                     ],
                 )

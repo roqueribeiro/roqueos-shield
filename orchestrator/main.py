@@ -22,6 +22,9 @@ from fastapi.staticfiles import StaticFiles
 from orchestrator import __version__
 from orchestrator.ai.observability import log_processor
 from orchestrator.api.routers import (
+    audit as audit_router,
+)
+from orchestrator.api.routers import (
     auth as auth_router,
 )
 from orchestrator.api.routers import (
@@ -198,6 +201,7 @@ app.include_router(users_router.router)  # /users (admin-only, RBAC)
 app.include_router(auth_router.router)  # /auth (OIDC SSO)
 app.include_router(conta_router.router)  # /setup, /auth/session (senha, standalone)
 app.include_router(settings_router.router)  # /settings/ai, /settings/scope
+app.include_router(audit_router.router)  # /audit (audit:read, papel auditor)
 app.include_router(system_router.router)  # /system/services, /system/logs, /system/usage
 app.include_router(mcp_router.router)  # /mcp (MCP por HTTP)
 
