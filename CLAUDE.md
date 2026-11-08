@@ -1,6 +1,8 @@
-# CAI — Continuous AI Security
+# RoqueShield
 
 Plataforma open-source de análise de vulnerabilidade para ambientes regulados (banking, fintech, healthcare — alinhada com LGPD/PCI/OWASP). Combina ~15 scanner adapters (Nmap, ZAP, Nuclei, Trivy, Greenbone, gitleaks, trufflehog, dnstwist, GitHub/Shodan/Censys, Checkov, kube-bench) com triagem AI híbrida (Claude/OpenAI via API + Ollama/LM Studio local) num orchestrator FastAPI + arq + Postgres.
+
+> Nome interno: o produto é **RoqueShield**. O motor e o pacote ainda se chamam `cai` no código (pacote `cai-orchestrator`, containers `cai-*`, CLI admin `cai`); a CLI do usuário final é `roqueshield`.
 
 ## Comandos rápidos
 
@@ -20,7 +22,7 @@ API REST: `http://127.0.0.1:8080` com header `X-API-Token`. Docs em [docs/runboo
 
 - **`orchestrator/adapters/`** — 15 adapters seguindo `ScannerAdapter` Protocol (`base.py`)
 - **`orchestrator/domain/`** — `Finding` canônico Pydantic, `scrubber.py` PII/PCI, `dedup.py`
-- **`orchestrator/ai/`** — gateway litellm + AIAnalyzer + agentic (CAI framework opt-in)
+- **`orchestrator/ai/`** — gateway litellm + AIAnalyzer + loop agêntico próprio (o cai-framework externo saiu em 23/10/2026)
 - **`orchestrator/api/`** — FastAPI routers (targets, scans, findings, reports, exposure, investigate, audit)
 - **`orchestrator/jobs/`** — arq workers + pipelines síncronos
 - **`orchestrator/persistence/`** — SQLModel (SQLite dev, Postgres prod) + alembic
