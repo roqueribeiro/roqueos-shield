@@ -1,8 +1,8 @@
-"""C4 — Codigo: ciclo de vida do adapter e o contrato do silencio."""
+"""C4: Codigo: ciclo de vida do adapter e o contrato do silencio."""
 
 from .c4lib import *
 
-SAIDA = "c4-code"
+SAIDA = "codigo"
 
 
 def draw(theme):
@@ -11,10 +11,14 @@ def draw(theme):
     t = theme
     title_block(
         c,
-        "RoqueShield — Ciclo de vida de um scanner",
-        "O nível 4 desce ao código de _run_adapter(), em orchestrator/jobs/pipelines.py. "
-        "Cada passo tem uma saída de erro explícita, e nenhuma delas devolve lista vazia.",
-        level="C4  ·  CÓDIGO",
+        tr("RoqueShield: ciclo de vida de um scanner", "RoqueShield: lifecycle of a scanner"),
+        tr(
+            "O nível 4 desce ao código de _run_adapter(), em orchestrator/jobs/pipelines.py. "
+            "Cada passo tem uma saída de erro explícita, e nenhuma delas devolve lista vazia.",
+            "Level 4 goes down to the code of _run_adapter(), in orchestrator/jobs/pipelines.py. "
+            "Every step has an explicit error exit, and none of them returns an empty list.",
+        ),
+        level=tr("C4  ·  CÓDIGO", "C4  ·  CODE"),
     )
     brand(c)
 
@@ -22,7 +26,7 @@ def draw(theme):
     c.text(
         LX,
         196,
-        "O CONTRATO ScannerAdapter",
+        tr("O CONTRATO ScannerAdapter", "THE ScannerAdapter CONTRACT"),
         size=11,
         weight=700,
         fill=P["rose"],
@@ -32,9 +36,14 @@ def draw(theme):
     c.para(
         LX,
         220,
-        "orchestrator/adapters/base.py — cinco métodos assíncronos, mais um "
-        "cleanup opcional detectado por getattr. Quinze adapters implementam "
-        "este Protocol, e o pipeline não sabe o nome de nenhum deles.",
+        tr(
+            "orchestrator/adapters/base.py: cinco métodos assíncronos, mais um "
+            "cleanup opcional detectado por getattr. Quinze adapters implementam "
+            "este Protocol, e o pipeline não sabe o nome de nenhum deles.",
+            "orchestrator/adapters/base.py: five async methods, plus an optional "
+            "cleanup detected through getattr. Fifteen adapters implement this "
+            "Protocol, and the pipeline does not know the name of any of them.",
+        ),
         size=11,
         fill=t["ink_soft"],
         max_w=LW,
@@ -48,8 +57,12 @@ def draw(theme):
         LW,
         1,
         "await adapter.health()",
-        "Round-trip de verdade, não construção de cliente. O censys passava no "
-        "health só instanciando o SDK, e a busca falhava depois, calada.",
+        tr(
+            "Round-trip de verdade, não construção de cliente. O censys passava no "
+            "health só instanciando o SDK, e a busca falhava depois, calada.",
+            "A real round-trip, not building a client. censys used to pass health "
+            "just by instantiating the SDK, and the search then failed silently.",
+        ),
         color=P["rose"],
     )
     y = s1.y + s1.h + 46
@@ -60,8 +73,12 @@ def draw(theme):
         LW,
         2,
         "handle = await adapter.start_scan(target, options)",
-        "Handle vazio ou sem native_id levanta AdapterUnavailableError. Aqui o "
-        "adapter recusa tipo de alvo incompatível com ValueError.",
+        tr(
+            "Handle vazio ou sem native_id levanta AdapterUnavailableError. Aqui o "
+            "adapter recusa tipo de alvo incompatível com ValueError.",
+            "An empty handle, or one with no native_id, raises AdapterUnavailableError. "
+            "This is where the adapter rejects an unsupported target type with ValueError.",
+        ),
         color=P["rose"],
     )
     y = s2.y + s2.h + 46
@@ -72,8 +89,12 @@ def draw(theme):
         LW,
         3,
         "loop: await adapter.poll(handle)",
-        "A cada 5 s, teto de 1800 s. FAILED e CANCELED levantam; estouro de timeout "
-        "levanta. poll lê task.result(), não task.done(): terminar não é dar certo.",
+        tr(
+            "A cada 5 s, teto de 1800 s. FAILED e CANCELED levantam; estouro de timeout "
+            "levanta. poll lê task.result(), não task.done(): terminar não é dar certo.",
+            "Every 5 s, capped at 1800 s. FAILED and CANCELED raise; a timeout raises. "
+            "poll reads task.result(), not task.done(): finishing is not succeeding.",
+        ),
         color=P["rose"],
     )
     y = s3.y + s3.h + 46
@@ -84,9 +105,14 @@ def draw(theme):
         LW,
         4,
         "raw = await adapter.fetch_results(handle)",
-        "Report ausente, vazio ou ilegível vira ScanIntegrityError. Nunca {}. "
-        'Foi assim que gitleaks, dnstwist e kube_bench diziam "limpo" sem ter lido '
-        "nada.",
+        tr(
+            "Report ausente, vazio ou ilegível vira ScanIntegrityError. Nunca {}. "
+            'Foi assim que gitleaks, dnstwist e kube_bench diziam "limpo" sem ter lido '
+            "nada.",
+            "A missing, empty or unreadable report becomes ScanIntegrityError. Never {}. "
+            'That is how gitleaks, dnstwist and kube_bench used to say "clean" without '
+            "reading anything.",
+        ),
         color=P["rose"],
     )
     y = s4.y + s4.h + 46
@@ -97,7 +123,10 @@ def draw(theme):
         LW,
         5,
         "findings = await adapter.normalize(raw)",
-        "Traduz a saída da ferramenta para Finding, com severity, confidence, CWE e evidência.",
+        tr(
+            "Traduz a saída da ferramenta para Finding, com severity, confidence, CWE e evidência.",
+            "Translates the tool output into Finding, with severity, confidence, CWE and evidence.",
+        ),
         color=P["rose"],
     )
     y = s5.y + s5.h + 46
@@ -108,8 +137,12 @@ def draw(theme):
         LW,
         6,
         "raw.coverage_gaps  →  Finding INFO",
-        "A conversão acontece em UM lugar. Quinze adapters lembrarem disso é "
-        "convenção; um lugar é mecanismo.",
+        tr(
+            "A conversão acontece em UM lugar. Quinze adapters lembrarem disso é "
+            "convenção; um lugar é mecanismo.",
+            "The conversion happens in ONE place. Fifteen adapters remembering it is "
+            "a convention; one place is a mechanism.",
+        ),
         color=P["amber"],
     )
     y = s6.y + s6.h + 46
@@ -120,7 +153,10 @@ def draw(theme):
         LW,
         7,
         "finally: await adapter.cleanup(handle)",
-        "Cancela a task e apaga o workdir. Roda mesmo quando o passo anterior levantou.",
+        tr(
+            "Cancela a task e apaga o workdir. Roda mesmo quando o passo anterior levantou.",
+            "Cancels the task and deletes the workdir. Runs even when an earlier step raised.",
+        ),
         color=P["green"],
     )
 
@@ -152,7 +188,7 @@ def draw(theme):
     c.text(
         EX - 16 + 336,
         s4.y + s4.h + 26,
-        "↓ tudo isto cai no mesmo lugar",
+        tr("↓ tudo isto cai no mesmo lugar", "↓ all of this lands in one place"),
         size=10.5,
         fill=P["red"],
         anchor="end",
@@ -165,10 +201,15 @@ def draw(theme):
         s5.y,
         336,
         "×",
-        "scanners_skipped[nome] = motivo",
-        "Aparece no relatório, na resposta da API e na tela do RoqueShield. "
-        "E quando NENHUM scanner rodou, o scan inteiro termina FAILED — não DONE "
-        "com zero achados.",
+        tr("scanners_skipped[nome] = motivo", "scanners_skipped[name] = reason"),
+        tr(
+            "Aparece no relatório, na resposta da API e na tela do RoqueShield. "
+            "E quando NENHUM scanner rodou, o scan inteiro termina FAILED, não DONE "
+            "com zero achados.",
+            "Shows up in the report, in the API response and on the RoqueShield screen. "
+            "And when NO scanner ran, the whole scan ends FAILED, not DONE with zero "
+            "findings.",
+        ),
         color=P["red"],
     )
 
@@ -179,26 +220,38 @@ def draw(theme):
         RX,
         196,
         688,
-        ["situação", "o que o adapter faz", "onde o usuário vê"],
         [
-            ["Rodou e não achou", "devolve []", "achado nenhum, cobertura completa"],
+            tr("situação", "situation"),
+            tr("o que o adapter faz", "what the adapter does"),
+            tr("onde o usuário vê", "where the user sees it"),
+        ],
+        [
             [
-                "Não deu para verificar",
+                tr("Rodou e não achou", "Ran, found nothing"),
+                tr("devolve []", "returns []"),
+                tr("achado nenhum, cobertura completa", "no findings, full coverage"),
+            ],
+            [
+                tr("Não deu para verificar", "Could not check"),
                 "raise ScanIntegrityError",
                 "scanners_skipped, coverage_complete: false",
             ],
-            ["Verificou em parte", "preenche RawResults.coverage_gaps", "achado INFO no relatório"],
+            [
+                tr("Verificou em parte", "Checked only part"),
+                tr("preenche RawResults.coverage_gaps", "fills RawResults.coverage_gaps"),
+                tr("achado INFO no relatório", "INFO finding in the report"),
+            ],
         ],
         [204, 236, 248],
         color=P["rose"],
-        title="Os três níveis — e nunca o silêncio",
+        title=tr("Os três níveis, e nunca o silêncio", "The three levels, and never silence"),
     )
 
     yy += 34
     c.text(
         RX,
         yy,
-        "O MECANISMO, SENÃO ISTO É DECORAÇÃO",
+        tr("O MECANISMO, SENÃO ISTO É DECORAÇÃO", "THE MECHANISM, OR THIS IS DECORATION"),
         size=11,
         weight=700,
         fill=P["cyan"],
@@ -213,12 +266,20 @@ def draw(theme):
         688,
         "✓",
         "scripts/check_no_silence.py",
-        'Job "Contrato do silencio" no CI. Compara o CÓDIGO com a regra por AST, '
-        "não por grep. Reprova except que termina vazio dentro do ciclo de vida do "
-        "scan, poll que decide por task.done() sem ler o resultado, e dicionário de "
-        "sucesso fabricado dentro de except. Escape explícito: "
-        "# silencio-ok: motivo — e o motivo escrito é o que denuncia se um dia "
-        "liberarem um silêncio de verdade.",
+        tr(
+            'Job "Contrato do silencio" no CI. Compara o CÓDIGO com a regra por AST, '
+            "não por grep. Reprova except que termina vazio dentro do ciclo de vida do "
+            "scan, poll que decide por task.done() sem ler o resultado, e dicionário de "
+            "sucesso fabricado dentro de except. Escape explícito: "
+            "# silencio-ok: motivo. O motivo escrito é o que denuncia se um dia "
+            "liberarem um silêncio de verdade.",
+            'CI job "Contrato do silencio". Checks the CODE against the rule by AST, '
+            "not by grep. Fails an except that ends empty inside the scan lifecycle, a "
+            "poll that decides on task.done() without reading the result, and a success "
+            "dict fabricated inside except. Explicit escape: # silencio-ok: reason. The "
+            "written reason is what gives it away if someone ever lets a real silence "
+            "through.",
+        ),
         color=P["cyan"],
     )
     yy = g.y + g.h + 26
@@ -228,34 +289,70 @@ def draw(theme):
         RX,
         yy,
         688,
-        ["burla que passou pelo gate v1", "o que mudou"],
         [
-            ["if _ESTRITO: raise com a flag desligada", "raise sob condição constante não conta"],
+            tr("burla que passou pelo gate v1", "bypass that beat gate v1"),
+            tr("o que mudou", "what changed"),
+        ],
+        [
             [
-                ".append numa lista local que ninguém lê",
-                "o destino precisa se chamar gap/erro/lacuna/errors",
+                tr(
+                    "if _ESTRITO: raise com a flag desligada",
+                    "if _ESTRITO: raise with the flag off",
+                ),
+                tr(
+                    "raise sob condição constante não conta",
+                    "raise under a constant condition does not count",
+                ),
             ],
             [
-                "silêncio movido para um helper _ler_report()",
-                "num adapter, toda função conta, menos health e cleanup",
+                tr(
+                    ".append numa lista local que ninguém lê",
+                    ".append to a local list nobody reads",
+                ),
+                tr(
+                    "o destino precisa se chamar gap/erro/lacuna/errors",
+                    "the target must be named gap/erro/lacuna/errors",
+                ),
+            ],
+            [
+                tr(
+                    "silêncio movido para um helper _ler_report()",
+                    "silence moved into a _ler_report() helper",
+                ),
+                tr(
+                    "num adapter, toda função conta, menos health e cleanup",
+                    "in an adapter every function counts, except health and cleanup",
+                ),
             ],
             [
                 'payload = texto if texto.strip() else ""',
-                "fetch_results que constrói vazio e nunca levanta reprova",
+                tr(
+                    "fetch_results que constrói vazio e nunca levanta reprova",
+                    "fetch_results that builds empty and never raises fails",
+                ),
             ],
         ],
         [352, 336],
         color=P["amber"],
-        title="O gate tem gate: 4 burlas viraram teste",
+        title=tr(
+            "O gate tem gate: 4 burlas viraram teste",
+            "The gate has a gate: 4 bypasses became tests",
+        ),
     )
     yy += 22
     c.para(
         RX,
         yy + 14,
-        "Uma auditoria adversarial burlou a primeira versão do gate de quatro formas e "
-        "reintroduziu o silêncio no nmap com o CI verde. Um controle que o autor do "
-        "código contorna em quatro tentativas não é controle. As quatro viraram "
-        "tests/unit/test_gate_do_silencio.py.",
+        tr(
+            "Uma auditoria adversarial burlou a primeira versão do gate de quatro formas e "
+            "reintroduziu o silêncio no nmap com o CI verde. Um controle que o autor do "
+            "código contorna em quatro tentativas não é controle. As quatro viraram "
+            "tests/unit/test_gate_do_silencio.py.",
+            "An adversarial audit beat the first version of the gate in four ways and put "
+            "the silence back into nmap with CI green. A control the code author gets around "
+            "in four tries is not a control. All four became "
+            "tests/unit/test_gate_do_silencio.py.",
+        ),
         size=11,
         fill=t["ink_soft"],
         max_w=688,
@@ -264,8 +361,9 @@ def draw(theme):
     c.h = int(max(s7.y + s7.h, ss.y + ss.h, yy + 120) + 96)
     footer(
         c,
-        "C4 model · nível 4 de 4 · fonte: orchestrator/jobs/pipelines.py · "
-        "orchestrator/adapters/base.py · scripts/check_no_silence.py",
+        tr("C4 model · nível 4 de 4 · fonte: ", "C4 model · level 4 of 4 · source: ")
+        + "orchestrator/jobs/pipelines.py · orchestrator/adapters/base.py · "
+        "scripts/check_no_silence.py",
         "github.com/roqueribeiro/roqueos-shield",
         y=c.h - 26,
     )

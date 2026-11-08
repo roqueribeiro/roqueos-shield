@@ -1,8 +1,10 @@
 # Contributing to RoqueShield
 
-Thanks for considering a contribution! RoqueShield is pre-1.0 and benefits from issues, PRs, new scanner adapters, AI prompt improvements, documentation, and translations alike.
+*Also available in [Brazilian Portuguese](docs/pt-BR/CONTRIBUTING.md).*
 
-Before opening a PR, please read the sections below — most reviews stall on items that are documented here.
+Thanks for considering a contribution. RoqueShield is pre-1.0 and benefits from issues, PRs, new scanner adapters, AI prompt improvements, documentation and translations alike.
+
+Before opening a PR, read the sections below: most reviews stall on items that are documented here.
 
 ## Code of Conduct
 
@@ -10,25 +12,32 @@ Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). By contr
 
 ## Found a vulnerability?
 
-**Do not** open a public issue. Follow [SECURITY.md](SECURITY.md) — use GitHub Security Advisories.
+**Do not** open a public issue. Follow [SECURITY.md](SECURITY.md) and use GitHub Security Advisories.
+
+## The project's rule
+
+A rule without a mechanism is decoration. If you propose a norm, say which gate, test or script will run it. And every new check is born with a mutant: break the code on purpose and show that the check fails. A check that has never failed proves nothing. List the mutants you tried in the PR description.
 
 ## Ways to contribute
 
-- **New scanner adapter** — easiest high-impact contribution. See `Adding an adapter` below.
-- **Bug fix** — open an issue first only if the fix is non-trivial.
-- **Feature** — open a GitHub issue using the *Feature Request* template to discuss design before coding.
-- **AI prompt / triage rule** — see `orchestrator/ai/prompts/` and explain in the PR description what you observed before/after.
-- **Documentation / translation** — README, runbook, threat-model, architecture. Bilingual PT-BR/EN PRs welcome.
-- **Tests** — current coverage is light. Adding unit tests to adapters or API routers is always appreciated.
+- **New scanner adapter**: the highest-impact contribution. See [Adding an adapter](#adding-an-adapter).
+- **Bug fix**: open an issue first only if the fix is non-trivial.
+- **Feature**: open a GitHub issue with the *Feature Request* template to discuss the design before coding.
+- **AI prompt or triage rule**: see `orchestrator/ai/prompts/`, and say in the PR what you observed before and after.
+- **Documentation or translation**: the map of every doc is [docs/INDEX.md](docs/INDEX.md). Each doc exists in English (`docs/`) and in Brazilian Portuguese (`docs/pt-BR/`); a change goes into both, and `scripts/check_docs_fresh.py` fails a doc without its pair or with a broken link.
+- **Tests**: the CI floor is 64% coverage and only goes up. Unit tests for adapters and API routers are always welcome.
 
 ## Development setup
+
+The full guide to the development stack (containers, ports, Make targets, the web screen, the CI) is [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). The short version:
 
 Prerequisites:
 
 - Python 3.13
-- Docker Desktop (WSL2 on Windows) or Docker Engine + Compose v2
-- `make` (Linux/macOS native; on Windows use WSL or `gnumake`)
+- Docker Desktop (WSL2 on Windows) or Docker Engine with Compose v2
+- `make` (native on Linux and macOS; on Windows use WSL)
 - At least 8 GB of free RAM (16 GB if you run the `greenbone` profile)
+- An NVIDIA GPU for the `cai-ollama` container, which `make up` starts; without one, start the services by name ([docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#4-the-containers))
 
 Clone and bootstrap:
 
@@ -36,20 +45,21 @@ Clone and bootstrap:
 git clone https://github.com/roqueribeiro/roqueos-shield.git
 cd roqueos-shield
 cp .env.example .env
-# fill in at least APP_TOKEN, POSTGRES_PASSWORD, ZAP_API_KEY (any random strings)
+# Generate APP_TOKEN, ZAP_API_KEY and POSTGRES_PASSWORD, and put the same Postgres
+# password in DATABASE_URL: docs/DEVELOPMENT.md has the commands. The API refuses
+# to boot with the example APP_TOKEN.
 
-make build       # build the orchestrator image (~5 min first time)
-make up          # bring up postgres + redis + orchestrator + worker + zap + lab
+make build       # the orchestrator, kali-toolbox and cai-expert images
+make up          # orchestrator, worker, postgres, redis, ollama, zap, trivy, kali-toolbox and the lab
 make migrate     # alembic upgrade head
-make smoke       # E2E: scan Juice Shop, produce HTML report in reports/
+make smoke       # active scan of the Juice Shop; the HTML report lands in reports/
 ```
 
-If the smoke test passes, your environment is good.
+`make smoke` does not judge the result: open the report and confirm it has real injection findings. Zero findings on the Juice Shop is a failure.
 
 ### The web UI (`web/`)
 
-The screen the standalone image serves is a Vue 3 + Quasar app in `web/`. Use
-**yarn** (the lockfile is `yarn.lock`), never npm:
+The screen the standalone image serves is a Vue 3 + Quasar app in `web/`. Use **yarn** (the lockfile is `yarn.lock`), never npm:
 
 ```bash
 cd web
@@ -58,10 +68,7 @@ yarn build            # writes orchestrator/web_dist, which the API serves at /
 cd .. && scripts/web_e2e.sh   # a throwaway shield + the Playwright e2e of the screen
 ```
 
-Without `orchestrator/web_dist`, the API falls back to the older dashboard in
-`orchestrator/static/`. Texts live in `web/src/i18n/` (pt-BR, en-US and es-ES at least;
-the other locales fall back to English). Screenshots in the docs are generated by
-`scripts/doc_capturas.sh`, never by hand.
+`yarn dev` serves the screen on port 9100 and proxies the API to 127.0.0.1:8080. Without `orchestrator/web_dist`, the API falls back to the older dashboard in `orchestrator/static/` (that is what the development stack shows). Texts live in `web/src/i18n/`; the standalone-only texts (`shield.js`) exist in pt-BR, en-US and es-ES, and the other locales fall back to English for those. Screenshots in the docs are generated by `scripts/doc_capturas.sh`, never by hand.
 
 ### The standalone image
 
@@ -72,57 +79,62 @@ docker build -f docker/images/standalone/Dockerfile --build-arg ENGINE=roqueos-s
 ROQUESHIELD_VERSION=dev sh install.sh   # installs your local build, same as a user would
 ```
 
-For a tighter inner loop without Docker (unit tests / linting only):
+`install.sh` tries `docker pull` first and, when the tag is not on the registry, uses the image already on your machine.
+
+### Tests, lint and gates without Docker
+
+`make test` and `make lint` run inside the orchestrator image, which is built without the development dependencies and without `tests/`; use the local environment instead, the same way the CI does:
 
 ```bash
-pip install -e ".[dev]"
-pytest
-ruff check orchestrator tests
-mypy orchestrator
+python3.13 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+.venv/bin/pytest
+.venv/bin/ruff check orchestrator tests scripts
+.venv/bin/ruff format --check orchestrator tests scripts
+.venv/bin/mypy orchestrator
+python scripts/check_no_silence.py
+python scripts/check_docs_fresh.py
+python scripts/gen_diagrams.py --check
 ```
+
+What each one holds, and the CI job behind it, is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#7-local-gates). What a change has to prove is in [docs/TESTING.md](docs/TESTING.md).
 
 ## Coding conventions
 
-These are enforced in review and (most) by CI:
+These are enforced in review and, most of them, by CI:
 
 - **Python 3.13**, full type hints, `from __future__ import annotations` at the top of every module
-- **Async-first** — adapters, API handlers, and persistence are `async def`
+- **Async-first**: adapters, API handlers and persistence are `async def`
 - **Pydantic v2** for schemas, `SQLModel` for DB models
 - **structlog** for logging (JSON in prod, plain in dev)
 - **litellm** is the *only* entry point to any LLM. Do **not** import `anthropic` or `openai` directly.
 - **Findings** are always `orchestrator.domain.schemas.Finding`. No adapter-specific variants.
 - **Severity** adjusted by AI context goes in `Finding.ai_triage.adjusted_severity`. Never overwrite `Finding.severity`.
 - **Datetimes** are always `datetime.now(UTC)` and stored with `sa_type=DateTime(timezone=True)`.
-
-Lint and type-check before pushing:
-
-```bash
-make lint     # ruff + mypy
-pytest        # unit tests
-```
+- **Zero findings must be distinguishable from "did not run"**: an adapter raises `ScanIntegrityError` or declares a coverage gap, never returns empty on an error. `scripts/check_no_silence.py` fails the merge otherwise.
 
 ## Adding an adapter
 
-Adapters live in [`orchestrator/adapters/`](orchestrator/adapters/) and implement the `ScannerAdapter` Protocol defined in [`base.py`](orchestrator/adapters/base.py).
+Adapters live in [`orchestrator/adapters/`](orchestrator/adapters/) and implement the `ScannerAdapter` Protocol defined in [`base.py`](orchestrator/adapters/base.py). The step-by-step guide, with what each gate demands at each step, is [docs/EXTENDING.md](docs/EXTENDING.md).
 
 Minimum checklist for a new adapter:
 
-1. Implement `health()`, `start_scan()`, `poll()`, `fetch_results()`, `normalize()`.
+1. Implement `health()`, `start_scan()`, `poll()`, `fetch_results()` and `normalize()`. `poll()` reads the return code, not just `task.done()`.
 2. Normalize raw output into the canonical `Finding` schema (`orchestrator/domain/schemas.py`).
-3. Add a unit test under `tests/unit/` using a static fixture of the scanner's raw output. No live network calls in tests.
-4. Update [`README.md`](README.md) / [`README.pt-BR.md`](README.pt-BR.md) adapters table.
-5. If the adapter needs an external service, add it to [`docker/`](docker/) (compose profile preferred) and document it in `.env.example`.
-6. If the adapter calls an external API with a key, the key must come from `pydantic-settings`; never hard-code.
+3. Register it in `_build_adapters` and `_SCANNER_ASSET_SUPPORT` (`orchestrator/jobs/pipelines.py`), or in `orchestrator/jobs/exposure.py` for OSINT, and declare its options in `orchestrator/domain/opcoes.py`.
+4. Add a unit test under `tests/unit/` built on a real sample of the scanner's output, covering both sides: it finds, and missing or unreadable output raises instead of returning empty. No live network calls in tests.
+5. Update the adapters table in [`README.md`](README.md) and [`README.pt-BR.md`](README.pt-BR.md), and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) with its pair.
+6. Put the binary in `docker/images/orchestrator/Dockerfile` (the worker runs the scanners), with a pinned version. A key or URL is a `Settings` field in `orchestrator/config.py` and goes into `.env.example`; never hard-code it.
 
-If you use Claude Code, the [`cai-add-adapter`](.claude/skills/cai-add-adapter/SKILL.md) skill scaffolds most of this.
+If you use Claude Code, the [`cai-add-adapter`](.claude/skills/cai-add-adapter/SKILL.md) skill scaffolds part of this. Its `poll()` template decides by `task.done()` alone and fails the silence gate: follow [docs/EXTENDING.md](docs/EXTENDING.md) for that piece.
 
 ## Modifying sensitive areas
 
-Some files have extra review requirements because they affect compliance/security posture:
+Some files have extra review requirements because they affect the compliance and security posture:
 
-- **`orchestrator/domain/scrubber.py`** — regex changes need a justification in the PR description. Do not relax patterns without explaining the false-positive that motivated the change.
-- **`orchestrator/audit/logger.py`** — the audit log is append-only. Never introduce code paths that `UPDATE` or `DELETE` from `audit_log`. The Postgres trigger is a safety net, not a license to relax the application layer.
-- **`orchestrator/api/deps.py`** — authentication code. Never remove `require_token` from an endpoint that already has it. Discuss design in an issue first.
+- **`orchestrator/domain/scrubber.py`**: regex changes need a justification in the PR description. Do not relax patterns without explaining the false positive that motivated the change.
+- **`orchestrator/audit/logger.py`**: the audit log is append-only. Never introduce code paths that `UPDATE` or `DELETE` from `audit_log`. The Postgres trigger is a safety net, not a license to relax the application layer.
+- **`orchestrator/api/deps.py`**: authentication code. Never remove `require_token` from an endpoint that already has it. Discuss the design in an issue first.
 
 ## PR workflow
 
@@ -132,27 +144,25 @@ Some files have extra review requirements because they affect compliance/securit
 4. Update [`CHANGELOG.md`](CHANGELOG.md) under `[Unreleased]`. Use the categories: Added / Changed / Deprecated / Removed / Fixed / Security.
 5. Sign your commits with a [DCO `Signed-off-by:` line](https://developercertificate.org/) (`git commit -s`). This affirms you wrote the change and can submit it under Apache 2.0.
 6. Open a PR using the template. Fill in the checklist.
-7. CI must be green. Address review comments by pushing additional commits — we squash on merge, so don't worry about a messy local history.
+7. CI must be green. Address review comments by pushing additional commits: we squash on merge, so a messy local history is fine.
 
 ## Issue triage labels
 
-- `good first issue` — small, well-scoped, lower context
-- `help wanted` — we'd love a PR
-- `adapter` — adding/improving a scanner integration
-- `ai` — anything in `orchestrator/ai/`
-- `compliance` — scrubber, audit log, allowlist, auth-ref logic
-- `docs` — README, runbook, threat-model
-- `breaking` — touches a public API or DB migration
+- `good first issue`: small, well-scoped, lower context
+- `help wanted`: we'd love a PR
+- `adapter`: adding or improving a scanner integration
+- `ai`: anything in `orchestrator/ai/`
+- `compliance`: scrubber, audit log, allowlist, auth-ref logic
+- `docs`: anything under `docs/`, the READMEs and this file
+- `breaking`: touches a public API or a DB migration
 
 ## Releasing (maintainers only)
 
-1. Bump the version in [`pyproject.toml`](pyproject.toml), `orchestrator/__init__.py`,
-   `web/package.json` and `VERSAO_PADRAO` in `install.sh` (`scripts/check_docs_fresh.py`
-   fails if they disagree). Publish the image (`scripts/release-docker.sh`) **before**
-   merging that bump: `install.sh` on `main` installs the version it names.
-2. Move `[Unreleased]` items in [`CHANGELOG.md`](CHANGELOG.md) under the new version + date.
-3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"` (signed tag), `git push --tags`.
-4. Create a GitHub Release from the tag, copy the CHANGELOG section into the body.
+1. Bump the version in [`pyproject.toml`](pyproject.toml), `orchestrator/__init__.py`, `web/package.json` and `VERSAO_PADRAO` in `install.sh` (`scripts/check_docs_fresh.py` fails if they disagree).
+2. Move the `[Unreleased]` items in [`CHANGELOG.md`](CHANGELOG.md) under the new version and date.
+3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"` (signed tag). `scripts/release-docker.sh` refuses to publish unless the tag `vX.Y.Z` exists, matches the `pyproject.toml` version and points to `HEAD`, on a clean tree.
+4. Publish the images with `scripts/release-docker.sh` **before** merging the bump: `install.sh` on `main` installs the version it names, so that image has to exist on Docker Hub first.
+5. `git push --tags`, then create a GitHub Release from the tag with the CHANGELOG section as the body.
 
 ## Questions?
 

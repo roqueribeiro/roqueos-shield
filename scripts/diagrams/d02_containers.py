@@ -1,8 +1,8 @@
-"""C2 — Containers."""
+"""C2: Containers."""
 
 from .c4lib import *
 
-SAIDA = "c2-containers"
+SAIDA = "containers"
 
 
 def draw(theme):
@@ -10,10 +10,15 @@ def draw(theme):
     P = PALETTE
     title_block(
         c,
-        "RoqueShield — Containers",
-        "Cada caixa é um processo com imagem própria. Tudo dentro da fronteira sobe "
-        "como uma stack Docker só, provisionada pelo RoqueOS ou por docker compose. "
-        "Serviço marcado opt-in não sobe por padrão.",
+        "RoqueShield: containers",
+        tr(
+            "Cada caixa é um processo com imagem própria. Tudo dentro da fronteira sobe "
+            "como uma stack Docker só, provisionada pelo RoqueOS ou por docker compose. "
+            "Serviço marcado opt-in não sobe por padrão.",
+            "Each box is a process with its own image. Everything inside the boundary "
+            "comes up as one Docker stack, provisioned by RoqueOS or by docker compose. "
+            "Services marked opt-in do not start by default.",
+        ),
         level="C2  ·  CONTAINERS",
     )
     brand(c)
@@ -30,30 +35,46 @@ def draw(theme):
                 title="RoqueOS Server",
                 tech="NestJS · dockerode",
                 color=P["accent"],
-                desc="Provisiona a stack, guarda o token cifrado em AES e faz proxy de "
-                "/pentest/api/* injetando X-API-Token.",
+                desc=tr(
+                    "Provisiona a stack, guarda o token cifrado em AES e faz proxy de "
+                    "/pentest/api/* injetando X-API-Token.",
+                    "Provisions the stack, keeps the token AES-encrypted and proxies "
+                    "/pentest/api/* injecting X-API-Token.",
+                ),
             ),
             dict(
                 title="CLI  cai",
                 tech="Typer",
                 color=P["cyan"],
-                desc="scan · exposure · serve · bundle. Mesma imagem do orchestrator, "
-                "outro entrypoint.",
+                desc=tr(
+                    "scan · exposure · serve · bundle. Mesma imagem do orchestrator, "
+                    "outro entrypoint.",
+                    "scan · exposure · serve · bundle. Same image as the orchestrator, "
+                    "different entrypoint.",
+                ),
             ),
             dict(
-                title="Agente / CI",
+                title=tr("Agente / CI", "Agent / CI"),
                 tech="HTTP",
                 color=P["cyan"],
-                desc="Fala REST e lê o AI Fix Bundle direto, sem passar pelo RoqueOS.",
+                desc=tr(
+                    "Fala REST e lê o AI Fix Bundle direto, sem passar pelo RoqueOS.",
+                    "Speaks REST and reads the AI Fix Bundle directly, bypassing RoqueOS.",
+                ),
             ),
         ],
     )
     c.para(
         70,
         718,
-        "Autenticação: X-API-Key + X-API-Secret, ou OIDC. O SSE usa "
-        "session-token curto na query porque EventSource não carrega "
-        "header — a apiKey nunca vai na URL.",
+        tr(
+            "Autenticação: X-API-Token (de serviço ou por usuário), Bearer OIDC "
+            "ou o cookie de sessão da tela. Só o SSE aceita a credencial em "
+            "?token=, porque EventSource não manda header.",
+            "Auth: X-API-Token (service or per-user), Bearer OIDC or the UI "
+            "session cookie. Only the SSE stream accepts the credential in "
+            "?token=, because EventSource cannot send headers.",
+        ),
         size=10.5,
         fill=theme["ink_faint"],
         max_w=262,
@@ -61,7 +82,7 @@ def draw(theme):
 
     # ---------- coluna B: a stack
     sB = c.slot()
-    W = [346, 346]
+    W = [330, 330]  # 2*330+24 = 684: cabe na fronteira com 28 de folga dos dois lados
     (api, wrk), y = row(
         c,
         430,
@@ -72,16 +93,25 @@ def draw(theme):
                 title="orchestrator",
                 tech="FastAPI · uvicorn · :8080",
                 color=P["rose"],
-                desc="33 rotas em 10 routers. Valida escopo, grava a trilha de auditoria "
-                "no mesmo commit do scan, enfileira o job e transmite fase por SSE "
-                "em /ui/api/events. Serve o dashboard estático em /ui.",
+                desc=tr(
+                    "51 rotas em 14 routers. Valida escopo, grava a trilha de auditoria "
+                    "no mesmo commit do scan, enfileira o job e transmite fase por SSE "
+                    "em /ui/api/events. Serve a tela em / (o painel antigo em /ui só sem o build).",
+                    "51 routes in 14 routers. Checks scope, writes the audit trail in "
+                    "the same commit as the scan, enqueues the job and streams phases "
+                    "over SSE at /ui/api/events. Serves the UI at / (the old /ui dashboard only without the build).",
+                ),
             ),
             dict(
                 title="worker",
-                tech="arq · mesma imagem",
+                tech=tr("arq · mesma imagem", "arq · same image"),
                 color=P["rose"],
-                desc="Roda run_scan_job e run_exposure_job: é quem executa os adapters, "
-                "chama o LLM e escreve o relatório. Entrypoint arq, não uvicorn.",
+                desc=tr(
+                    "Roda run_scan_job e run_exposure_job: é quem executa os adapters, "
+                    "chama o LLM e escreve o relatório. Entrypoint arq, não uvicorn.",
+                    "Runs run_scan_job and run_exposure_job: it executes the adapters, "
+                    "calls the LLM and writes the report. arq entrypoint, not uvicorn.",
+                ),
             ),
         ],
         gap=24,
@@ -97,20 +127,28 @@ def draw(theme):
                 tech="postgres:16-alpine",
                 color=P["green"],
                 desc="targets · scans · findings · finding_status · users · ai_runs · "
-                "audit_log. A trilha é append-only por TRIGGER no banco, não por "
-                "disciplina de código.",
+                + tr(
+                    "audit_log. A trilha é append-only por TRIGGER no banco, não por "
+                    "disciplina de código.",
+                    "audit_log. The trail is append-only through a database TRIGGER, "
+                    "not through coding discipline.",
+                ),
             ),
             dict(
                 title="redis",
                 tech="redis:7-alpine",
                 color=P["green"],
-                desc="Fila do arq. É o que separa a resposta 202 do scan que leva meia hora.",
+                desc=tr(
+                    "Fila do arq. É o que separa a resposta 202 do scan que leva meia hora.",
+                    "The arq queue. It is what separates the 202 response from a scan that "
+                    "takes half an hour.",
+                ),
             ),
         ],
         gap=24,
     )
     y += 38  # corredor: tres arestas rotuladas nao cabem em 24px
-    W3 = [222, 222, 222]
+    W3 = [212, 212, 212]
     (zap, tri, kali), y = row(
         c,
         430,
@@ -121,19 +159,28 @@ def draw(theme):
                 title="zap",
                 tech="zap-stable · :8090",
                 color=P["amber"],
-                desc="DAST de aplicação web. Spider e fila passiva; varredura ativa é opt-in.",
+                desc=tr(
+                    "DAST de aplicação web. Spider e fila passiva; varredura ativa é opt-in.",
+                    "Web application DAST. Spider and passive queue; active scan is opt-in.",
+                ),
             ),
             dict(
                 title="trivy",
                 tech="trivy · :4954",
                 color=P["amber"],
-                desc="Modo server. Imagem de container e dependência de repositório.",
+                desc=tr(
+                    "Modo server. Imagem de container e dependência de repositório.",
+                    "Server mode. Container images and repository dependencies.",
+                ),
             ),
             dict(
                 title="kali-toolbox",
                 tech="kali-rolling",
                 color=P["kali"],
-                desc="19 ferramentas de pentest. É onde o agente executa comando.",
+                desc=tr(
+                    "19 ferramentas de pentest. É onde o agente executa comando.",
+                    "19 pentest tools. This is where the agent runs commands.",
+                ),
             ),
         ],
         gap=24,
@@ -148,19 +195,29 @@ def draw(theme):
                 title="ollama",
                 tech="opt-in",
                 color=P["gray"],
-                desc="LLM local, para quando o prompt não pode sair da rede.",
+                desc=tr(
+                    "LLM local, para quando o prompt não pode sair da rede.",
+                    "Local LLM, for when the prompt cannot leave the network.",
+                ),
             ),
             dict(
                 title="greenbone",
-                tech="opt-in · 7 serviços",
+                tech=tr("opt-in · 7 serviços", "opt-in · 7 services"),
                 color=P["gray"],
-                desc="Scanner de rede autenticado. O feed leva de 30 min a 3 h.",
+                desc=tr(
+                    "Scanner de rede autenticado. O feed leva de 30 min a 3 h.",
+                    "Authenticated network scanner. The feed takes 30 min to 3 h.",
+                ),
             ),
             dict(
                 title="cai-expert",
                 tech="STUB",
                 color=P["gray"],
-                desc="Container do agente. O compose se declara stub e o build usa || true.",
+                desc=tr(
+                    "Container do agente. O compose se declara stub e o build usa || true.",
+                    "Agent container. The compose file says it is a stub and the build "
+                    "uses || true.",
+                ),
             ),
         ],
         gap=24,
@@ -169,7 +226,7 @@ def draw(theme):
     c.text(
         exp.x + exp.w,
         exp.y + exp.h + 24,
-        "não operacional",
+        tr("não operacional", "not operational"),
         size=10,
         fill=P["red"],
         anchor="end",
@@ -186,30 +243,41 @@ def draw(theme):
         262,
         [
             dict(
-                title="Provedor de LLM",
+                title=tr("Provedor de LLM", "LLM provider"),
                 tech="litellm",
                 color=P["amber"],
-                desc="Anthropic · OpenAI · OpenRouter · endpoint local. O gateway faz "
-                "fallback local→nuvem e grava telemetria em ai_runs.",
+                desc=tr(
+                    "Anthropic · OpenAI · OpenRouter · endpoint local. O gateway faz "
+                    "fallback local→nuvem e grava telemetria em ai_runs.",
+                    "Anthropic · OpenAI · OpenRouter · local endpoint. The gateway falls "
+                    "back local→cloud and records telemetry in ai_runs.",
+                ),
             ),
             dict(
-                title="Alvos",
-                tech="7 tipos de ativo",
+                title=tr("Alvos", "Targets"),
+                tech=tr("7 tipos de ativo", "7 asset types"),
                 color=P["red"],
-                desc="Só o que a allow-list permite. lab-only vem ligado: juice-shop, "
-                "dvwa, webgoat.",
+                desc=tr(
+                    "Com lab-only (padrão), endereço interno só se estiver na "
+                    "allow-list, que vem vazia. Lab: juice-shop, dvwa.",
+                    "With lab-only (default), an internal address only if it is on "
+                    "the allow-list, which ships empty. Lab: juice-shop, dvwa.",
+                ),
             ),
             dict(
                 title="DefectDojo",
-                tech="REST · opcional",
+                tech=tr("REST · opcional", "REST · optional"),
                 color=P["gray"],
-                desc="Export dos achados para gestão centralizada.",
+                desc=tr(
+                    "Export dos achados para gestão centralizada.",
+                    "Exports findings to centralized management.",
+                ),
             ),
         ],
     )
 
     # fronteiras fecham agora que a altura do conteúdo é conhecida
-    c.into(sA, boundary, 48, 186, 306, 646, "quem entra", color=P["violet"])
+    c.into(sA, boundary, 48, 186, 306, 646, tr("quem entra", "who comes in"), color=P["violet"])
     b = c.into(
         sB,
         boundary,
@@ -218,20 +286,30 @@ def draw(theme):
         740,
         exp.y + exp.h + 64 - 168,
         "stack roqueos-pentest",
-        "rede roqueos-network",
+        tr("rede roqueos-network", "network roqueos-network"),
         color=P["rose"],
     )
-    c.into(sC, boundary, 1258, 186, 306, dd.y + dd.h + 28 - 186, "fora da stack", color=P["gray"])
+    c.into(
+        sC,
+        boundary,
+        1258,
+        186,
+        306,
+        dd.y + dd.h + 28 - 186,
+        tr("fora da stack", "outside the stack"),
+        color=P["gray"],
+    )
 
     # ---------- arestas
+    # ordem de baixo para cima: o rotulo pintado depois cobre a linha vertical que o cruza
     edge(
         c,
-        ros.right,
-        api.pt("left", 0.2),
-        "proxy",
-        "HTTP + SSE",
-        color=P["accent"],
-        mid=[(378, ros.cy), (378, api.y + api.h * 0.2)],
+        ag.right,
+        api.pt("left", 0.85),
+        "REST",
+        "X-API-Token",
+        color=P["cyan"],
+        mid=[(378, ag.cy), (378, api.y + api.h * 0.85)],
     )
     edge(
         c,
@@ -244,21 +322,21 @@ def draw(theme):
     )
     edge(
         c,
-        ag.right,
-        api.pt("left", 0.85),
-        "REST",
-        "X-API-Key",
-        color=P["cyan"],
-        mid=[(378, ag.cy), (378, api.y + api.h * 0.85)],
+        ros.right,
+        api.pt("left", 0.2),
+        "proxy",
+        "HTTP + SSE",
+        color=P["accent"],
+        mid=[(378, ros.cy), (378, api.y + api.h * 0.2)],
     )
-    edge(c, api.right, wrk.left, "enfileira", "arq")
-    edge(c, api.bottom, pg.top, "lê e grava", "SQLModel")
-    edge(c, wrk.bottom, rd.top, "consome", "job")
+    edge(c, api.right, wrk.left, tr("enfileira", "enqueues"), "arq")
+    edge(c, api.bottom, pg.top, tr("lê e grava", "reads, writes"), "SQLModel")
+    edge(c, wrk.bottom, rd.top, tr("consome", "consumes"), "job")
     edge(
         c,
         wrk.pt("left", 0.75),
         (pg.x + pg.w, pg.y + 30),
-        "grava achado",
+        tr("grava achado", "writes findings"),
         color=P["green"],
         mid=[(wrk.x - 12, wrk.y + wrk.h * 0.75), (wrk.x - 12, pg.y + 30)],
     )
@@ -267,7 +345,7 @@ def draw(theme):
         (wrk.cx, rd.y + rd.h),
         (zap.cx, zap.y),
         "start · poll · fetch",
-        "contrato do adapter",
+        tr("contrato do adapter", "adapter contract"),
         color=P["amber"],
         mid=[(wrk.cx, rd.y + rd.h + 20), (zap.cx, rd.y + rd.h + 20)],
     )
@@ -284,7 +362,7 @@ def draw(theme):
         (rd.cx + 120, rd.y + rd.h),
         kali.pt("top", 0.72),
         "docker exec",
-        "argv, nunca shell",
+        tr("argv, nunca shell", "argv, never shell"),
         color=P["kali"],
         mid=[(rd.cx + 120, rd.y + rd.h + 48), (kali.x + kali.w * 0.72, rd.y + rd.h + 48)],
         label_dx=0,
@@ -294,8 +372,8 @@ def draw(theme):
         c,
         wrk.right,
         llm.left,
-        "tria",
-        "prompt sanitizado",
+        tr("tria", "triage"),
+        tr("prompt sanitizado", "scrubbed prompt"),
         color=P["amber"],
         mid=[(1200, wrk.cy), (1200, llm.cy)],
     )
@@ -303,7 +381,7 @@ def draw(theme):
         c,
         (b.x + b.w, zap.cy),
         tgt.pt("left", 0.7),
-        "varre",
+        tr("varre", "scans"),
         color=P["red"],
         mid=[(1186, zap.cy), (1186, tgt.y + tgt.h * 0.7)],
         label_dy=54,
@@ -312,7 +390,7 @@ def draw(theme):
         c,
         (b.x + b.w, pg.cy + 40),
         dd.pt("left", 0.4),
-        "exporta",
+        tr("exporta", "exports"),
         color=P["gray"],
         mid=[(1222, pg.cy + 40), (1222, dd.y + dd.h * 0.4)],
         label_dy=-48,
@@ -323,14 +401,14 @@ def draw(theme):
         1258,
         726,
         [
-            (P["rose"], "Processo do RoqueShield"),
-            (P["green"], "Armazenamento"),
-            (P["amber"], "Scanner ou serviço externo"),
-            (P["kali"], "Toolbox de pentest"),
-            (P["accent"], "Família RoqueOS"),
-            (P["cyan"], "Cliente automatizado"),
-            (P["gray"], "Opt-in ou opcional"),
-            (P["red"], "Alvo, ou peça declarada stub"),
+            (P["rose"], tr("Processo do RoqueShield", "RoqueShield process")),
+            (P["green"], tr("Armazenamento", "Storage")),
+            (P["amber"], tr("Scanner ou serviço externo", "Scanner or external service")),
+            (P["kali"], tr("Toolbox de pentest", "Pentest toolbox")),
+            (P["accent"], tr("Família RoqueOS", "RoqueOS family")),
+            (P["cyan"], tr("Cliente automatizado", "Automated client")),
+            (P["gray"], tr("Opt-in ou opcional", "Opt-in or optional")),
+            (P["red"], tr("Alvo, ou peça declarada stub", "Target, or a declared stub")),
         ],
         cols=1,
         box_w=306,
@@ -338,8 +416,8 @@ def draw(theme):
 
     footer(
         c,
-        "C4 model · nível 2 de 4 · fonte: docker/compose*.yml · orchestrator/main.py · "
-        "orchestrator/jobs/queue.py",
+        tr("C4 model · nível 2 de 4 · fonte: ", "C4 model · level 2 of 4 · source: ")
+        + "docker/compose*.yml · orchestrator/main.py · orchestrator/jobs/queue.py",
         "github.com/roqueribeiro/roqueos-shield",
     )
     return c

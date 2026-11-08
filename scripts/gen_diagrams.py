@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenera todos os diagramas de docs/assets/diagrams/.
+"""Regenera todos os diagramas de docs/assets/diagramas/.
 
     python scripts/gen_diagrams.py            # gera tudo
     python scripts/gen_diagrams.py --check    # nao escreve, so confere se esta em dia
@@ -12,6 +12,13 @@ Nao depende de nada fora da biblioteca padrao. A medida de texto vem de
 scripts/diagrams/metrics.json, uma tabela de avanco por caractere extraida das
 fontes reais e versionada junto: assim o mesmo codigo gera o mesmo SVG em
 qualquer maquina, com ou sem a fonte instalada.
+
+Cada modulo sai em dois idiomas e dois temas, quatro arquivos por diagrama:
+
+    <nome>.claro.svg  <nome>.escuro.svg          portugues
+    <nome>.en.claro.svg  <nome>.en.escuro.svg    ingles
+
+O texto de cada idioma e um par tr("pt", "en") dentro do proprio modulo.
 """
 
 from __future__ import annotations
@@ -28,7 +35,7 @@ sys.dont_write_bytecode = True
 from pathlib import Path  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
-SAIDA = RAIZ / "docs" / "assets" / "diagrams"
+SAIDA = RAIZ / "docs" / "assets" / "diagramas"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -56,14 +63,21 @@ MODULOS = [
     d08_integracoes,
     d09_telas,
 ]
-TEMAS = [(c4lib.DARK, "dark"), (c4lib.LIGHT, "light")]
+TEMAS = [(c4lib.LIGHT, "claro"), (c4lib.DARK, "escuro")]
+# portugues sem marca no nome, ingles com ".en": o par que o README referencia.
+IDIOMAS = [("pt", ""), ("en", ".en")]
 
 
 def gerar() -> dict[str, str]:
     saidas: dict[str, str] = {}
-    for mod in MODULOS:
-        for tema, sufixo in TEMAS:
-            saidas[f"{mod.SAIDA}-{sufixo}.svg"] = mod.draw(tema).render()
+    try:
+        for lingua, marca in IDIOMAS:
+            c4lib.set_lang(lingua)
+            for mod in MODULOS:
+                for tema, sufixo in TEMAS:
+                    saidas[f"{mod.SAIDA}{marca}.{sufixo}.svg"] = mod.draw(tema).render()
+    finally:
+        c4lib.set_lang("pt")
     return saidas
 
 
@@ -85,9 +99,12 @@ def main() -> int:
                 problemas.append(f"  FALTA      {alvo.relative_to(RAIZ)}")
             elif alvo.read_text(encoding="utf-8") != conteudo:
                 problemas.append(f"  DESATUALIZADO  {alvo.relative_to(RAIZ)}")
-        extras = {p.name for p in SAIDA.glob("*.svg")} - set(saidas)
+        # Orfao: arquivo na pasta que o gerador nao produz. Diagrama renomeado deixa
+        # o antigo para tras, e o README continua apontando para uma foto que ninguem
+        # mais refaz. Vale para qualquer arquivo, nao so .svg.
+        extras = {p.name for p in SAIDA.iterdir() if p.is_file()} - set(saidas)
         for e in sorted(extras):
-            problemas.append(f"  ORFAO      docs/assets/diagrams/{e}")
+            problemas.append(f"  ORFAO      {(SAIDA / e).relative_to(RAIZ)}")
         if problemas:
             print(
                 "Diagramas fora de sincronia com scripts/diagrams/:\n"

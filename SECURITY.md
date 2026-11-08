@@ -59,8 +59,11 @@ Out of scope:
 ## Known limits (not vulnerabilities, but tell us if you find a way around them)
 
 - In the standalone image every process (API, worker, ZAP, scanners) runs as the same
-  user, which can read `/data/secrets`. Secrets are kept out of the worker's
-  environment, but a compromised scanner is not isolated from them.
+  user, which can read `/data/secrets`. The worker does not receive the service token,
+  the session key or the first-run code, but it does keep the key that decrypts the
+  stored AI key, the ZAP API key and the database and Redis URLs (with the Redis
+  password), and the scanners it starts inherit that environment. A compromised
+  scanner is not isolated from them.
 - The scope check resolves DNS when a target is created and when a scan is enqueued;
   the scanner resolves again later. Loopback and link-local are refused even for a name
   on the allowlist, but a name could still be re-pointed to another private address.
@@ -100,4 +103,4 @@ before public disclosure. If in doubt, ask first.
   (allowed binaries, curl options, scope of every host, URL and path in the argv) is
   defense in depth, not a sandbox: turn live execution on only in an isolated
   environment.
-- Read the threat model in [`docs/threat-model.md`](docs/threat-model.md).
+- Read the threat model in [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md).

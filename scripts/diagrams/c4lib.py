@@ -1,9 +1,9 @@
 """
-c4lib — primitivas de desenho C4 em SVG puro, na identidade RoqueOS.
+c4lib: primitivas de desenho C4 em SVG puro, na identidade RoqueOS.
 
 Por que SVG escrito à mão e não graphviz/mermaid: diagrama de arquitetura que vale
 a pena olhar tem posição pensada. Layout automático empurra caixa para onde couber,
-e o leitor perde a única coisa que o desenho tinha para dar — a forma do sistema.
+e o leitor perde a única coisa que o desenho tinha para dar, a forma do sistema.
 Aqui a posição é declarada, o estilo é um só, e o arquivo é regenerável.
 """
 
@@ -15,6 +15,32 @@ import math
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
+
+# ---------------------------------------------------------------- idioma
+
+# Cada texto visível é um par tr("pt", "en"). O gerador escolhe o idioma antes de
+# chamar draw(); o módulo do diagrama não sabe qual está saindo. Par em vez de
+# catálogo separado: a tradução fica ao lado do desenho que ela precisa caber, e
+# quem muda uma frase vê a outra na mesma linha.
+_LANG = "pt"
+IDIOMAS = ("pt", "en")
+
+
+def set_lang(lang: str) -> None:
+    global _LANG
+    if lang not in IDIOMAS:
+        raise ValueError(f"idioma desconhecido: {lang}")
+    _LANG = lang
+
+
+def lang() -> str:
+    return _LANG
+
+
+def tr(pt: str, en: str) -> str:
+    """O texto no idioma da geração corrente."""
+    return en if _LANG == "en" else pt
+
 
 # ---------------------------------------------------------------- temas
 
@@ -515,8 +541,9 @@ def title_block(c: Canvas, title, subtitle=None, level=None, x=48, y=52):
         )
 
 
-def legend(c: Canvas, x, y, items, title="Legenda", cols=1, box_w=250):
+def legend(c: Canvas, x, y, items, title=None, cols=1, box_w=250):
     t = c.theme
+    title = title or tr("Legenda", "Legend")
     rows = math.ceil(len(items) / cols)
     h = 34 + rows * 21 + 10
     c.rect(x, y, box_w, h, r=10, fill=t["bg_alt"], stroke=t["node_stroke"], sw=1)

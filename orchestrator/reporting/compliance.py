@@ -464,7 +464,7 @@ class ComplianceReport:
 def _grade(risk_index: int, has_critical: bool, has_high: bool) -> str:
     """Nota de postura A–F a partir do índice de risco agregado.
 
-    A nota nunca é melhor que C com qualquer crítico aberto, nem que B com alto."""
+    A nota nunca é melhor que D com qualquer crítico aberto, nem que C com alto."""
     if risk_index == 0:
         return "A"
     if has_critical:
