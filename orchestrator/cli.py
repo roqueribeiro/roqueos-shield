@@ -7,6 +7,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Annotated
+from uuid import UUID, uuid4
 
 import structlog
 import typer
@@ -16,7 +17,7 @@ from rich.table import Table
 from orchestrator.config import settings
 from orchestrator.domain.schemas import AssetType, Severity, Target
 from orchestrator.jobs.exposure import run_exposure_scan
-from orchestrator.jobs.pipelines import run_scan
+from orchestrator.jobs.pipelines import ScanResult, run_scan
 
 app = typer.Typer(
     name="cai",
@@ -44,13 +45,81 @@ def _setup_logging() -> None:
     )
 
 
+_TIPOS = "|".join(t.value for t in AssetType)
+
+
+async def _gates_e_auditoria(
+    t: Target, authorization_ref: str | None, profile: str | None, scan_id: UUID
+) -> list[str]:
+    """Os mesmos gates do `POST /scans`, e o `scan.create` na trilha de auditoria.
+
+    Antes a CLI chamava `run_scan` direto: sem escopo (LAB_ONLY, allowlist), sem
+    `authorization_ref` e sem auditoria. Quem tinha shell na imagem escaneava fora do
+    escopo e não ficava rastro. Lê o escopo gravado pela tela (`aplicar`), como o
+    worker, e falha fechado: sem banco não há trilha, e sem trilha não há scan.
+    Devolve a lista efetiva de scanners. Levanta `GateRecusado`.
+    """
+    from orchestrator.api.routers.scans import gates_do_scan, scanners_do_scan
+    from orchestrator.audit import log_audit_event
+    from orchestrator.persistence.db import init_db, session
+    from orchestrator.runtime_settings import aplicar
+
+    try:
+        await init_db()
+        async with session() as s:
+            await aplicar(s)
+    except Exception as e:  # noqa: BLE001  banco fora: sem escopo da tela e sem trilha
+        raise _ErroDeAuditoria(str(e)) from e
+    gates_do_scan(t.value, t.asset_type.value, authorization_ref)
+    nomes = scanners_do_scan(None, t.asset_type, profile)
+    try:
+        async with session() as s:
+            await log_audit_event(
+                s,
+                action="scan.create",
+                actor=_ator_da_cli(),
+                resource_type="scan",
+                resource_id=scan_id,
+                authorization_ref=authorization_ref,
+                metadata={
+                    "target_value": t.value,
+                    "target_asset_type": t.asset_type.value,
+                    "profile": profile,
+                    "scanners": nomes,
+                    "lab_only": settings.LAB_ONLY,
+                    "via": "cai scan",
+                },
+            )
+            await s.commit()
+    except Exception as e:  # noqa: BLE001
+        raise _ErroDeAuditoria(str(e)) from e
+    return nomes
+
+
+class _ErroDeAuditoria(RuntimeError):
+    """O banco não respondeu: sem escopo gravado e sem trilha, o scan não roda."""
+
+
+def _ator_da_cli() -> str:
+    import getpass
+
+    try:
+        return f"cli:{getpass.getuser()}"
+    except Exception:  # noqa: BLE001  sem usuário no ambiente (container sem /etc/passwd)
+        return "cli:desconhecido"
+
+
 @app.command()
 def scan(
-    target: Annotated[str, typer.Argument(help="URL ou host alvo")],
-    asset_type: Annotated[str, typer.Option(help="host|url|domain")] = "url",
+    target: Annotated[str, typer.Argument(help="URL, host, domínio, imagem ou repositório")],
+    asset_type: Annotated[str, typer.Option(help=_TIPOS)] = "url",
     criticality: Annotated[str, typer.Option(help="info|low|medium|high|critical")] = "medium",
     contains_pii: Annotated[
-        bool, typer.Option(help="alvo trata dados pessoais (rota AI local)")
+        bool,
+        typer.Option(
+            help="marca o alvo como tratando dado pessoal; vai como contexto para a "
+            "triagem. Não troca o modelo: para IA local, configure LLM_API_BASE",
+        ),
     ] = False,
     skip_ai: Annotated[bool, typer.Option(help="pula triagem AI")] = False,
     active_zap: Annotated[bool, typer.Option(help="ZAP active scan (mais agressivo)")] = False,
@@ -61,8 +130,21 @@ def scan(
             "porque active scan sem ajax nao acha nada numa SPA.",
         ),
     ] = None,
+    authorization_ref: Annotated[
+        str | None,
+        typer.Option(
+            help="referência da autorização (ticket, change); obrigatória com "
+            "REQUIRE_AUTH_REF=true. Vai para a trilha de auditoria",
+        ),
+    ] = None,
 ) -> None:
-    """Roda Nmap + ZAP contra o alvo, triagem AI e gera relatorio HTML."""
+    """Roda os scanners do tipo do alvo, triagem AI e gera relatorio HTML.
+
+    Passa pelos mesmos gates do POST /scans (escopo, authorization_ref) e grava
+    `scan.create` no audit_log antes de começar.
+    """
+    from orchestrator.api.routers.scans import GateRecusado
+
     _setup_logging()
 
     t = Target(
@@ -71,16 +153,34 @@ def scan(
         criticality=Severity(criticality),
         contains_pii=contains_pii,
     )
-
-    console.print(f"[bold cyan]CAI[/] starting scan against [bold]{t.value}[/]")
-    console.print(f"  asset_type={t.asset_type} criticality={t.criticality} pii={t.contains_pii}")
-    console.print()
-
+    scan_id = uuid4()
     # ajax acompanha o active por default: numa SPA (Juice Shop e cia.) o active scan
     # sem o ajax spider nao enxerga rota nenhuma e o relatorio sai vazio.
     ajax_on = active_zap if ajax is None else ajax
     options = {"zap": {"active": active_zap, "ajax": ajax_on}}
-    result = asyncio.run(run_scan(t, skip_ai=skip_ai, options=options))
+
+    async def _tudo() -> ScanResult:
+        # Um loop só: o engine do banco prende a conexão ao loop que a abriu.
+        nomes = await _gates_e_auditoria(t, authorization_ref, None, scan_id)
+        console.print(f"[bold cyan]CAI[/] starting scan against [bold]{t.value}[/]")
+        console.print(
+            f"  asset_type={t.asset_type} criticality={t.criticality} pii={t.contains_pii}"
+        )
+        console.print(f"  scanners={nomes} scan_id={scan_id}")
+        console.print()
+        return await run_scan(t, scanners=nomes, skip_ai=skip_ai, options=options, scan_id=scan_id)
+
+    try:
+        result = asyncio.run(_tudo())
+    except GateRecusado as e:
+        console.print(f"[red]scan recusado ({e.status}):[/] {e.detalhe}")
+        raise typer.Exit(2) from e
+    except _ErroDeAuditoria as e:
+        console.print(
+            f"[red]scan recusado:[/] não consegui gravar a trilha de auditoria ({e}). "
+            "Sem auditoria o scan não roda."
+        )
+        raise typer.Exit(2) from e
 
     table = Table(title="Findings — resumo")
     table.add_column("Tool")
@@ -187,7 +287,6 @@ def bundle(
 ) -> None:
     """Gera AI Fix Bundle (JSON) pra outra IA consumir e patchar código."""
     import json
-    from uuid import UUID
 
     from orchestrator.reporting.exporters.ai_bundle import build_bundle
 

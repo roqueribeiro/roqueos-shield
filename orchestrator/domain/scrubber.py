@@ -65,6 +65,33 @@ _COOKIE_HEADER: Final[Pattern[str]] = re.compile(
 )
 
 
+# Tokens do GitHub: clássico/OAuth/usuário/servidor/refresh (`ghp_`, `gho_`, `ghu_`,
+# `ghs_`, `ghr_`) e fine-grained (`github_pat_`). O gitleaks e o trufflehog acham
+# esses tokens em repo; sem este padrão o token passava intacto para o LLM externo e
+# para o AI Fix Bundle.
+_GITHUB_TOKEN: Final[Pattern[str]] = re.compile(
+    r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b"
+)
+
+# Tokens do Slack: bot, user, app-level, refresh, legacy (`xoxb-`, `xoxp-`, `xoxa-`,
+# `xoxr-`, `xoxs-`).
+_SLACK_TOKEN: Final[Pattern[str]] = re.compile(r"\bxox[abprs]-[A-Za-z0-9\-]{10,}")
+
+# Atribuição de senha/segredo em código, config, query string ou log:
+# `password=...`, `"db_password": "..."`, `secret: ...`, `api_key=...`, `passwd ...`.
+# A chave fica (o LLM precisa saber QUE havia um segredo ali); só o valor some.
+# O valor que já virou placeholder (`<JWT>`, `<AWS_KEY>`) começa com `<` e não casa,
+# então a ordem com os padrões específicos acima não destrói a informação deles.
+# `(?!=)` evita tratar comparação (`password == x`) como atribuição.
+_SECRET_ASSIGNMENT: Final[Pattern[str]] = re.compile(
+    r"(\b\w*(?:password|passwd|passwort|senha|pwd|secret|api[_\-]?key|apikey|"
+    r"access[_\-]?key|private[_\-]?key|auth[_\-]?token|access[_\-]?token|"
+    r"client[_\-]?secret)\w*[\"']?\s*[:=](?!=)\s*)"
+    r"(\"[^\"\r\n]*\"|'[^'\r\n]*'|[^\s\"',;&<>]+)",
+    re.IGNORECASE,
+)
+
+
 def _luhn_check(num: str) -> bool:
     """Valida cartão pelo algoritmo de Luhn. Reduz falso positivo no PAN."""
     digits = [int(d) for d in num if d.isdigit()]
@@ -103,6 +130,9 @@ def scrub(text: str) -> str:
     out = _COOKIE_HEADER.sub(lambda m: f"{m.group(1)}<REDACTED_COOKIE>", out)
     out = _JWT.sub("<JWT>", out)
     out = _AWS_KEY.sub("<AWS_KEY>", out)
+    out = _GITHUB_TOKEN.sub("<GITHUB_TOKEN>", out)
+    out = _SLACK_TOKEN.sub("<SLACK_TOKEN>", out)
+    out = _SECRET_ASSIGNMENT.sub(lambda m: f"{m.group(1)}<REDACTED_SECRET>", out)
     out = _PAN.sub(_redact_pan, out)
     out = _CVV.sub(lambda m: m.group(0).replace(m.group(1), "<CVV>"), out)
     out = _CNPJ.sub("<CNPJ>", out)

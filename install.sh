@@ -15,7 +15,7 @@
 #   ROQUESHIELD_PORT       / ROQUESHIELD_PORTA      port on your computer (8080)
 #   ROQUESHIELD_VERSION    / ROQUESHIELD_VERSAO     image version (this script's)
 #   ROQUESHIELD_NAME       / ROQUESHIELD_NOME       container and volume name (roqueshield)
-#   ROQUESHIELD_NO_BROWSER / ROQUESHIELD_NAO_ABRIR  set to 1 to not open the browser
+#   ROQUESHIELD_NO_BROWSER / ROQUESHIELD_NAO_ABRIR  1, true or yes to not open the browser
 #
 # What it does NOT do: publish the port beyond your computer (it listens on 127.0.0.1),
 # ask for sudo, install Docker, or touch anything outside its container and volume.
@@ -37,6 +37,41 @@ ok() { printf '    %s✓%s %s\n' "$V" "$R" "$*"; }
 aviso() { printf '    %s!%s %s\n' "$A" "$R" "$*"; }
 morre() { printf '\n%s%s%s %s\n' "$E" "$(tr_ 'Não deu:' 'Could not finish:')" "$R" "$*" >&2; exit 1; }
 
+# The help comes from here and not from reading this file: under `curl | sh`, $0 is the
+# shell, not the script, and there is no file to read.
+ajuda() {
+  cat <<'FIM'
+RoqueShield standalone in one command / em um comando:
+
+  curl -fsSL https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/install.sh | sh
+
+Update to this script's version, keeping your data / Atualizar mantendo os dados:
+
+  curl -fsSL https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/install.sh | sh -s -- --update
+
+Options / Opções:
+  --update       / --atualizar   replace the container with this script's version (data stays)
+  --no-browser   / --nao-abrir   do not open the browser
+  -h, --help                     this text
+
+Optional variables (English or Portuguese names):
+  ROQUESHIELD_PORT       / ROQUESHIELD_PORTA      port on your computer (8080)
+  ROQUESHIELD_VERSION    / ROQUESHIELD_VERSAO     image version (this script's)
+  ROQUESHIELD_NAME       / ROQUESHIELD_NOME       container and volume name (roqueshield)
+  ROQUESHIELD_NO_BROWSER / ROQUESHIELD_NAO_ABRIR  1, true or yes to not open the browser
+
+It listens on 127.0.0.1 only, does not ask for sudo, does not install Docker, and does
+not touch anything outside its container and volume.
+FIM
+}
+
+ligado() {
+  case "$1" in
+    1|[Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 configurar() {
   case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in
     pt*) PT=1 ;;
@@ -51,15 +86,24 @@ configurar() {
   VERSAO="${ROQUESHIELD_VERSION:-${ROQUESHIELD_VERSAO:-$VERSAO_PADRAO}}"
   PORTA="${ROQUESHIELD_PORT:-${ROQUESHIELD_PORTA:-8080}}"
   NOME="${ROQUESHIELD_NAME:-${ROQUESHIELD_NOME:-roqueshield}}"
-  NAO_ABRIR="${ROQUESHIELD_NO_BROWSER:-${ROQUESHIELD_NAO_ABRIR:-}}"
+  # Only 1/true/yes turn it on: before, any non-empty value did, so
+  # ROQUESHIELD_NO_BROWSER=0 or =false kept the browser closed.
+  pedido_nao_abrir="${ROQUESHIELD_NO_BROWSER:-${ROQUESHIELD_NAO_ABRIR:-}}"
+  if ligado "$pedido_nao_abrir"; then
+    NAO_ABRIR=1
+  else
+    NAO_ABRIR=0
+    case "$pedido_nao_abrir" in
+      ""|0|[Ff][Aa][Ll][Ss][Ee]|[Nn][Oo]) ;;
+      *) aviso "$(tr_ "ROQUESHIELD_NO_BROWSER='$pedido_nao_abrir' não é 1/true/yes; o navegador vai abrir." "ROQUESHIELD_NO_BROWSER='$pedido_nao_abrir' is not 1/true/yes; the browser will open.")" ;;
+    esac
+  fi
   ATUALIZAR=0
   for arg in "$@"; do
     case "$arg" in
       --update|--atualizar) ATUALIZAR=1 ;;
       --no-browser|--nao-abrir) NAO_ABRIR=1 ;;
-      -h|--help)
-        sed -n '2,21p' "$0" 2>/dev/null || printf '%s\n' "$SCRIPT_URL"
-        exit 0 ;;
+      -h|--help) ajuda; exit 0 ;;
       *) morre "$(tr_ "opção desconhecida: $arg (use --update ou --no-browser)" "unknown option: $arg (use --update or --no-browser)")" ;;
     esac
   done
@@ -230,7 +274,7 @@ primeiro_uso() {
   fi
 
   abriu=0
-  if [ -z "$NAO_ABRIR" ]; then
+  if [ "$NAO_ABRIR" != 1 ]; then
     if [ -z "$codigo" ]; then
       abrir_com "$URL" && abriu=1
     else

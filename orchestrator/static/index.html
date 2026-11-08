@@ -3,38 +3,59 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CAI — Continuous AI Security</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            bg: '#0b1220', panel: '#111a2c', border: '#1e293b',
-            accent: '#3b82f6', accent2: '#8b5cf6',
-            ok: '#10b981', warn: '#f59e0b', down: '#ef4444', muted: '#64748b',
-          }
-        }
-      }
-    }
-  </script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="styles.css" />
+  <title>RoqueShield · Dashboard</title>
+  <!-- Tudo do mesmo endereço, sob o CSP do /ui: nada de CDN, nada de script inline.
+       Alpine é o build CSP (sem eval); o CSS do Tailwind sai pronto de tailwind/. -->
+  <link rel="stylesheet" href="styles.css" integrity="sha384-dqVr91tM4fnmsy9kctd3TutozSz5rCMlqq1/f/VJULRTjUHeU7oYERRoTKz7qMRT" />
+  <script src="vendor/chart-4.4.0.umd.min.js" integrity="sha384-FcQlsUOd0TJjROrBxhJdUhXTUgNJQxTMcxZe6nHbaEfFL1zjQ+bq/uRoBQxb0KMo"></script>
+  <script src="app.js"></script>
+  <script defer src="vendor/alpinejs-csp-3.17.5.min.js" integrity="sha384-Q4UOujiwqAb/jTt3ki4pdkETk4I3rIFQX8h271PLI41okj/YIKY7IQQFMw73wkrX"></script>
 </head>
 <body class="bg-bg text-slate-200 min-h-screen font-sans antialiased">
 
-<div x-data="dashboard()" x-init="init()" class="flex h-screen overflow-hidden">
+<div x-data="dashboard" x-cloak>
+
+  <!-- Entrada: sessão por cookie HttpOnly (rs_session), nunca token no navegador -->
+  <div x-show="screen === 'login'" class="min-h-screen flex items-center justify-center p-6">
+    <form @submit.prevent="submitLogin" class="w-full max-w-sm bg-panel border border-border rounded-lg p-6 space-y-4">
+      <div>
+        <div class="font-semibold">RoqueShield</div>
+        <div class="text-xs text-muted mt-1" x-text="loginTitle()"></div>
+      </div>
+      <label class="block text-xs text-muted">E-mail
+        <input x-model="form.email" type="email" autocomplete="username" required
+               class="mt-1 w-full px-3 py-2 text-sm rounded bg-bg border border-border focus:border-accent focus:outline-none" />
+      </label>
+      <label x-show="needsSetup" class="block text-xs text-muted">Nome
+        <input x-model="form.name" type="text" autocomplete="name"
+               class="mt-1 w-full px-3 py-2 text-sm rounded bg-bg border border-border focus:border-accent focus:outline-none" />
+      </label>
+      <label class="block text-xs text-muted">Senha
+        <input x-model="form.password" type="password" autocomplete="current-password" required
+               class="mt-1 w-full px-3 py-2 text-sm rounded bg-bg border border-border focus:border-accent focus:outline-none" />
+      </label>
+      <label x-show="needsSetup" class="block text-xs text-muted">Código de primeiro uso
+        <input x-model="form.setup_code" type="password" autocomplete="off"
+               class="mt-1 w-full px-3 py-2 text-sm rounded bg-bg border border-border focus:border-accent focus:outline-none" />
+        <span class="block mt-1 text-[10px]">docker exec &lt;container&gt; cat /data/secrets/SETUP_CODE</span>
+      </label>
+      <div x-show="loginError" class="text-xs text-down" x-text="loginError"></div>
+      <button type="submit" :disabled="busy"
+              class="w-full px-3 py-2 text-sm rounded bg-accent text-white hover:bg-accent/90 transition"
+              x-text="submitLabel()"></button>
+    </form>
+  </div>
+
+  <div x-show="screen === 'app'" class="flex h-screen overflow-hidden">
 
   <!-- Sidebar -->
   <aside class="w-60 bg-panel border-r border-border flex flex-col">
     <div class="px-5 py-4 border-b border-border">
       <div class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-accent2 flex items-center justify-center font-bold">C</div>
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-accent2 flex items-center justify-center font-bold">R</div>
         <div>
-          <div class="font-semibold text-sm">CAI</div>
-          <div class="text-xs text-muted">Continuous AI Security</div>
+          <div class="font-semibold text-sm">RoqueShield</div>
+          <div class="text-xs text-muted">Dashboard</div>
         </div>
       </div>
     </div>
@@ -42,7 +63,7 @@
     <nav class="flex-1 py-3">
       <template x-for="t in tabs" :key="t.id">
         <button
-          @click="activeTab = t.id"
+          @click="selectTab(t.id)"
           :class="activeTab === t.id ? 'bg-accent/10 text-accent border-l-2 border-accent' : 'text-slate-400 hover:bg-panel/60 border-l-2 border-transparent'"
           class="w-full text-left px-5 py-2.5 text-sm flex items-center gap-3 transition">
           <span x-text="t.icon" class="text-lg"></span>
@@ -57,7 +78,7 @@
         <span :class="overallStatus === 'ok' ? 'bg-ok' : 'bg-warn'" class="w-1.5 h-1.5 rounded-full"></span>
         <span x-text="overallStatus === 'ok' ? 'Stack saudável' : 'Stack degradada'"></span>
       </div>
-      <div class="mt-1 truncate" x-text="`v${version || '...'} · ${nowFmt()}`"></div>
+      <div class="mt-1 truncate" x-text="footerText()"></div>
     </div>
   </aside>
 
@@ -65,19 +86,15 @@
   <main class="flex-1 overflow-y-auto">
     <header class="sticky top-0 z-10 bg-bg/80 backdrop-blur border-b border-border px-8 py-4 flex items-center justify-between">
       <div>
-        <h1 class="text-xl font-semibold" x-text="tabs.find(t => t.id === activeTab)?.label"></h1>
-        <p class="text-xs text-muted mt-0.5" x-text="tabs.find(t => t.id === activeTab)?.subtitle"></p>
+        <h1 class="text-xl font-semibold" x-text="currentTab().label"></h1>
+        <p class="text-xs text-muted mt-0.5" x-text="currentTab().subtitle"></p>
       </div>
       <div class="flex items-center gap-2">
-        <button @click="refresh()" class="px-3 py-1.5 text-xs rounded bg-panel border border-border hover:border-accent transition flex items-center gap-1.5">
+        <button @click="refresh" class="px-3 py-1.5 text-xs rounded bg-panel border border-border hover:border-accent transition flex items-center gap-1.5">
           <span>↻</span> <span>Atualizar</span>
         </button>
-        <input
-          x-model="token"
-          @change="saveToken()"
-          type="password"
-          placeholder="X-API-Token"
-          class="px-3 py-1.5 text-xs rounded bg-panel border border-border focus:border-accent focus:outline-none w-56" />
+        <span class="text-xs text-muted" x-text="account.email"></span>
+        <button @click="logout" class="px-3 py-1.5 text-xs rounded bg-panel border border-border hover:border-accent transition">Sair</button>
       </div>
     </header>
 
@@ -90,7 +107,7 @@
         <div>
           <h2 class="text-xs uppercase tracking-wider text-muted mb-3">Stack health</h2>
           <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            <template x-for="c in health.components || []" :key="c.name">
+            <template x-for="c in healthComponents()" :key="c.name">
               <div class="bg-panel border border-border rounded-lg p-3">
                 <div class="flex items-center justify-between mb-1">
                   <span class="text-xs text-muted uppercase" x-text="c.name"></span>
@@ -101,7 +118,7 @@
                   }" class="text-xs px-2 py-0.5 rounded" x-text="c.status"></span>
                 </div>
                 <div class="text-sm font-mono" x-text="c.latency_ms + 'ms'"></div>
-                <div class="text-xs text-muted mt-1 truncate" x-text="c.detail?.error || c.detail?.version || (c.detail?.models || []).join(', ') || (c.detail?.keys_configured || []).join(', ') || ''"></div>
+                <div class="text-xs text-muted mt-1 truncate" x-text="componentDetail(c)"></div>
               </div>
             </template>
           </div>
@@ -111,17 +128,17 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div class="bg-panel border border-border rounded-lg p-4">
             <div class="text-xs uppercase tracking-wider text-muted mb-1">AI Calls</div>
-            <div class="text-2xl font-semibold" x-text="aiStats.total ?? 0"></div>
-            <div class="text-xs text-muted">total · success rate <span x-text="((aiStats.success_rate ?? 1) * 100).toFixed(0) + '%'"></span></div>
+            <div class="text-2xl font-semibold" x-text="aiTotal()"></div>
+            <div class="text-xs text-muted">total · success rate <span x-text="aiSuccessRate()"></span></div>
           </div>
           <div class="bg-panel border border-border rounded-lg p-4">
             <div class="text-xs uppercase tracking-wider text-muted mb-1">Latência LLM</div>
-            <div class="text-2xl font-semibold"><span x-text="aiStats.latency_p50 ?? 0"></span><span class="text-sm text-muted">ms p50</span></div>
-            <div class="text-xs text-muted"><span x-text="aiStats.latency_p95 ?? 0"></span>ms p95</div>
+            <div class="text-2xl font-semibold"><span x-text="aiLatency('latency_p50')"></span><span class="text-sm text-muted">ms p50</span></div>
+            <div class="text-xs text-muted"><span x-text="aiLatency('latency_p95')"></span>ms p95</div>
           </div>
           <div class="bg-panel border border-border rounded-lg p-4">
             <div class="text-xs uppercase tracking-wider text-muted mb-1">Fallback rate</div>
-            <div class="text-2xl font-semibold"><span x-text="((aiStats.fallback_rate ?? 0) * 100).toFixed(1)"></span><span class="text-sm text-muted">%</span></div>
+            <div class="text-2xl font-semibold"><span x-text="aiFallbackRate()"></span><span class="text-sm text-muted">%</span></div>
             <div class="text-xs text-muted">primário caiu pra fallback</div>
           </div>
         </div>
@@ -164,20 +181,20 @@
                 <td class="text-xs">
                   <div class="flex items-center gap-2">
                     <span x-text="s.current_phase || '-'"></span>
-                    <span x-show="s.phase_progress !== null" class="text-muted" x-text="`(${s.phase_progress}%)`"></span>
+                    <span x-show="s.phase_progress !== null" class="text-muted" x-text="'(' + s.phase_progress + '%)'"></span>
                   </div>
                 </td>
                 <td class="text-right font-mono text-xs" x-text="s.total_findings"></td>
                 <td class="text-right">
                   <span class="inline-flex gap-1 text-xs">
-                    <span x-show="s.severity_counts.critical" class="px-1.5 rounded bg-down/30 text-down" x-text="`C ${s.severity_counts.critical}`"></span>
-                    <span x-show="s.severity_counts.high" class="px-1.5 rounded bg-warn/30 text-warn" x-text="`H ${s.severity_counts.high}`"></span>
-                    <span x-show="s.severity_counts.medium" class="px-1.5 rounded bg-accent/30 text-accent" x-text="`M ${s.severity_counts.medium}`"></span>
+                    <span x-show="s.severity_counts.critical" class="px-1.5 rounded bg-down/30 text-down" x-text="'C ' + s.severity_counts.critical"></span>
+                    <span x-show="s.severity_counts.high" class="px-1.5 rounded bg-warn/30 text-warn" x-text="'H ' + s.severity_counts.high"></span>
+                    <span x-show="s.severity_counts.medium" class="px-1.5 rounded bg-accent/30 text-accent" x-text="'M ' + s.severity_counts.medium"></span>
                   </span>
                 </td>
                 <td class="text-right text-xs text-muted" x-text="fmtTime(s.started_at)"></td>
                 <td class="text-right pr-3">
-                  <a :href="`cockpit.html?scan_id=${s.id}&token=${encodeURIComponent(token)}`" class="text-xs text-accent hover:underline">cockpit →</a>
+                  <a :href="cockpitUrl(s)" class="text-xs text-accent hover:underline">cockpit →</a>
                 </td>
               </tr>
             </template>
@@ -210,7 +227,7 @@
                 </td>
                 <td class="text-xs font-mono truncate max-w-xs" x-text="r.model"></td>
                 <td class="text-right text-xs font-mono" x-text="r.latency_ms + 'ms'"></td>
-                <td class="text-right text-xs font-mono text-muted" x-text="`${r.prompt_tokens}/${r.completion_tokens}`"></td>
+                <td class="text-right text-xs font-mono text-muted" x-text="r.prompt_tokens + '/' + r.completion_tokens"></td>
                 <td class="text-right text-xs font-mono text-muted" x-text="r.finding_count || '-'"></td>
                 <td class="text-center">
                   <span :class="r.success ? 'text-ok' : 'text-down'" x-text="r.success ? '✓' : '✗'"></span>
@@ -230,13 +247,13 @@
             <span :class="sseConnected ? 'bg-ok animate-pulse' : 'bg-warn'" class="inline-block w-1.5 h-1.5 rounded-full mr-1"></span>
             <span x-text="sseConnected ? 'Conectado · streaming' : 'Desconectado'"></span>
           </span>
-          <button @click="logs = []" class="text-muted hover:text-slate-300">limpar</button>
+          <button @click="clearLogs" class="text-muted hover:text-slate-300">limpar</button>
           <input x-model="logFilter" placeholder="filtrar (event/level/...)" class="ml-auto px-2 py-1 text-xs rounded bg-panel border border-border focus:border-accent focus:outline-none w-72" />
         </div>
         <div class="bg-panel border border-border rounded-lg p-3 font-mono text-xs h-[60vh] overflow-y-auto" id="logsEl">
           <template x-for="l in logsFiltered()" :key="l._key">
             <div class="py-0.5 flex gap-2">
-              <span class="text-muted shrink-0" x-text="l.timestamp?.slice(11, 19) || '--:--:--'"></span>
+              <span class="text-muted shrink-0" x-text="logTime(l, '--:--:--')"></span>
               <span :class="logLevelColor(l.level)" class="shrink-0 w-12 uppercase text-[10px] mt-0.5" x-text="l.level || 'log'"></span>
               <span class="text-accent2 shrink-0" x-text="l.event"></span>
               <span class="text-slate-400 truncate" x-text="logRest(l)"></span>
@@ -248,8 +265,8 @@
 
     </div>
   </main>
+  </div>
 </div>
 
-<script src="app.js"></script>
 </body>
 </html>

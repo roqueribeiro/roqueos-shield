@@ -216,15 +216,33 @@ if settings.OIDC_ISSUER and settings.OIDC_CLIENT_ID and settings.OIDC_CLIENT_SEC
     )
 
 # Cabeçalhos de segurança da tela e da API. A CSP vale para a tela (tudo do mesmo
-# endereço, nada de CDN). Ficam sem CSP o /docs e o /redoc do FastAPI e o dashboard
-# antigo em /ui (só servido sem o build da tela), que carregam script de CDN.
+# endereço, nada de CDN). Ficam sem CSP só o /docs e o /redoc do FastAPI, que carregam
+# o Swagger/ReDoc de CDN.
 # `frame-ancestors 'none'` + X-Frame-Options valem para tudo: ninguém embute o shield.
 _CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; "
     "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 )
-_SEM_CSP = ("/docs", "/redoc", "/ui")
+# O dashboard antigo em /ui (só servido sem o build da tela) tem a CSP mais estrita da
+# casa: libs vendorizadas em static/vendor, Alpine no build CSP (sem eval), Tailwind
+# compilado em styles.css, nenhum script ou estilo inline. Até a issue #10 ele ficava
+# isento, porque puxava Tailwind play-cdn (que exige 'unsafe-eval'), Alpine e Chart.js
+# de CDN sem SRI, e guardava o token em localStorage.
+_CSP_UI = (
+    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+    "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+    "form-action 'self'; frame-ancestors 'none'"
+)
+_SEM_CSP = ("/docs", "/redoc")
+
+
+def _csp_para(caminho: str) -> str | None:
+    if caminho == "/ui" or caminho.startswith("/ui/"):
+        return _CSP_UI
+    if caminho.startswith(_SEM_CSP):
+        return None
+    return _CSP
 
 
 class CabecalhosDeSeguranca:
@@ -238,7 +256,7 @@ class CabecalhosDeSeguranca:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        com_csp = not str(scope.get("path", "")).startswith(_SEM_CSP)
+        csp = _csp_para(str(scope.get("path", "")))
 
         async def enviar(msg: Any) -> None:
             if msg["type"] == "http.response.start":
@@ -248,8 +266,8 @@ class CabecalhosDeSeguranca:
                     (b"x-frame-options", b"DENY"),
                     (b"referrer-policy", b"no-referrer"),
                 ]
-                if com_csp:
-                    extra.append((b"content-security-policy", _CSP.encode()))
+                if csp is not None:
+                    extra.append((b"content-security-policy", csp.encode()))
                 msg["headers"] = list(msg.get("headers", [])) + [
                     (k, v) for k, v in extra if k not in nomes
                 ]

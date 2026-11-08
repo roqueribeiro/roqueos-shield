@@ -1,18 +1,29 @@
-# CAI — base compose. Sobe orchestrator + Postgres + Redis + Ollama.
+# CAI: base compose. Sobe orchestrator + worker + Postgres + Redis.
 #
 # Profiles:
-#   default      orchestrator + db + redis + ollama
+#   default      orchestrator + worker + db + redis
+#   ollama       Ollama local com reserva de GPU NVIDIA (fora do default: numa máquina
+#                sem GPU NVIDIA o `up` inteiro falhava em "could not select device
+#                driver nvidia"). No Mac, rode o Ollama nativo e aponte
+#                OLLAMA_BASE_URL para http://host.docker.internal:11434.
 #   scanners     ZAP + Trivy + kali-toolbox
 #   greenbone    stack Greenbone Community (~5GB feed sync inicial)
 #   lab          alvos vulneráveis (Juice Shop, DVWA, WebGoat)
 #   obs          Phoenix tracing
 #   ai-agent     cai-expert (Fase 4)
 #
-# Uso (Makefile esconde os flags):
-#   docker compose -f docker/compose.yml \
+# Uso (Makefile esconde os flags). O --env-file e o --project-directory são
+# obrigatórios: com -f docker/..., o compose procuraria o .env em docker/.
+#   docker compose --env-file .env --project-directory docker \
+#                  -f docker/compose.yml \
 #                  -f docker/compose.scanners.yml \
 #                  -f docker/compose.lab.yml \
-#                  --profile scanners --profile lab up -d
+#                  --profile default --profile scanners --profile lab up -d
+#
+# Raiz só de leitura (Issue #12): orchestrator e worker sobem com read_only: true.
+# O que eles escrevem tem lugar próprio: /app/reports e /app/data (bind mounts),
+# /tmp (tmpfs: os mkdtemp dos adapters e o clone dos repos escaneados) e o HOME
+# (tmpfs: semgrep e nuclei gravam config e cache em ~/.semgrep e ~/.config).
 
 name: cai
 
@@ -29,12 +40,21 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    read_only: true
     env_file:
       - ../.env
     volumes:
       - ../reports:/app/reports
       - ../data:/app/data
       - ../config:/app/config:ro
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 268435456 # 256 MiB: o export de relatório monta o zip em /tmp
+      - type: tmpfs
+        target: /home/roqueos
+        tmpfs:
+          size: 67108864 # 64 MiB
     ports:
       - "127.0.0.1:8080:8080"
     networks:
@@ -51,6 +71,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 30s
     profiles:
       - default
       - scanners
@@ -62,18 +83,32 @@ services:
     image: cai-orchestrator:dev
     container_name: cai-worker
     # SEC-06 / Issue #12: não-root (UID 1000) e sem capability. Sem root, NET_RAW
-    # não chegaria ao processo de qualquer jeito: o nmap faz connect scan (-sT).
-    # Separar um worker só de nmap com raw socket continua em aberto na #12.
+    # não chegaria ao processo de qualquer jeito: o nmap faz connect scan (-sT -Pn).
+    # Decisão da #12 (08/11/2026): o worker separado só para o nmap, com NET_RAW e
+    # numa rede própria, NÃO vai ser feito. Ele só existiria para dar raw socket ao
+    # SYN scan, e o adapter não usa SYN scan. Se um dia usar, a capability volta num
+    # serviço próprio, nunca neste worker, que roda os outros catorze scanners.
+    # Sem healthcheck: o arq não expõe porta, e a fila parada aparece no /health da
+    # /health/full da API (redis) e no job que não sai de QUEUED.
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
+    read_only: true
     env_file:
       - ../.env
     volumes:
       - ../reports:/app/reports
       - ../data:/app/data
       - ../config:/app/config:ro
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 2147483648 # 2 GiB: o clone do repo escaneado mora aqui
+      - type: tmpfs
+        target: /home/roqueos
+        tmpfs:
+          size: 536870912 # 512 MiB: config e cache de semgrep, nuclei e trivy
     networks:
       - cai-net
     extra_hosts:
@@ -138,8 +173,7 @@ services:
     networks:
       - cai-net
     profiles:
-      - default
-      - ai-local
+      - ollama
 
 networks:
   cai-net:

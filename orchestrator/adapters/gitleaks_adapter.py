@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import shutil
 import tempfile
@@ -13,6 +14,7 @@ from uuid import uuid4
 import structlog
 
 from orchestrator.adapters.base import ScanIntegrityError
+from orchestrator.domain.scrubber import scrub
 from orchestrator.domain.schemas import (
     AssetType,
     Confidence,
@@ -26,6 +28,37 @@ from orchestrator.domain.schemas import (
 )
 
 log = structlog.get_logger(__name__)
+
+_PLACEHOLDER = "REDACTED"
+
+
+def _hash_segredo(item: dict[str, Any]) -> str | None:
+    """Discriminador de dedupe derivado do segredo sem guardar o segredo."""
+    segredo = item.get("Secret") or ""
+    if not segredo or segredo == _PLACEHOLDER:
+        return None
+    return "sha256:" + hashlib.sha256(segredo.encode()).hexdigest()[:16]
+
+
+def _match_sem_segredo(item: dict[str, Any]) -> str:
+    """`Match` do gitleaks sem a credencial em claro.
+
+    Com `--redact` o gitleaks já entrega `REDACTED` no lugar do segredo. Esta função
+    é a segunda camada: report de versão antiga, sem a flag, ou importado de fora
+    ainda traz o `Secret` dentro do `Match`, e ele é trocado aqui antes de virar
+    evidência. Se o `Secret` não estiver presente para localizar o trecho, o `Match`
+    inteiro é descartado: sem saber onde está o segredo não há como garantir que
+    ele saiu.
+    """
+    match = item.get("Match") or ""
+    segredo = item.get("Secret") or ""
+    if not match:
+        return ""
+    if segredo and segredo != _PLACEHOLDER:
+        return scrub(match.replace(segredo, _PLACEHOLDER))
+    if _PLACEHOLDER in match:
+        return scrub(match)
+    return f"<{_PLACEHOLDER}: trecho omitido, o report não indicou onde está o segredo>"
 
 
 class GitleaksAdapter:
@@ -101,6 +134,11 @@ class GitleaksAdapter:
                 "--report-path",
                 str(report_path),
                 "--no-banner",
+                # `--redact`: o gitleaks troca o segredo por "REDACTED" nos campos
+                # `Secret` e `Match` do report. O report fica no disco do shield e o
+                # Finding vai para o banco, o LLM e o AI Fix Bundle: nenhum deles
+                # precisa da credencial em claro para mandar rotacioná-la.
+                "--redact",
                 "--exit-code",
                 "0",  # achar leak não é "erro"
             ]
@@ -194,8 +232,10 @@ class GitleaksAdapter:
                     # mais ANTIGO, então o relatório mandava rotacionar a credencial
                     # de 2024 em vez da que está em produção. O fingerprint do
                     # gitleaks (ou o commit) separa as ocorrências.
+                    # O fallback no `Secret` vai como HASH: o discriminador é persistido
+                    # no Finding, e a credencial em claro não pode morar ali.
                     dedup_discriminator=(
-                        item.get("Fingerprint") or item.get("Commit") or item.get("Secret")
+                        item.get("Fingerprint") or item.get("Commit") or _hash_segredo(item)
                     ),
                     title=f"Secret detectado: {item.get('Description', rule)}",
                     description=(
@@ -207,7 +247,7 @@ class GitleaksAdapter:
                     evidence=[
                         Evidence(
                             description=f"Match na rule {rule}",
-                            snippet=(item.get("Match") or "")[:400],
+                            snippet=_match_sem_segredo(item)[:400],
                         )
                     ],
                 )

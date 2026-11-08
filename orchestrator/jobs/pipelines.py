@@ -96,26 +96,90 @@ _PROFILE_SCANNERS: dict[str, dict[AssetType, list[str]]] = {
 }
 
 
+# Os profiles que o pipeline sabe executar. `web`, `network` e `full` escolhem a lista
+# de scanners (`_PROFILE_SCANNERS`); `active` usa a lista padrão do tipo e liga o
+# active scan do ZAP (`apply_profile`, em `api/routers/scans.py`). Antes, qualquer
+# string passava: `exposure` e `cloud` eram aceitos por `POST /scans`, oferecidos
+# pelo MCP, gravados no scan, e rodavam a lista padrão como se fossem `web`. O
+# operador pedia OSINT e recebia um scan web passivo, sem aviso.
+PERFIS_DO_SCAN: tuple[str, ...] = ("web", "network", "full", "active")
+
+# Perfis que existem em outro lugar e por isso merecem um caminho na mensagem.
+_PERFIS_DE_OUTRO_PIPELINE: dict[str, str] = {
+    "exposure": "o OSINT roda por POST /exposure/scan (ou `cai exposure`), não por POST /scans",
+}
+
+# Chave de `scanners_skipped` quando nenhum scanner do pipeline aceita o alvo.
+SEM_SCANNER = "pipeline"
+
+
+class PerfilRecusado(ValueError):
+    """`profile` que o pipeline não executa. Recusar é melhor que rodar outra coisa."""
+
+
+def validar_perfil(profile: str | None) -> str:
+    """Normaliza o profile e recusa o que não existe, dizendo o que existe."""
+    p = (profile or "").strip().lower()
+    if p in PERFIS_DO_SCAN:
+        return p
+    aceitos = ", ".join(PERFIS_DO_SCAN)
+    if p in _PERFIS_DE_OUTRO_PIPELINE:
+        raise PerfilRecusado(
+            f"profile {p!r} não é um scan: {_PERFIS_DE_OUTRO_PIPELINE[p]} (aceitos: {aceitos})"
+        )
+    raise PerfilRecusado(f"profile {p!r} não existe (aceitos: {aceitos})")
+
+
 def resolve_scanners(
     requested: list[str] | None, asset_type: AssetType, profile: str | None = None
 ) -> list[str]:
     """A lista EFETIVA de scanners: pedido explícito > profile > default do tipo.
 
-    Sempre filtrada pelo que aceita o asset_type, e nunca vazia. É o que o scan roda
-    e o que fica em `requested_scanners` (o front mostra isso como "Scanners").
+    Sempre filtrada pelo que aceita o asset_type. Vazia quando nenhum scanner do
+    pipeline aceita o tipo (`k8s_resource`): quem chama recusa ou registra em
+    `scanners_skipped`. Os motivos estão em `resolve_scanners_com_motivo`.
     """
+    return resolve_scanners_com_motivo(requested, asset_type, profile)[0]
+
+
+def resolve_scanners_com_motivo(
+    requested: list[str] | None, asset_type: AssetType, profile: str | None = None
+) -> tuple[list[str], dict[str, str]]:
+    """Como `resolve_scanners`, e também o que ficou de fora e por quê.
+
+    O segundo item vai para `scanners_skipped`: scanner pedido com nome desconhecido,
+    scanner pedido que não aceita o tipo do alvo, e (com a chave `SEM_SCANNER`) o
+    caso em que nenhum scanner aceita o alvo. O fallback antigo para `["nmap"]`
+    mandava um k8s_resource para o nmap, que recusava o tipo: o scan fechava com
+    zero achados e parecia limpo.
+    """
+    pulados: dict[str, str] = {}
     if requested:
-        names = _supported_for(requested, asset_type)
-        if names:
-            return names
+        conhecidos: list[str] = []
+        for n in requested:
+            if n not in _SCANNER_ASSET_SUPPORT:
+                pulados[n] = (
+                    f"scanner desconhecido (o pipeline de scan constrói: "
+                    f"{', '.join(sorted(_SCANNER_ASSET_SUPPORT))})"
+                )
+            elif asset_type not in _SCANNER_ASSET_SUPPORT[n]:
+                pulados[n] = f"{n} não aceita asset_type {asset_type.value}"
+            else:
+                conhecidos.append(n)
+        if conhecidos:
+            return conhecidos, pulados
     by_profile = _PROFILE_SCANNERS.get((profile or "").strip().lower(), {}).get(asset_type)
     if by_profile:
         names = _supported_for(by_profile, asset_type)
         if names:
-            return names
-    return _supported_for(_DEFAULT_SCANNERS.get(asset_type, ["nmap", "zap"]), asset_type) or [
-        "nmap"
-    ]
+            return names, pulados
+    names = _supported_for(_DEFAULT_SCANNERS.get(asset_type, []), asset_type)
+    if not names:
+        pulados[SEM_SCANNER] = (
+            f"nenhum scanner do pipeline de scan aceita asset_type {asset_type.value}: "
+            "este alvo não foi verificado"
+        )
+    return names, pulados
 
 
 def _supported_for(names: list[str], asset_type: AssetType) -> list[str]:
@@ -130,8 +194,15 @@ def _supported_for(names: list[str], asset_type: AssetType) -> list[str]:
     return out
 
 
-def _build_adapters(names: list[str]) -> list[ScannerAdapter]:
-    """Instancia adapters a partir dos nomes pedidos; desconhecidos → warning."""
+def _build_adapters(
+    names: list[str], skipped: dict[str, str] | None = None
+) -> list[ScannerAdapter]:
+    """Instancia adapters a partir dos nomes pedidos.
+
+    Nome desconhecido não vira só log: com `skipped`, entra lá com o motivo (é o
+    `scanners_skipped` do resultado). Sem isso o scan pedia um scanner, não rodava, e
+    a cobertura saía completa.
+    """
     from orchestrator.adapters.checkov_adapter import CheckovAdapter
     from orchestrator.adapters.gitleaks_adapter import GitleaksAdapter
     from orchestrator.adapters.greenbone_adapter import GreenboneAdapter
@@ -164,6 +235,8 @@ def _build_adapters(names: list[str]) -> list[ScannerAdapter]:
         factory = factories.get(n)
         if factory is None:
             log.warning("scanner.unknown", scanner=n)
+            if skipped is not None:
+                skipped[n] = "scanner desconhecido: o pipeline de scan não sabe construí-lo"
             continue
         out.append(factory())
     return out
@@ -292,27 +365,38 @@ async def run_scan(
 
     Args:
         target: alvo da varredura.
-        adapters: lista de adapters; default = [Nmap, ZAP].
+        adapters: lista de adapters; None = resolve por `scanners`, profile e
+            asset_type (`resolve_scanners_com_motivo`).
         skip_ai: se True, pula AIAnalyzer (útil quando não há API key).
         options: dict por adapter — `{"nmap": {...}, "zap": {...}}`.
         scan_id: id do scan a ATUALIZAR (criado por POST /scans). None = cria novo.
     """
     scan_id = scan_id or uuid4()
     options = dict(options or {})
+    # O que ficou de fora já na resolução (nome desconhecido, tipo incompatível, alvo
+    # sem scanner) entra em `scanners_skipped` com o motivo, junto com o que falhar
+    # ao rodar. Sem scanner nenhum o scan termina `failed`: nada foi verificado.
+    pulados_na_resolucao: dict[str, str] = {}
     if adapters is None:
-        names = resolve_scanners(scanners, target.asset_type, profile)
-        log.info("scan.scanners_resolved", scanners=names, profile=profile)
-        adapters = _build_adapters(names)
-        if not adapters:
-            fallback = _DEFAULT_SCANNERS.get(target.asset_type, ["nmap"])
-            log.warning("scan.no_adapters_resolved", requested=names, fallback=fallback)
-            adapters = _build_adapters(fallback)
+        names, pulados_na_resolucao = resolve_scanners_com_motivo(
+            scanners, target.asset_type, profile
+        )
+        log.info(
+            "scan.scanners_resolved",
+            scanners=names,
+            profile=profile,
+            skipped=list(pulados_na_resolucao),
+        )
+        adapters = _build_adapters(names, pulados_na_resolucao)
     # Trivy: default internal scanners to vuln+secret+misconfig (CVEs + embedded
     # secrets + Dockerfile/IaC misconfig) unless the caller already set it.
     if any(getattr(a, "name", "") == "trivy" for a in adapters):
         options.setdefault("trivy", {}).setdefault("scanners", "vuln,secret,misconfig")
 
     result = ScanResult(scan_id=scan_id, target=target)
+    for nome, motivo in pulados_na_resolucao.items():
+        result.scanners_skipped[nome] = motivo
+        result.errors.append(f"{nome}: {motivo}")
     sid = str(scan_id)
     # Cria ScanRow upfront pra que AIRun.scan_id (FK) seja válido durante triage
     await _ensure_scan_row(scan_id, target)

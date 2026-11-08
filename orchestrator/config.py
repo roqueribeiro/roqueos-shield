@@ -26,11 +26,14 @@ class Settings(BaseSettings):
     # Se vazio + LLM_API_BASE setado, fallback "lm-studio".
     LLM_API_KEY: str = ""
     # SEC-03: quando o modelo primário é LOCAL (soberania de dados) e falha, o
-    # gateway pode cair no LLM_FALLBACK_MODEL cloud — o que manda os findings pro
+    # gateway pode cair no LLM_FALLBACK_MODEL cloud, o que manda os findings pro
     # provider externo. Isso fura o isolamento que o modo local existe pra garantir.
-    # True mantém o fallback (com log de aviso); em ambiente regulado, defina False
-    # para PROIBIR o cruzamento local→cloud (o scan falha em vez de vazar).
-    ALLOW_CLOUD_FALLBACK: bool = True
+    # Default False desde 08/11/2026: num produto para ambiente regulado, quem escolheu
+    # modelo local escolheu não mandar dado para fora, e a travessia calada era o
+    # padrão de quem não leu esta linha. False faz a triagem falhar em vez de vazar.
+    # True volta a permitir, sempre com log de aviso. Só afeta primário local
+    # (LLM_API_BASE definido); fallback de nuvem para nuvem não muda.
+    ALLOW_CLOUD_FALLBACK: bool = False
     # Modelo do LOOP AGÊNTICO (investigação). Separado do LLM_MODEL de propósito:
     # a triagem em massa pode rodar local barato (soberania), mas o loop com
     # ferramenta exige raciocínio e contexto grande — Qwen 27B q4 com 8-16k satura

@@ -4,6 +4,10 @@ Compliance gates aplicados em `create_scan`:
 - `validate_target_value` (H4/H5): rejeita argv injection e SSRF.
 - `REQUIRE_AUTH_REF`: força `authorization_ref` quando ativo (default off em dev).
 - `log_audit_event`: registra `scan.create` no audit_log append-only.
+
+Os dois primeiros e a escolha de scanners moram em `gates_do_scan` e
+`scanners_do_scan`, funções sem FastAPI que a CLI `cai scan` também chama: o mesmo
+gate em dois lugares é o que deixava a CLI rodar fora do escopo.
 """
 
 from __future__ import annotations
@@ -27,7 +31,12 @@ from orchestrator.domain.target_validator import (
     TargetValidationError,
     validate_target_value,
 )
-from orchestrator.jobs.pipelines import resolve_scanners
+from orchestrator.jobs.pipelines import (
+    PERFIS_DO_SCAN,
+    PerfilRecusado,
+    resolve_scanners_com_motivo,
+    validar_perfil,
+)
 from orchestrator.jobs.queue import _redis_settings
 from orchestrator.persistence.models import AIRun, FindingRow, ScanRow, ScanState, TargetRow
 
@@ -59,9 +68,15 @@ class AuthContext(BaseModel):
 
 class ScanIn(BaseModel):
     target_id: UUID
-    # web (passivo, default) | network | exposure | cloud | full/active (liga o
-    # active scan do ZAP: payloads reais de injection, mais lento e mais intrusivo).
-    profile: str = "web"
+    profile: str = Field(
+        default="web",
+        description=(
+            "web (passivo, default) | network | full | active. `full` e `active` ligam o "
+            "active scan do ZAP (payloads reais de injection). Outro valor é 422: "
+            "`exposure` roda por POST /exposure/scan."
+        ),
+        examples=list(PERFIS_DO_SCAN),
+    )
     scanners: list[str] | None = Field(
         default=None,
         description=(
@@ -139,6 +154,63 @@ def apply_profile(options: dict, profile: str) -> dict:
     return out
 
 
+class GateRecusado(Exception):
+    """Um gate do scan recusou. `status` é o HTTP que a API devolve (403 ou 422)."""
+
+    def __init__(self, status: int, detalhe: str) -> None:
+        super().__init__(detalhe)
+        self.status = status
+        self.detalhe = detalhe
+
+
+def gates_do_scan(target_value: str, asset_type: str, authorization_ref: str | None) -> None:
+    """Gates 1 e 2 do scan: escopo do alvo e referência de autorização.
+
+    Chamado pelo `POST /scans` e pela CLI `cai scan`. Levanta `GateRecusado`.
+    """
+    # Re-valida no momento do scan (target.value poderia ter sido inserido
+    # pre-allowlist em uma stack antiga sendo migrada).
+    try:
+        validate_target_value(target_value, asset_type=asset_type)
+    except TargetValidationError as e:
+        raise GateRecusado(403, f"target rejeitado pela policy: {e}") from e
+    if settings.REQUIRE_AUTH_REF and not authorization_ref:
+        raise GateRecusado(
+            403,
+            "authorization_ref e obrigatorio (REQUIRE_AUTH_REF=true). "
+            "Forneca o ticket/aprovacao formal do engagement.",
+        )
+
+
+def perfil_do_scan(profile: str | None) -> str:
+    """O profile normalizado, ou `GateRecusado(422)` para o que o pipeline não executa.
+
+    Antes qualquer string passava: `exposure` e `cloud` gravavam no scan e rodavam a
+    lista padrão do tipo, como se fossem `web`. Quem pedia OSINT recebia um scan web.
+    """
+    try:
+        return validar_perfil(profile)
+    except PerfilRecusado as e:
+        raise GateRecusado(422, str(e)) from e
+
+
+def scanners_do_scan(
+    scanners: list[str] | None, asset_type: AssetType, profile: str | None
+) -> list[str]:
+    """A lista efetiva de scanners, ou `GateRecusado(422)`.
+
+    Recusa scanner pedido que não existe ou não aceita o tipo do alvo, e alvo que
+    scanner nenhum aceita (`k8s_resource`). Antes os dois viravam outra coisa calada:
+    o scanner sumia num log e o k8s ia para o nmap, que o recusava. Zero achados,
+    cobertura completa. `profile=None` (a CLI `cai scan`) usa a lista padrão do tipo.
+    """
+    nomes, pulados = resolve_scanners_com_motivo(scanners, asset_type, profile)
+    if pulados:
+        motivos = "; ".join(f"{k}: {v}" for k, v in pulados.items())
+        raise GateRecusado(422, f"scanners recusados: {motivos}")
+    return nomes
+
+
 def redact_audit_auth(audit_body: dict) -> dict:
     """Redige os VALORES dos auth headers no request_body do audit, mantendo os
     NOMES (a auditoria precisa saber QUAIS headers, não o segredo)."""
@@ -163,21 +235,14 @@ async def create_scan(
     if target is None:
         raise HTTPException(404, "target não encontrado")
 
-    # Gate 1: validar target.value contra injecao de flag e SSRF.
-    # Re-valida no momento do scan (target.value poderia ter sido inserido
-    # pre-allowlist em uma stack antiga sendo migrada).
+    # Gates 1 e 2: escopo do alvo (injeção de flag, SSRF, LAB_ONLY, allowlist) e
+    # authorization_ref quando REQUIRE_AUTH_REF. E o profile e os scanners que existem.
     try:
-        validate_target_value(target.value, asset_type=target.asset_type)
-    except TargetValidationError as e:
-        raise HTTPException(403, f"target rejeitado pela policy: {e}") from e
-
-    # Gate 2: authorization_ref obrigatorio quando ativo (prod regulado).
-    if settings.REQUIRE_AUTH_REF and not body.authorization_ref:
-        raise HTTPException(
-            403,
-            "authorization_ref e obrigatorio (REQUIRE_AUTH_REF=true). "
-            "Forneca o ticket/aprovacao formal do engagement.",
-        )
+        gates_do_scan(target.value, target.asset_type, body.authorization_ref)
+        perfil = perfil_do_scan(body.profile)
+        effective_scanners = scanners_do_scan(body.scanners, AssetType(target.asset_type), perfil)
+    except GateRecusado as e:
+        raise HTTPException(e.status, e.detalhe) from e
 
     # Scanning autenticado: o segredo (auth.headers) NUNCA entra na tabela
     # `scans`. Helpers PUROS (testáveis) separam o que persiste do segredo
@@ -195,17 +260,16 @@ async def create_scan(
         except TargetValidationError as e:
             raise HTTPException(403, f"auth.openapi_url rejeitado pela policy: {e}") from e
     persisted_options, auth_headers, openapi_url = split_scan_auth(opcoes, body.auth)
-    persisted_options = apply_profile(persisted_options, body.profile)
-    # A lista EFETIVA (pedido > profile > default do tipo). O front não manda
-    # `scanners` e mostra `scanners_executed` no relatório: persistir [] deixaria a
-    # tela com "Scanners: —". Além disso é o que faz o profile da UI virar verdade.
-    effective_scanners = resolve_scanners(body.scanners, AssetType(target.asset_type), body.profile)
+    persisted_options = apply_profile(persisted_options, perfil)
+    # `effective_scanners` é a lista EFETIVA (pedido > profile > default do tipo). O
+    # front não manda `scanners` e mostra `scanners_executed` no relatório: persistir
+    # [] deixaria a tela com "Scanners: —".
     audit_body = redact_audit_auth(body.model_dump(mode="json"))
 
     scan = ScanRow(
         target_id=target.id,
         state=ScanState.PENDING.value,
-        profile=body.profile,
+        profile=perfil,
         requested_scanners=effective_scanners,
         options=persisted_options,
         actor=principal.email,
@@ -226,7 +290,7 @@ async def create_scan(
         metadata={
             "target_value": target.value,
             "target_asset_type": target.asset_type,
-            "profile": body.profile,
+            "profile": perfil,
             "scanners": effective_scanners,
             "lab_only": settings.LAB_ONLY,
         },
@@ -247,7 +311,7 @@ async def create_scan(
         options=persisted_options,
         actor=principal.email,
         scan_id=str(scan.id),
-        profile=body.profile,
+        profile=perfil,
         # Segredo efêmero: vai pro job (Redis, consumido) — NÃO pra `scans`.
         auth_headers=auth_headers or None,
         openapi_url=openapi_url,

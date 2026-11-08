@@ -1,12 +1,49 @@
-/* CAI dashboard — Alpine.js components.
+/* Dashboard antigo do RoqueShield em /ui (servido só quando não existe o build da
+ * tela nova em orchestrator/web_dist).
  *
- * Dois componentes:
- *   - dashboard()  — index.html (4 abas, polling 3s, charts)
- *   - cockpit()    — cockpit.html (1 scan, SSE phase + logs)
+ * Dois componentes Alpine (build CSP, sem eval, registrados por Alpine.data):
+ *   dashboard  em index.html  (4 abas, polling 3s, gráficos)
+ *   cockpit    em cockpit.html (1 scan, SSE de fase e logs)
+ *
+ * Autenticação: só o cookie HttpOnly `rs_session`, o mesmo da tela nova. O JavaScript
+ * não lê, não guarda e não manda token nenhum: o login é POST /auth/session (ou
+ * POST /setup no primeiro uso), o navegador guarda o cookie e o devolve sozinho no
+ * mesmo endereço, inclusive no EventSource do SSE. Escrita leva o cabeçalho
+ * X-RoqueShield, que o shield exige quando a credencial é o cookie (CSRF).
+ *
+ * O build CSP do Alpine só entende expressão simples no HTML (sem template string,
+ * arrow function, `?.` ou `??`): o que for mais que isso vira método aqui.
  */
 
 const POLL_MS = 3000;
-const TOKEN_KEY = 'cai_app_token';
+const CABECALHO_CSRF = 'X-RoqueShield';
+
+// -------------------- HTTP (cookie de sessão, nada de token) --------------------
+
+async function api(path, { method = 'GET', body } = {}) {
+  const headers = { Accept: 'application/json' };
+  if (method !== 'GET' && method !== 'HEAD') headers[CABECALHO_CSRF] = '1';
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const r = await fetch(path, {
+    method,
+    headers,
+    credentials: 'same-origin',
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  let data = null;
+  const tipo = r.headers.get('content-type') || '';
+  if (tipo.includes('application/json')) {
+    try { data = await r.json(); } catch { data = null; }
+  }
+  return { ok: r.ok, status: r.status, data };
+}
+
+function erroDe(resp) {
+  const d = resp.data && resp.data.detail;
+  if (typeof d === 'string') return d;
+  if (resp.status === 429) return 'muitas tentativas; espere um pouco';
+  return 'falhou (HTTP ' + resp.status + ')';
+}
 
 // -------------------- helpers globais --------------------
 
@@ -58,20 +95,53 @@ function logLevelColor(lvl) {
 }
 
 function logRest(l) {
-  // Mostra os campos extras (sem level/event/timestamp/_received_at)
-  const { level, event, timestamp, _received_at, ...rest } = l;
+  // Mostra os campos extras (sem level/event/timestamp/_received_at/_key)
+  const { level, event, timestamp, _received_at, _key, ...rest } = l;
   return Object.keys(rest).length ? JSON.stringify(rest) : '';
 }
 
+function logTime(l, vazio) {
+  return (l && l.timestamp) ? String(l.timestamp).slice(11, 19) : vazio;
+}
+
+let _seqLog = 0;
 function logKey(l) {
   // chave pra Alpine não duplicar em re-render
-  return `${l.timestamp || ''}-${l.event || ''}-${Math.random()}`;
+  _seqLog += 1;
+  return (l.timestamp || '') + '-' + (l.event || '') + '-' + _seqLog;
+}
+
+function abrirSSE(alvo, url, aoFase) {
+  // Mesmo endereço: o EventSource leva o cookie de sessão sozinho, sem ?token=.
+  const src = new EventSource(url);
+  src.addEventListener('open', () => { alvo.sseConnected = true; });
+  src.addEventListener('error', () => { alvo.sseConnected = false; });
+  src.addEventListener('log', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      data._key = logKey(data);
+      alvo.logs.push(data);
+      if (alvo.logs.length > 500) alvo.logs = alvo.logs.slice(-500);
+    } catch (err) { console.warn('log SSE ilegível', err); }
+  });
+  if (aoFase) {
+    src.addEventListener('phase', (e) => {
+      try { aoFase(JSON.parse(e.data)); } catch (err) { console.warn('fase SSE ilegível', err); }
+    });
+  }
+  return src;
 }
 
 // -------------------- Dashboard component --------------------
 
 function dashboard() {
   return {
+    screen: 'loading',
+    needsSetup: false,
+    busy: false,
+    loginError: '',
+    form: { email: '', name: '', password: '', setup_code: '' },
+    account: { email: '' },
     activeTab: 'dashboard',
     tabs: [
       { id: 'dashboard', icon: '◉', label: 'Dashboard', subtitle: 'Visão geral da stack e atividade', badge: null },
@@ -79,7 +149,6 @@ function dashboard() {
       { id: 'ai',        icon: '✦', label: 'AI Calls',  subtitle: 'Chamadas LLM (litellm)',             badge: null },
       { id: 'logs',      icon: '⌗', label: 'Logs',       subtitle: 'Stream de eventos do orchestrator',  badge: null },
     ],
-    token: '',
     health: { components: [], overall: 'ok' },
     overallStatus: 'ok',
     version: '',
@@ -94,21 +163,100 @@ function dashboard() {
     chartModels: null,
     chartSeverity: null,
 
-    init() {
-      this.token = localStorage.getItem(TOKEN_KEY) || '';
+    // Alpine chama init() sozinho; não repetir em x-init (polling dobrado).
+    async init() {
+      await this.checkSession();
+    },
+
+    async checkSession() {
+      const eu = await api('/auth/session');
+      if (eu.ok && eu.data) {
+        this.account = eu.data;
+        this.startApp();
+        return;
+      }
+      const setup = await api('/setup');
+      this.needsSetup = !!(setup.ok && setup.data && setup.data.needs_setup);
+      if (setup.ok && setup.data) this.version = setup.data.version || '';
+      this.screen = 'login';
+    },
+
+    loginTitle() {
+      return this.needsSetup ? 'Primeiro uso: crie a conta de administrador' : 'Entrar';
+    },
+
+    submitLabel() {
+      if (this.busy) return '...';
+      return this.needsSetup ? 'Criar conta e entrar' : 'Entrar';
+    },
+
+    async submitLogin() {
+      this.busy = true;
+      this.loginError = '';
+      try {
+        const resp = this.needsSetup
+          ? await api('/setup', { method: 'POST', body: {
+              email: this.form.email,
+              name: this.form.name || null,
+              password: this.form.password,
+              setup_code: this.form.setup_code || null,
+            } })
+          : await api('/auth/session', { method: 'POST', body: {
+              email: this.form.email, password: this.form.password,
+            } });
+        if (!resp.ok) { this.loginError = erroDe(resp); return; }
+        this.form.password = '';
+        this.form.setup_code = '';
+        this.account = resp.data || { email: this.form.email };
+        this.startApp();
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    async logout() {
+      await api('/auth/session', { method: 'DELETE' });
+      this.stopApp();
+      this.account = { email: '' };
+      this.screen = 'login';
+    },
+
+    startApp() {
+      this.screen = 'app';
       this.refresh();
-      this.pollTimer = setInterval(() => this.refresh(), POLL_MS);
+      if (!this.pollTimer) this.pollTimer = setInterval(() => this.refresh(), POLL_MS);
       this.connectSSE();
     },
 
-    saveToken() {
-      localStorage.setItem(TOKEN_KEY, this.token);
-      this.refresh();
+    stopApp() {
+      if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
       this.disconnectSSE();
-      this.connectSSE();
     },
+
+    sessionLost() {
+      // 401 no meio do uso: sessão expirou ou foi derrubada (logout em outra aba).
+      this.stopApp();
+      this.screen = 'login';
+    },
+
+    selectTab(id) { this.activeTab = id; },
+    currentTab() { return this.tabs.find(t => t.id === this.activeTab) || this.tabs[0]; },
+    footerText() { return 'v' + (this.version || '...') + ' · ' + nowFmt(); },
+    clearLogs() { this.logs = []; },
+    cockpitUrl(s) { return 'cockpit.html?scan_id=' + encodeURIComponent(s.id); },
+
+    healthComponents() { return (this.health && this.health.components) || []; },
+    componentDetail(c) {
+      const d = c.detail || {};
+      return d.error || d.version || (d.models || []).join(', ') || (d.keys_configured || []).join(', ') || '';
+    },
+    aiTotal() { return this.aiStats.total ?? 0; },
+    aiSuccessRate() { return ((this.aiStats.success_rate ?? 1) * 100).toFixed(0) + '%'; },
+    aiLatency(campo) { return this.aiStats[campo] ?? 0; },
+    aiFallbackRate() { return ((this.aiStats.fallback_rate ?? 0) * 100).toFixed(1); },
 
     async refresh() {
+      if (this.screen !== 'app') return;
       await Promise.all([
         this.loadHealth(),
         this.loadScans(),
@@ -121,9 +269,10 @@ function dashboard() {
 
     async fetchJson(path) {
       try {
-        const r = await fetch(path, { headers: { 'X-API-Token': this.token } });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return await r.json();
+        const r = await api(path);
+        if (r.status === 401) { this.sessionLost(); return null; }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.data;
       } catch (e) {
         console.warn('fetch failed', path, e.message);
         return null;
@@ -161,6 +310,7 @@ function dashboard() {
     },
 
     renderCharts() {
+      if (typeof Chart === 'undefined') return;
       // Models doughnut
       const ctxM = document.getElementById('chartModels');
       if (ctxM && this.aiStats.by_model) {
@@ -207,20 +357,8 @@ function dashboard() {
     },
 
     connectSSE() {
-      if (!this.token) return;
-      // EventSource não tem header customizado — usa query token
-      const url = `/ui/api/events?token=${encodeURIComponent(this.token)}`;
-      this.sseSource = new EventSource(url);
-      this.sseSource.addEventListener('open', () => { this.sseConnected = true; });
-      this.sseSource.addEventListener('error', () => { this.sseConnected = false; });
-      this.sseSource.addEventListener('log', (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          data._key = logKey(data);
-          this.logs.push(data);
-          if (this.logs.length > 500) this.logs = this.logs.slice(-500);
-        } catch {}
-      });
+      if (this.sseSource) return;
+      this.sseSource = abrirSSE(this, '/ui/api/events');
     },
 
     disconnectSSE() {
@@ -237,7 +375,7 @@ function dashboard() {
       ).slice(-200);
     },
 
-    nowFmt, fmtTime, stateColor, sevColor, logLevelColor, logRest,
+    nowFmt, fmtTime, stateColor, sevColor, logLevelColor, logRest, logTime,
   };
 }
 
@@ -246,10 +384,11 @@ function dashboard() {
 function cockpit() {
   return {
     scanId: '',
-    token: '',
     scan: null,
     findings: [],
     logs: [],
+    needsLogin: false,
+    missingScan: false,
     sseConnected: false,
     sseSource: null,
     pollTimer: null,
@@ -268,8 +407,7 @@ function cockpit() {
     init() {
       const params = new URLSearchParams(location.search);
       this.scanId = params.get('scan_id') || '';
-      this.token = params.get('token') || localStorage.getItem(TOKEN_KEY) || '';
-      if (!this.scanId) { document.body.innerText = 'Faltou ?scan_id=...'; return; }
+      if (!this.scanId) { this.missingScan = true; return; }
       this.refresh();
       this.pollTimer = setInterval(() => this.refresh(), POLL_MS);
       this.connectSSE();
@@ -277,19 +415,26 @@ function cockpit() {
 
     async fetchJson(path) {
       try {
-        const r = await fetch(path, { headers: { 'X-API-Token': this.token } });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return await r.json();
+        const r = await api(path);
+        if (r.status === 401) { this.stop(); this.needsLogin = true; return null; }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.data;
       } catch (e) {
         console.warn('fetch failed', path, e.message);
         return null;
       }
     },
 
+    stop() {
+      if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+      if (this.sseSource) { this.sseSource.close(); this.sseSource = null; this.sseConnected = false; }
+    },
+
     async refresh() {
+      const id = encodeURIComponent(this.scanId);
       const [scan, findings] = await Promise.all([
-        this.fetchJson(`/ui/api/scans/${this.scanId}`),
-        this.fetchJson(`/ui/api/findings?scan_id=${this.scanId}&limit=200`),
+        this.fetchJson('/ui/api/scans/' + id),
+        this.fetchJson('/ui/api/findings?scan_id=' + id + '&limit=200'),
       ]);
       if (scan) {
         this.scan = scan;
@@ -303,42 +448,42 @@ function cockpit() {
     },
 
     connectSSE() {
-      if (!this.token) return;
-      const url = `/ui/api/events?token=${encodeURIComponent(this.token)}&scan_id=${encodeURIComponent(this.scanId)}`;
-      this.sseSource = new EventSource(url);
-      this.sseSource.addEventListener('open', () => { this.sseConnected = true; });
-      this.sseSource.addEventListener('error', () => { this.sseConnected = false; });
-      this.sseSource.addEventListener('log', (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          data._key = logKey(data);
-          this.logs.push(data);
-          if (this.logs.length > 500) this.logs = this.logs.slice(-500);
-        } catch {}
-      });
-      this.sseSource.addEventListener('phase', (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          if (data.scan_id === this.scanId) {
-            // forçar refresh de scan pra ver o phase update
-            this.phaseProgress = data.progress;
-            this.refresh();
-          }
-        } catch {}
+      const url = '/ui/api/events?scan_id=' + encodeURIComponent(this.scanId);
+      this.sseSource = abrirSSE(this, url, (data) => {
+        if (data.scan_id === this.scanId) {
+          // forçar refresh de scan pra ver o phase update
+          this.phaseProgress = data.progress;
+          this.refresh();
+        }
       });
     },
 
+    scanState() { return this.scan ? this.scan.state : ''; },
+    targetLabel() { return (this.scan && this.scan.target && this.scan.target.value) || 'carregando...'; },
+    scanAiRuns() { return (this.scan && this.scan.ai_runs) || []; },
+    hasReport() { return !!(this.scan && this.scan.report_path); },
+    recentLogs() { return this.logs.slice(-200); },
+    aiRunMeta(r) { return r.prompt_tokens + 'p/' + r.completion_tokens + 'c · ' + r.finding_count + ' findings'; },
+    findingsCountText() {
+      const sc = (this.scan && this.scan.severity_counts) || {};
+      const total = Object.values(sc).reduce((a, b) => a + b, 0);
+      return this.findings.length + ' de ' + total;
+    },
+    // O cookie vai junto no link do mesmo endereço: nada de ?token= na URL.
+    bundleUrl() { return '/reports/' + encodeURIComponent(this.scanId) + '/ai-bundle'; },
+    reportUrl() { return '/reports/' + encodeURIComponent(this.scanId); },
+
     elapsed() {
-      if (!this.scan?.started_at) return '';
+      if (!this.scan || !this.scan.started_at) return '';
       const start = new Date(this.scan.started_at).getTime();
       const end = this.scan.finished_at ? new Date(this.scan.finished_at).getTime() : Date.now();
       const sec = Math.floor((end - start) / 1000);
       const m = Math.floor(sec / 60), s = sec % 60;
-      return m > 0 ? `${m}m ${s}s` : `${s}s`;
+      return m > 0 ? m + 'm ' + s + 's' : s + 's';
     },
 
     phaseStatus(key) {
-      const cur = this.scan?.current_phase;
+      const cur = this.scan ? this.scan.current_phase : null;
       if (!cur) return 'pending';
       // ordem das fases pra inferir "passou já"
       const order = this.phases.map(p => p.key);
@@ -366,6 +511,13 @@ function cockpit() {
       return { done: '✓', running: '⚡', failed: '✗', pending: '○' }[st];
     },
 
-    sevColor, stateColor, logLevelColor, logRest, fmtTime,
+    sevColor, stateColor, logLevelColor, logRest, logTime, fmtTime,
   };
 }
+
+// O build CSP do Alpine não avalia `dashboard()` no x-data: o componente é registrado
+// por nome e o HTML diz só `x-data="dashboard"`. Este arquivo carrega antes do Alpine.
+document.addEventListener('alpine:init', () => {
+  window.Alpine.data('dashboard', dashboard);
+  window.Alpine.data('cockpit', cockpit);
+});
