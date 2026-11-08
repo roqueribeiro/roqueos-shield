@@ -102,12 +102,27 @@ _PROFILE_SCANNERS: dict[str, dict[AssetType, list[str]]] = {
 # string passava: `exposure` e `cloud` eram aceitos por `POST /scans`, oferecidos
 # pelo MCP, gravados no scan, e rodavam a lista padrão como se fossem `web`. O
 # operador pedia OSINT e recebia um scan web passivo, sem aviso.
-PERFIS_DO_SCAN: tuple[str, ...] = ("web", "network", "full", "active")
+PERFIS_DO_SCAN: tuple[str, ...] = ("web", "network", "full", "active", "exposure")
+
+# `exposure` não escolhe adapters do pipeline de scan: ele entrega o alvo ao pipeline
+# OSINT (`jobs/exposure.py`), com o domínio do alvo como domínio da empresa e a dork
+# `"<domínio>"` no GitHub (código público que cita o domínio). O roqueos-front oferece
+# esse profile no POST /scans; antes ele rodava a lista padrão do tipo, um scan web
+# passivo com o rótulo "Exposure (OSINT)". Os nomes aqui são os vetores que o
+# pipeline OSINT registra em `scanners_ran`/`scanners_skipped`.
+PERFIL_EXPOSURE = "exposure"
+SCANNERS_EXPOSURE: list[str] = [
+    "github_exposure",
+    "gitleaks",
+    "trufflehog",
+    "dnstwist",
+    "shodan",
+    "subdomain_takeover",
+]
+_TIPOS_EXPOSURE: frozenset[AssetType] = frozenset({AssetType.DOMAIN, AssetType.URL, AssetType.HOST})
 
 # Perfis que existem em outro lugar e por isso merecem um caminho na mensagem.
-_PERFIS_DE_OUTRO_PIPELINE: dict[str, str] = {
-    "exposure": "o OSINT roda por POST /exposure/scan (ou `cai exposure`), não por POST /scans",
-}
+_PERFIS_DE_OUTRO_PIPELINE: dict[str, str] = {}
 
 # Chave de `scanners_skipped` quando nenhum scanner do pipeline aceita o alvo.
 SEM_SCANNER = "pipeline"
@@ -154,6 +169,8 @@ def resolve_scanners_com_motivo(
     zero achados e parecia limpo.
     """
     pulados: dict[str, str] = {}
+    if (profile or "").strip().lower() == PERFIL_EXPOSURE:
+        return _resolve_exposure(requested, asset_type)
     if requested:
         conhecidos: list[str] = []
         for n in requested:
@@ -180,6 +197,65 @@ def resolve_scanners_com_motivo(
             "este alvo não foi verificado"
         )
     return names, pulados
+
+
+def _resolve_exposure(
+    requested: list[str] | None, asset_type: AssetType
+) -> tuple[list[str], dict[str, str]]:
+    """O profile `exposure` roda o pipeline OSINT inteiro, ou nada.
+
+    `scanners` explícito não se aplica (o pipeline OSINT decide os vetores pelo que
+    está configurado), e o alvo precisa ter um domínio: imagem, repo, porta e k8s não
+    têm. Os dois casos voltam como motivo, e o `POST /scans` os recusa com 422.
+    """
+    pulados: dict[str, str] = {}
+    if requested:
+        for n in requested:
+            pulados[n] = (
+                "o profile exposure roda o pipeline OSINT inteiro; `scanners` não se aplica"
+            )
+        return [], pulados
+    if asset_type not in _TIPOS_EXPOSURE:
+        pulados[SEM_SCANNER] = (
+            f"o profile exposure precisa de um domínio (url, domain ou host), "
+            f"não de asset_type {asset_type.value}"
+        )
+        return [], pulados
+    return list(SCANNERS_EXPOSURE), pulados
+
+
+def dominio_do_alvo(target: Target) -> str:
+    """O domínio que o pipeline OSINT investiga a partir do alvo do scan."""
+    from urllib.parse import urlparse
+
+    valor = target.value.strip()
+    if target.asset_type == AssetType.URL or "://" in valor:
+        return (urlparse(valor).hostname or "").lower()
+    return valor.lower().rstrip(".")
+
+
+async def _run_exposure_como_scan(target: Target, *, scan_id: UUID, skip_ai: bool) -> ScanResult:
+    """O profile `exposure` de um scan: o pipeline OSINT, gravado no MESMO scan."""
+    from orchestrator.jobs.exposure import run_exposure_scan
+
+    sid = str(scan_id)
+    await _ensure_scan_row(scan_id, target)
+    await _update_phase(scan_id, "exposure_running")
+    emit_phase(sid, "exposure_running")
+    dominio = dominio_do_alvo(target)
+    result = await run_exposure_scan(
+        company_name=target.label or dominio,
+        domains=[dominio] if dominio else [],
+        github_orgs=[],
+        dorks=[f'"{dominio}"'] if dominio else [],
+        skip_ai=skip_ai,
+        scan_id=scan_id,
+        target=target,
+    )
+    final = "failed" if (result.scanners_skipped and not result.scanners_ran) else "done"
+    await _update_phase(scan_id, final)
+    emit_phase(sid, final)
+    return result
 
 
 def _supported_for(names: list[str], asset_type: AssetType) -> list[str]:
@@ -373,6 +449,10 @@ async def run_scan(
     """
     scan_id = scan_id or uuid4()
     options = dict(options or {})
+    if adapters is None and (profile or "").strip().lower() == PERFIL_EXPOSURE:
+        _, pulados = _resolve_exposure(scanners, target.asset_type)
+        if not pulados:
+            return await _run_exposure_como_scan(target, scan_id=scan_id, skip_ai=skip_ai)
     # O que ficou de fora já na resolução (nome desconhecido, tipo incompatível, alvo
     # sem scanner) entra em `scanners_skipped` com o motivo, junto com o que falhar
     # ao rodar. Sem scanner nenhum o scan termina `failed`: nada foi verificado.

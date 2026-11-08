@@ -47,6 +47,7 @@ from orchestrator.domain.schemas import (
 from orchestrator.jobs import pipelines
 from orchestrator.jobs.pipelines import (
     PERFIS_DO_SCAN,
+    SCANNERS_EXPOSURE,
     SEM_SCANNER,
     resolve_scanners,
     resolve_scanners_com_motivo,
@@ -269,18 +270,51 @@ async def test_run_scan_desconhecido_entra_em_scanners_skipped(
 # ------------------------------------------------------------------- 4. perfis
 
 
-@pytest.mark.parametrize("perfil", ["exposure", "cloud", "qualquer", ""])
+@pytest.mark.parametrize("perfil", ["cloud", "qualquer", ""])
 def test_perfil_que_nao_existe_e_422(perfil: str) -> None:
     # Mutação: `validar_perfil` aceitar qualquer string -> não levanta.
     with pytest.raises(GateRecusado) as e:
         perfil_do_scan(perfil)
     assert e.value.status == 422
-    assert "aceitos: web, network, full, active" in e.value.detalhe
+    assert "aceitos: web, network, full, active, exposure" in e.value.detalhe
 
 
-def test_perfil_exposure_aponta_o_caminho_certo() -> None:
-    with pytest.raises(GateRecusado, match="POST /exposure/scan"):
-        perfil_do_scan("exposure")
+def test_perfil_exposure_resolve_para_o_pipeline_osint() -> None:
+    # Mutação: tirar o desvio para `_resolve_exposure` -> volta a lista web (zap...).
+    nomes, pulados = resolve_scanners_com_motivo(None, AssetType.URL, "exposure")
+    assert nomes == SCANNERS_EXPOSURE and not pulados
+    _, pulados = resolve_scanners_com_motivo(None, AssetType.IMAGE, "exposure")
+    assert SEM_SCANNER in pulados
+    _, pulados = resolve_scanners_com_motivo(["zap"], AssetType.URL, "exposure")
+    assert "zap" in pulados
+
+
+async def test_run_scan_exposure_roda_o_osint_no_mesmo_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Mutação: tirar o desvio de `run_scan` para `_run_exposure_como_scan` -> o
+    # pipeline OSINT não é chamado (e o zap é construído).
+    from orchestrator.jobs import exposure as exposure_job
+
+    chamado: dict[str, Any] = {}
+
+    async def _osint(**kw: Any) -> pipelines.ScanResult:
+        chamado.update(kw)
+        r = pipelines.ScanResult(scan_id=kw["scan_id"], target=kw["target"])
+        r.scanners_ran.append("dnstwist")
+        return r
+
+    monkeypatch.setattr(exposure_job, "run_exposure_scan", _osint)
+    monkeypatch.setattr(
+        pipelines, "_build_adapters", lambda *a, **k: pytest.fail("pipeline de scan rodou")
+    )
+    sid = uuid4()
+    t = Target(asset_type=AssetType.URL, value="https://App.Exemplo.test:8443/x")
+    r = await pipelines.run_scan(t, skip_ai=True, profile="exposure", scan_id=sid)
+    assert r.scanners_ran == ["dnstwist"]
+    assert chamado["scan_id"] == sid and chamado["target"] is t
+    assert chamado["domains"] == ["app.exemplo.test"]
+    assert chamado["dorks"] == ['"app.exemplo.test"']
 
 
 def test_perfil_normaliza() -> None:
@@ -301,15 +335,41 @@ def test_mcp_so_oferece_o_que_existe() -> None:
         assert resolve_scanners(None, AssetType(tipo), "web"), tipo
 
 
-async def test_post_scans_com_profile_exposure_e_422(escopo_aberto: None) -> None:
-    alvo = TargetRow(asset_type="url", value="https://app.exemplo.test/")
+async def test_post_scans_com_profile_exposure_enfileira_o_osint(
+    escopo_aberto: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # O roqueos-front manda `profile: exposure` no POST /scans: tem que existir.
+    enfileirado: dict[str, Any] = {}
+
+    class _Pool:
+        async def enqueue_job(self, *a: Any, **k: Any) -> None:
+            enfileirado.update(k)
+
+    async def _pool(*a: Any, **k: Any) -> _Pool:
+        return _Pool()
+
+    monkeypatch.setattr(scans_router, "create_pool", _pool)
+    alvo = TargetRow(asset_type="domain", value="exemplo.test")
+    async with session() as s:
+        s.add(alvo)
+        await s.commit()
+    async with _como(Role.OPERATOR) as c:
+        r = await c.post("/scans", json={"target_id": str(alvo.id), "profile": "Exposure"})
+    assert r.status_code == 202, r.text
+    assert r.json()["profile"] == "exposure"
+    assert enfileirado["profile"] == "exposure"
+    assert enfileirado["scanners"] == SCANNERS_EXPOSURE
+
+
+async def test_post_scans_exposure_em_imagem_e_422(escopo_aberto: None) -> None:
+    alvo = TargetRow(asset_type="image", value="nginx:1.27")
     async with session() as s:
         s.add(alvo)
         await s.commit()
     async with _como(Role.OPERATOR) as c:
         r = await c.post("/scans", json={"target_id": str(alvo.id), "profile": "exposure"})
     assert r.status_code == 422, r.text
-    assert "/exposure/scan" in r.json()["detail"]
+    assert "domínio" in r.json()["detail"]
 
 
 async def test_post_scans_com_scanner_inexistente_e_422(escopo_aberto: None) -> None:

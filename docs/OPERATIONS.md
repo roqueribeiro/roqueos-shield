@@ -219,7 +219,7 @@ The environment wins over the UI. A field set by a variable shows as locked in t
 | `SHIELD_SERVICES` | all | processes to start (`orchestrator`, `worker`); how the production compose splits API and workers |
 | `LAB_ONLY`, `TARGET_ALLOWLIST`, `REQUIRE_AUTH_REF` | from the UI | lock the authorized scope |
 | `LLM_MODEL`, `LLM_API_BASE`, `ANTHROPIC_API_KEY` and the other keys | from the UI | lock the AI configuration |
-| `ALLOW_CLOUD_FALLBACK` | `true` | `false` forbids a local model from falling back to a cloud one |
+| `ALLOW_CLOUD_FALLBACK` | `false` | `false` forbids a local model from falling back to a cloud one; `true` allows it |
 | `AGENT_LIVE_EXECUTION` | `false` | lets an admin run the AI agent's planned commands for real (`dry_run=false`); off, the agent only plans |
 | `MCP_ALLOW_ACTIONS` | `false` | lets `POST /mcp` start scans (always with an authorization reference) |
 | `RATE_LIMIT_PER_MINUTE` | `20` | ceiling per user and route on the routes that start expensive work; `0` turns it off |
@@ -294,7 +294,7 @@ GREENBONE_USERNAME=admin
 GREENBONE_PASSWORD=<the password you set>
 ```
 
-The repository brings a minimal compose for it, made for the development stack: `make greenbone-up` starts it, `bash scripts/feed-sync.sh` follows the feed, the web console is at `http://127.0.0.1:9392` (plain HTTP: the `gsa` container serves port 80, published only on `127.0.0.1`) and GMP at `127.0.0.1:9390`. The default login is `admin/admin`: **change it** before any scan. For a real environment, use Greenbone's official compose. Both publish on the host's `127.0.0.1`, which the standalone container does not reach through `host.docker.internal` on Linux; put the shield and Greenbone on the same Docker network, or publish GMP where the container can reach it. [DEVELOPMENT.md](DEVELOPMENT.md) has the development side.
+The repository brings a minimal compose for it, made for the development stack: `make greenbone-up` starts it, `bash scripts/feed-sync.sh` follows the feed, the web console is at `http://127.0.0.1:9392` (plain HTTP: the `cai-gsa` container serves port 80, published only on `127.0.0.1`) and GMP at `127.0.0.1:9390`. The default login is `admin/admin`: **change it** before any scan. For a real environment, use Greenbone's official compose. Both publish on the host's `127.0.0.1`, which the standalone container does not reach through `host.docker.internal` on Linux; put the shield and Greenbone on the same Docker network, or publish GMP where the container can reach it. [DEVELOPMENT.md](DEVELOPMENT.md) has the development side.
 
 ## 13. Logs and health
 

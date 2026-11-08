@@ -14,6 +14,134 @@
         "title": "AssetType",
         "type": "string"
       },
+      "AuditOut": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "authorization_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorization Ref"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "request_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Hash"
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Id"
+          },
+          "resource_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Type"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "actor",
+          "action",
+          "resource_type",
+          "resource_id",
+          "authorization_ref",
+          "request_hash",
+          "metadata"
+        ],
+        "title": "AuditOut",
+        "type": "object"
+      },
+      "AuditPage": {
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit",
+          "has_more"
+        ],
+        "title": "AuditPage",
+        "type": "object"
+      },
       "AuthContext": {
         "description": "Contexto de autenticação pra scanning autenticado (atrás de login).\n\nOs `headers` (Cookie/Authorization/custom) são SEGREDOS: nunca persistem na\ntabela `scans` — viajam só como arg efêmero do job (Redis) até o worker, e\no scrubber redige seus valores de qualquer evidência/relatório. O\n`openapi_url` NÃO é segredo (é a spec pública da API) e pode ser persistido.",
         "properties": {
@@ -1014,6 +1142,14 @@
           },
           "profile": {
             "default": "web",
+            "description": "web (passivo, default) | network | full | active | exposure. `full` e `active` ligam o active scan do ZAP (payloads reais de injection); `exposure` roda o pipeline OSINT sobre o domínio do alvo (url, domain ou host). Outro valor é 422.",
+            "examples": [
+              "web",
+              "network",
+              "full",
+              "active",
+              "exposure"
+            ],
             "title": "Profile",
             "type": "string"
           },
@@ -1696,6 +1832,157 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/audit": {
+      "get": {
+        "description": "A trilha, mais recente primeiro. Exige `audit:read` (papéis `auditor` e `admin`).",
+        "operationId": "list_audit_audit_get",
+        "parameters": [
+          {
+            "description": "ex.: scan.create",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ex.: scan.create",
+              "title": "Action"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resource_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resource Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "authorization_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization Ref"
+            }
+          },
+          {
+            "description": "ISO-8601; só depois disto",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO-8601; só depois disto",
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "List Audit",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
     "/auth/callback": {
       "get": {
         "description": "Recebe o code do IdP → valida → provisiona usuário → emite sessão JWT.",
@@ -2651,7 +2938,7 @@
     },
     "/reports/{scan_id}/export/defectdojo": {
       "post": {
-        "description": "Exporta findings desse scan pro DefectDojo via API.",
+        "description": "Exporta findings desse scan pro DefectDojo via API.\n\nGrava `scan.export.defectdojo` no audit_log ANTES de enviar, e comita: os achados\nsaem do RoqueShield para outro sistema, e saída de dado é o que a trilha existe\npara registrar. Sem a linha gravada, nada sai (falha fechado).",
         "operationId": "export_defectdojo_reports__scan_id__export_defectdojo_post",
         "parameters": [
           {

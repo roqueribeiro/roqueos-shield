@@ -31,9 +31,9 @@ services:
       - ZAP_API_KEY=${ZAP_API_KEY:-changeme}
     # A chave da API NÃO vai na linha de comando: `-config api.key=...` aparecia em `ps`,
     # em /proc/<pid>/cmdline e no `docker inspect` (Config.Cmd). O entrypoint lê a
-    # chave do ambiente, grava um arquivo 0600 e passa só o caminho (-configfile),
-    # como o supervisor do standalone já fazia. O `unset` tira a chave do ambiente do
-    # java antes do exec. Os $$ são do compose: quem expande é o sh do container.
+    # chave do ambiente, grava um arquivo 0600 e acrescenta só o caminho (-configfile)
+    # ao command, como o supervisor do standalone já fazia. O `unset` tira a chave do
+    # ambiente do java antes do exec. Os $$ são do compose: quem expande é o sh do container.
     entrypoint:
       - sh
       - -c
@@ -44,9 +44,20 @@ services:
         arq="$${HOME:-/home/zap}/zap-api.properties"
         printf 'api.disablekey=false\napi.key=%s\n' "$$ZAP_API_KEY" > "$$arq"
         unset ZAP_API_KEY
-        exec zap.sh -daemon -host 0.0.0.0 -port 8090 \
-          -config 'api.addrs.addr.name=.*' -config api.addrs.addr.regex=true \
-          -configfile "$$arq"
+        exec "$$@" -configfile "$$arq"
+      - zap-entrypoint
+    # Só o que não é segredo vai no command; o entrypoint acrescenta o -configfile.
+    command:
+      - zap.sh
+      - -daemon
+      - -host
+      - 0.0.0.0
+      - -port
+      - "8090"
+      - -config
+      - api.addrs.addr.name=.*
+      - -config
+      - api.addrs.addr.regex=true
     healthcheck:
       # A mesma checagem do HEALTHCHECK da imagem, explícita e com start_period: o ZAP
       # leva um a dois minutos para abrir a porta. Sem a chave na URL de propósito.

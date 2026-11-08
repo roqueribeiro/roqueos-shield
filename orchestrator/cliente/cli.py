@@ -162,7 +162,8 @@ def scan_start(
         str,
         typer.Option(
             "--profile",
-            help="web|network|full|active (full e active ligam o ZAP active scan)",
+            help="web|network|full|active|exposure (full e active ligam o ZAP active "
+            "scan; exposure roda o OSINT sobre o domínio do alvo)",
         ),
     ] = "web",
     scanner: Annotated[

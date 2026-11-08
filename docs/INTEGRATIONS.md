@@ -54,7 +54,7 @@ Give integrations a per-user token with the smallest role that works:
 | Role | Can |
 | --- | --- |
 | `viewer` | read scans, findings, reports and the bundle |
-| `auditor` | the same, plus the audit log |
+| `auditor` | the same, plus the audit log (`GET /audit`) |
 | `operator` | the same as `viewer`, plus create targets, start and delete scans, mark findings resolved |
 | `admin` | everything, including scope, AI settings and users |
 
@@ -93,7 +93,7 @@ The options an integration uses, from `roqueshield scan start --help`, `report -
 
 | Command | Options |
 | --- | --- |
-| `scan start <alvo>` | `--type url\|domain\|host\|image\|repo\|k8s_resource` (default `url`), `--profile web\|network\|full` (default `web`), `--scanner` (repeat for more), `--auth-ref` (authorization reference), `--wait`, `--fail-on info\|low\|medium\|high\|critical`, `--intervalo` (poll seconds, default 5), `--prazo` (give-up seconds, default 7200) |
+| `scan start <alvo>` | `--type url\|domain\|host\|port\|image\|repo` (default `url`), `--profile web\|network\|full\|active\|exposure` (default `web`), `--scanner` (repeat for more), `--auth-ref` (authorization reference), `--wait`, `--fail-on info\|low\|medium\|high\|critical`, `--intervalo` (poll seconds, default 5), `--prazo` (give-up seconds, default 7200) |
 | `scan watch <scan_id>` | `--fail-on`, `--intervalo`, `--prazo` |
 | `scan show <scan_id>` | `--json` |
 | `findings <scan_id>` | `--severity`, `--limit` (default 200), `--json` |
@@ -226,7 +226,7 @@ The tools:
 | `get_findings` | `scan_id`, `severity`, `limit` (1 to 500) | the findings, or an error (below) |
 | `get_ai_bundle` | `scan_id` | the AI Fix Bundle, or an error (below) |
 | `list_targets` | none | registered targets |
-| `start_scan` | `target`, `asset_type`, `profile`, `authorization_ref` (required, 3+ characters) | only when actions are on |
+| `start_scan` | `target`, `asset_type` (`url`, `domain`, `host`, `port`, `image`, `repo`), `profile` (`web`, `network`, `full`, `active`, `exposure`), `authorization_ref` (required, 3+ characters) | only when actions are on |
 
 **A tool does not return an empty list for a scan that did not verify.** `get_findings` and `get_ai_bundle` on a scan that failed, is still running or has incomplete coverage come back with `isError: true`, the reason and the partial data. Run here with a fake API returning a finished scan where ZAP was skipped:
 

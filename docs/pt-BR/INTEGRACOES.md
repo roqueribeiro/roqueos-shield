@@ -54,7 +54,7 @@ Dê à integração um token de usuário com o menor papel que resolve:
 | Papel | Pode |
 | --- | --- |
 | `viewer` | ler scans, achados, relatórios e o bundle |
-| `auditor` | o mesmo, mais a trilha de auditoria |
+| `auditor` | o mesmo, mais a trilha de auditoria (`GET /audit`) |
 | `operator` | o mesmo do `viewer`, mais criar alvo, disparar e apagar scan, marcar achado como resolvido |
 | `admin` | tudo, inclusive escopo, configuração de IA e usuários |
 
@@ -91,7 +91,7 @@ As opções que uma integração usa, de `roqueshield scan start --help`, `repor
 
 | Comando | Opções |
 | --- | --- |
-| `scan start <alvo>` | `--type url\|domain\|host\|image\|repo\|k8s_resource` (padrão `url`), `--profile web\|network\|full` (padrão `web`), `--scanner` (repita para mais de um), `--auth-ref` (referência da autorização), `--wait`, `--fail-on info\|low\|medium\|high\|critical`, `--intervalo` (segundos entre leituras, padrão 5), `--prazo` (segundos até desistir, padrão 7200) |
+| `scan start <alvo>` | `--type url\|domain\|host\|port\|image\|repo` (padrão `url`), `--profile web\|network\|full\|active\|exposure` (padrão `web`), `--scanner` (repita para mais de um), `--auth-ref` (referência da autorização), `--wait`, `--fail-on info\|low\|medium\|high\|critical`, `--intervalo` (segundos entre leituras, padrão 5), `--prazo` (segundos até desistir, padrão 7200) |
 | `scan watch <scan_id>` | `--fail-on`, `--intervalo`, `--prazo` |
 | `scan show <scan_id>` | `--json` |
 | `findings <scan_id>` | `--severity`, `--limit` (padrão 200), `--json` |
@@ -224,7 +224,7 @@ As ferramentas:
 | `get_findings` | `scan_id`, `severity`, `limit` (1 a 500) | os achados, ou um erro (abaixo) |
 | `get_ai_bundle` | `scan_id` | o AI Fix Bundle, ou um erro (abaixo) |
 | `list_targets` | nenhum | alvos registrados |
-| `start_scan` | `target`, `asset_type`, `profile`, `authorization_ref` (obrigatório, 3+ caracteres) | só com as ações ligadas |
+| `start_scan` | `target`, `asset_type` (`url`, `domain`, `host`, `port`, `image`, `repo`), `profile` (`web`, `network`, `full`, `active`, `exposure`), `authorization_ref` (obrigatório, 3+ caracteres) | só com as ações ligadas |
 
 **Ferramenta não devolve lista vazia de scan que não verificou.** `get_findings` e `get_ai_bundle` sobre scan que falhou, ainda está rodando ou veio com cobertura incompleta voltam com `isError: true`, o motivo e o dado parcial. Rodado aqui com uma API falsa devolvendo um scan terminado em que o ZAP foi pulado:
 

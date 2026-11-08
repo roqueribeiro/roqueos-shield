@@ -105,9 +105,12 @@ FERRAMENTAS_DE_ACAO: list[dict[str, Any]] = [
                     # POST /scans o recusa com 422.
                     "enum": ["url", "domain", "host", "port", "image", "repo"],
                 },
-                # Os profiles que o pipeline executa (PERFIS_DO_SCAN). `exposure` saiu:
-                # o OSINT é POST /exposure/scan, e por aqui virava um scan web comum.
-                "profile": {"type": "string", "enum": ["web", "network", "full", "active"]},
+                # Os profiles que o pipeline executa (PERFIS_DO_SCAN). `exposure` roda o
+                # pipeline OSINT sobre o domínio do alvo.
+                "profile": {
+                    "type": "string",
+                    "enum": ["web", "network", "full", "active", "exposure"],
+                },
                 "authorization_ref": {
                     "type": "string",
                     "minLength": 3,

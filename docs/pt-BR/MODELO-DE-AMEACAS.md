@@ -145,16 +145,18 @@ A imagem `roqueos-shield:<versão>-standalone` roda a API, o worker, o Redis e o
 ## 9. Triagem de IA e o gateway de modelo
 
 - **Prompt injection.** Um scanner pode devolver evidência escrita para conduzir o modelo. O que limita o estrago: o scrubber tira os padrões sensíveis antes da chamada ao modelo (`orchestrator/ai/analyzer.py`); a saída da triagem só ajusta severidade e texto, não executa nada; e os comandos do agente passam pela coleira e, por padrão, não são executados.
-- **Soberania.** Quando o modelo principal é local e falha, o fallback para um provedor na nuvem manda os achados para fora, com o scrubber como única barreira. `ALLOW_CLOUD_FALLBACK=false` proíbe. O padrão no `Settings` é `true`; o `docker/compose.prod.yml` põe `false`. Implantação regulada deve manter `false`.
+- **Soberania.** Quando o modelo principal é local e falha, o fallback para um provedor na nuvem manda os achados para fora, com o scrubber como única barreira. `ALLOW_CLOUD_FALLBACK=false` proíbe, e é o padrão no `Settings` e no `docker/compose.prod.yml`. Ligar (`true`) é decisão que implantação regulada não deve tomar.
 - **Credencial do modelo.** `LLM_API_KEY` vinda do ambiente trava também o `LLM_API_BASE`, então uma requisição não consegue desviar a chave para outro endereço.
 
 ## 10. A trilha de auditoria
 
-Gravada por `orchestrator/audit/` para: `scan.create` (com `authorization_ref`), `scan.delete`, `target.create`, `finding.status_change`, `investigate.run` e `investigate.commands`, mudanças de configuração em `/settings/*` (valor de segredo nunca vai para a trilha), `setup.denied` e `setup.admin_created`, e os eventos de usuário (`user.create`, `user.set_role`, `user.deactivate`, `user.set_password`, `user.rotate_token`, `user.login`, `user.login_failed`, `user.logout`).
+Gravada por `orchestrator/audit/` para: `scan.create` (com `authorization_ref`, do `POST /scans` e do `cai scan`), `scan.delete`, `scan.export.defectdojo`, `exposure.scan`, `target.create`, `finding.status_change`, `investigate.run` e `investigate.commands`, mudanças de configuração em `/settings/*` (valor de segredo nunca vai para a trilha), `setup.denied` e `setup.admin_created`, e os eventos de usuário (`user.create`, `user.set_role`, `user.deactivate`, `user.set_password`, `user.rotate_token`, `user.login`, `user.login_failed`, `user.logout`).
 
 **Só-acréscimo só no Postgres.** Um trigger (migration 0004) recusa `UPDATE` e `DELETE` em `audit_log`. O SQLite, banco padrão do standalone, não tem esse trigger. `REQUIRE_IMMUTABLE_AUDIT=true` faz a API se recusar a subir em SQLite; o `docker/compose.prod.yml` liga.
 
-**Não auditado:** a exportação para o DefectDojo (`POST /reports/{id}/export/defectdojo`), o scan OSINT de exposição (`POST /exposure/scan`), e mudanças em `TARGET_ALLOWLIST` ou em `config/exposure_targets.yml` feitas no ambiente ou no disco, e não por `/settings/scope`.
+Lida pelo `GET /audit`, que exige `audit:read` (papéis `auditor` e `admin`).
+
+**Não auditado:** mudanças em `TARGET_ALLOWLIST` ou em `config/exposure_targets.yml` feitas no ambiente ou no disco, e não por `/settings/scope`.
 
 ## 11. Limites conhecidos
 

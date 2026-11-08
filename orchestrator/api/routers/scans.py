@@ -71,9 +71,10 @@ class ScanIn(BaseModel):
     profile: str = Field(
         default="web",
         description=(
-            "web (passivo, default) | network | full | active. `full` e `active` ligam o "
-            "active scan do ZAP (payloads reais de injection). Outro valor é 422: "
-            "`exposure` roda por POST /exposure/scan."
+            "web (passivo, default) | network | full | active | exposure. `full` e "
+            "`active` ligam o active scan do ZAP (payloads reais de injection); "
+            "`exposure` roda o pipeline OSINT sobre o domínio do alvo (url, domain ou "
+            "host). Outro valor é 422."
         ),
         examples=list(PERFIS_DO_SCAN),
     )
