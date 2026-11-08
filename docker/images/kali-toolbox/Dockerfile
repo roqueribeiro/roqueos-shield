@@ -22,7 +22,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # `|| echo fallback`: a imagem saía verde e sem nuclei, e o passo dos templates
 # abaixo quebrava o `make build` com "nuclei: not found". Agora download que falha
 # derruba o build (curl -f e set -e), e cada binário prova que executa.
-ARG TARGETARCH=amd64
+# Sem default: o BuildKit preenche com a arquitetura do build. Com `=amd64` aqui,
+# o default vencia e uma imagem arm64 recebia binário amd64.
+ARG TARGETARCH
 ARG SUBFINDER_VERSION=2.17.0
 ARG HTTPX_VERSION=1.12.0
 ARG NUCLEI_VERSION=3.11.1
@@ -34,7 +36,7 @@ ARG KUBEBENCH_VERSION=0.16.0
 RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends unzip libpcap0.8 \
         && rm -rf /var/lib/apt/lists/*; \
-    ARCH="${TARGETARCH}"; \
+    ARCH="${TARGETARCH:-amd64}"; \
     case "$ARCH" in \
       amd64) GL_ARCH=x64;   TV_ARCH=Linux-64bit ;; \
       arm64) GL_ARCH=arm64; TV_ARCH=Linux-ARM64 ;; \
