@@ -358,7 +358,34 @@ async def test_post_scans_com_profile_exposure_enfileira_o_osint(
     assert r.status_code == 202, r.text
     assert r.json()["profile"] == "exposure"
     assert enfileirado["profile"] == "exposure"
-    assert enfileirado["scanners"] == SCANNERS_EXPOSURE
+    assert not enfileirado["scanners"]
+    async with session() as s:
+        linha = await s.get(ScanRow, UUID(r.json()["id"]))
+    assert linha is not None and linha.requested_scanners == SCANNERS_EXPOSURE
+
+    # O que o worker recebe tem que chegar ao pipeline OSINT. Mutação: enfileirar a
+    # lista de SCANNERS_EXPOSURE em `scanners` -> o run_scan recusa e o OSINT não roda.
+    from orchestrator.jobs import exposure as exposure_job
+
+    chamado: dict[str, Any] = {}
+
+    async def _osint(**kw: Any) -> pipelines.ScanResult:
+        chamado.update(kw)
+        return pipelines.ScanResult(scan_id=kw["scan_id"], target=kw["target"])
+
+    monkeypatch.setattr(exposure_job, "run_exposure_scan", _osint)
+    monkeypatch.setattr(
+        pipelines, "_build_adapters", lambda *a, **k: pytest.fail("pipeline de scan rodou")
+    )
+    t = Target(asset_type=AssetType.DOMAIN, value="exemplo.test")
+    await pipelines.run_scan(
+        t,
+        skip_ai=True,
+        scanners=enfileirado["scanners"],
+        profile=enfileirado["profile"],
+        scan_id=uuid4(),
+    )
+    assert chamado["domains"] == ["exemplo.test"]
 
 
 async def test_post_scans_exposure_em_imagem_e_422(escopo_aberto: None) -> None:

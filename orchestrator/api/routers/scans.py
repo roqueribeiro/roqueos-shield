@@ -33,6 +33,7 @@ from orchestrator.domain.target_validator import (
     validate_target_value,
 )
 from orchestrator.jobs.pipelines import (
+    PERFIL_EXPOSURE,
     PERFIS_DO_SCAN,
     PerfilRecusado,
     resolve_scanners_com_motivo,
@@ -309,7 +310,10 @@ async def create_scan(
         asset_type=target.asset_type,
         criticality=target.criticality,
         contains_pii=target.contains_pii,
-        scanners=effective_scanners,
+        # No `exposure` a lista é só para mostrar no scan: o job recebe `scanners`
+        # vazio, porque o `run_scan` lê `scanners` explícito como pedido e recusa
+        # (achado do Bugbot no PR #26: o OSINT nunca rodava pelo POST /scans).
+        scanners=None if perfil == PERFIL_EXPOSURE else effective_scanners,
         options=persisted_options,
         actor=principal.email,
         scan_id=str(scan.id),
