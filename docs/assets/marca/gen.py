@@ -10,14 +10,22 @@ Uso:
 
 O overlay de texto (eyebrow, wordmark, lema, descritor, chips) não muda; só
 a arte à direita. É o mesmo processo do aidlc-harness: arte + overlay."""
-import argparse, base64, json, mimetypes, pathlib, sys
+
+import argparse
+import base64
+import json
+import mimetypes
+import pathlib
+
 from playwright.sync_api import sync_playwright
 
 HERE = pathlib.Path(__file__).parent
 FON = HERE / "fontes"
 
+
 def b64(p):
     return base64.b64encode(p.read_bytes()).decode()
+
 
 INTER = b64(FON / "InterTight.ttf")
 GEIST = b64(FON / "GeistMono.ttf")
@@ -28,6 +36,7 @@ CARIMBO = HERE / "carimbo.json"
 
 def _versao() -> str:
     import re
+
     m = re.search(r'^version = "([^"]+)"', (RAIZ / "pyproject.toml").read_text(), re.MULTILINE)
     if not m:
         raise SystemExit("não achei a versão no pyproject.toml")
@@ -95,6 +104,7 @@ ARTE = """
 </g>
 """
 
+
 def arte_raster(art_path):
     """Arte fotoreal do ChatGPT ocupando a metade direita, com fade pra esquerda."""
     p = pathlib.Path(art_path)
@@ -113,6 +123,7 @@ def arte_raster(art_path):
   <rect x="1360" y="0" width="1840" height="1120" fill="url(#fade)"/>
 </g>
 """
+
 
 def svg(lang, art):
     t = TXT[lang]
@@ -160,19 +171,20 @@ def svg(lang, art):
   <!-- coluna esquerda -->
   <g transform="translate(170,300)">
     <line x1="0" y1="-14" x2="54" y2="-14" stroke="#007aff" stroke-width="4"/>
-    <text class="eye" x="74" y="-2">{t['eyebrow']}</text>
+    <text class="eye" x="74" y="-2">{t["eyebrow"]}</text>
 
     <g transform="translate(6,70)"><use href="#mark" transform="translate(0,2) scale(1.15)"/></g>
     <text class="wm" x="92" y="168"><tspan fill="#e9eef5">Roque</tspan><tspan fill="#2f8bff">Shield</tspan></text>
 
-    <text class="m" x="2" y="300" fill="#e9eef5">{t['m1']}</text>
-    <text class="m" x="2" y="378" fill="#9aa7b4">{t['m2']}</text>
+    <text class="m" x="2" y="300" fill="#e9eef5">{t["m1"]}</text>
+    <text class="m" x="2" y="378" fill="#9aa7b4">{t["m2"]}</text>
 
-    <text class="desc" x="2" y="452">{t['desc']}</text>
+    <text class="desc" x="2" y="452">{t["desc"]}</text>
 
-    <text class="chip" x="2" y="604">{t['chips']}</text>
+    <text class="chip" x="2" y="604">{t["chips"]}</text>
   </g>
 </svg>"""
+
 
 def render(lang, outdir, art):
     html = f"<!doctype html><html><head><meta charset='utf-8'><style>html,body{{margin:0}}</style></head><body>{svg(lang, art)}</body></html>"
@@ -180,18 +192,19 @@ def render(lang, outdir, art):
     hp.write_text(html, encoding="utf-8")
     with sync_playwright() as p:
         b = p.chromium.launch()
-        pg = b.new_page(viewport={"width":3200,"height":1120}, device_scale_factor=1)
+        pg = b.new_page(viewport={"width": 3200, "height": 1120}, device_scale_factor=1)
         pg.goto(hp.as_uri())
         pg.wait_for_timeout(400)
         png = HERE / f"banner.{lang}.png"
-        pg.screenshot(path=str(png), clip={"x":0,"y":0,"width":3200,"height":1120})
+        pg.screenshot(path=str(png), clip={"x": 0, "y": 0, "width": 3200, "height": 1120})
         b.close()
     # PNG -> JPG qualidade alta
     from PIL import Image
+
     im = Image.open(png).convert("RGB")
     jpg = pathlib.Path(outdir) / f"banner.{lang}.jpg"
     im.save(jpg, "JPEG", quality=88, optimize=True, progressive=True)
-    print(f"{jpg} {jpg.stat().st_size//1024}K {im.size}")
+    print(f"{jpg} {jpg.stat().st_size // 1024}K {im.size}")
 
 
 # --- marca: logo, logo horizontal e social preview, da mesma fonte do banner ----
@@ -211,7 +224,9 @@ def _png(svg_txt, w, h, destino, fundo_transparente=True):
     html = (
         "<!doctype html><html><head><meta charset='utf-8'><style>html,body{margin:0;"
         + ("background:transparent" if fundo_transparente else "")
-        + "}</style></head><body>" + svg_txt + "</body></html>"
+        + "}</style></head><body>"
+        + svg_txt
+        + "</body></html>"
     )
     hp = HERE / "_marca.html"
     hp.write_text(html, encoding="utf-8")
@@ -220,8 +235,11 @@ def _png(svg_txt, w, h, destino, fundo_transparente=True):
         pg = b.new_page(viewport={"width": w, "height": h}, device_scale_factor=1)
         pg.goto(hp.as_uri())
         pg.wait_for_timeout(300)
-        pg.screenshot(path=str(destino), clip={"x": 0, "y": 0, "width": w, "height": h},
-                      omit_background=fundo_transparente)
+        pg.screenshot(
+            path=str(destino),
+            clip={"x": 0, "y": 0, "width": w, "height": h},
+            omit_background=fundo_transparente,
+        )
         b.close()
     hp.unlink()
     print(f"{destino} {destino.stat().st_size // 1024}K {w}x{h}")
@@ -232,7 +250,10 @@ def marca(outdir):
     # logo.svg: só o escudo, vetor, para quem precisa escalar
     (out / "logo.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-44 -16 88 128" width="88" height="128">'
-        + ESCUDO + "</svg>\n", encoding="utf-8")
+        + ESCUDO
+        + "</svg>\n",
+        encoding="utf-8",
+    )
     print(out / "logo.svg")
     # ícone quadrado (avatar, app, favicon grande)
     for lado in (1024, 512):
@@ -250,7 +271,10 @@ def marca(outdir):
         _png(svg_txt, lado, lado, out / f"logo-{lado}.png")
         del k
     # logo horizontal: escudo + wordmark, fundo transparente, para fundo claro e escuro
-    for tema, cor_roque, cor_shield in (("claro", "#0d1117", "#007aff"), ("escuro", "#e9eef5", "#2f8bff")):
+    for tema, cor_roque, cor_shield in (
+        ("claro", "#0d1117", "#007aff"),
+        ("escuro", "#e9eef5", "#2f8bff"),
+    ):
         svg_txt = (
             '<svg xmlns="http://www.w3.org/2000/svg" width="1056" height="208" viewBox="0 0 1056 208">'
             f"<defs><style>{FONTES}</style></defs>"
@@ -261,6 +285,7 @@ def marca(outdir):
         _png(svg_txt, 1056, 208, out / f"logo-horizontal.{tema}.png")
     # social preview do GitHub (1280x640): o banner recortado no formato que o GitHub pede
     from PIL import Image
+
     for lang in ("en", "pt"):
         im = Image.open(out / f"banner.{lang}.jpg").convert("RGB")
         w, h = im.size  # 3200x1120 -> 2:1 central, depois 1280x640
@@ -277,7 +302,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--art", help="arte raster (ex.: arte-scan.jpg gerada no ChatGPT)")
     ap.add_argument("--out", default=str(HERE), help="diretório de saída")
-    ap.add_argument("--so-marca", action="store_true", help="só logo, logo horizontal e social preview")
+    ap.add_argument(
+        "--so-marca", action="store_true", help="só logo, logo horizontal e social preview"
+    )
     a = ap.parse_args()
     if not a.so_marca:
         for lang in ("en", "pt"):
