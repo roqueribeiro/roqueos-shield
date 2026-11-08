@@ -133,7 +133,10 @@ RUN set -eux; \
 FROM python:3.13-slim AS base
 
 # nmap (port scan) — runs in-process. The heavier CLIs are copied from `tools`.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# `apt-get upgrade` pulls the base image's security fixes (e.g. zlib1g deb13u1,
+# CVE-2026-76844 / CVE-2026-85091): python:3.13-slim lags the Debian security feed,
+# and Trivy fails the release on a HIGH with a fix available.
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
         nmap \
         ca-certificates \
         curl \

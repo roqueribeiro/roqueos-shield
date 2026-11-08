@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- A imagem publicada atualiza os pacotes da base (`apt-get upgrade`) para fechar CVE-2026-76844 e CVE-2026-85091 no `zlib1g` da base `python:3.13-slim`, que o Trivy reprova na release.
+
+### Security
+
 Found by an independent review before the community release (2026-11-07), each one reproduced first and covered by a test that fails when the fix is removed:
 
 - **The AI agent's command leash checked only the finding's target, not the arguments.** With a valid target, `curl file:///data/secrets/APP_TOKEN`, `curl -d @file`, `curl http://127.0.0.1:8080/`, `nmap 169.254.169.254` or `nmap --script` were allowed and, in the standalone image, ran next to the secrets. Every URL, host, IP, path and file in the argv must now be the target itself; `--script`, `-K/--config`, `--resolve`, `--proxy`, `-L`, curl `-T` and other flags that read files or redirect the connection are refused; commands run with a minimal environment. Running an investigation for real (`dry_run=false`) is now off by default (`AGENT_LIVE_EXECUTION=false`: the agent only plans) and admin-only when turned on. curl has an allowlist of options; sqlmap `--alert`, `--tamper`, `-r`, nmap `-iR` and relative paths are refused.
