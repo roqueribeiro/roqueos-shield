@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Internal
 
 - mypy runs in strict mode with no global `ignore_missing_imports` (#7), and the CI typecheck job blocks the merge. The legacy ruff ignores are gone (#8); `S101` is allowed only under `tests/`.
-- CI actions: `actions/checkout` v7, `actions/setup-python` v7, `docker/build-push-action` v7, `docker/setup-buildx-action` v4.
+- CI actions: `actions/checkout` v7, `actions/setup-python` v7, `docker/build-push-action` v7, `docker/setup-buildx-action` v4, `astral-sh/setup-uv` v7, `docker/login-action` v4. ruff 0.17.4 (CI and the `dev` extra); the code needed no change.
 
 ### Documentation
 

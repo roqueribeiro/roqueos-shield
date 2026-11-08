@@ -102,7 +102,7 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
-    "ruff==0.16.5",   # pinado: formatação do ruff muda entre releases e quebra o gate
+    "ruff==0.17.4",   # pinado: formatação do ruff muda entre releases e quebra o gate
     "mypy==2.4.1",    # pinado: o typecheck é gate e regra nova do mypy não pode quebrar o CI sozinha
     "types-defusedxml>=0.7.0",
     "types-PyYAML>=6.0.0",

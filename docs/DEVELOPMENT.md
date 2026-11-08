@@ -240,7 +240,7 @@ python3.13 -m venv .venv
 | `uv lock --check` | `uv.lock` matches `pyproject.toml` | `lockfile` |
 | `scripts/web_e2e.sh` | the web screen against a real shield | `web` |
 
-The CI pins `ruff==0.16.5` (the `dev` extra pins the same). Another ruff version can disagree on formatting.
+The CI pins `ruff==0.17.4` (the `dev` extra pins the same). Another ruff version can disagree on formatting.
 
 **What you should see** from the three Python gates on a clean tree:
 
