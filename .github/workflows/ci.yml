@@ -43,7 +43,7 @@ jobs:
     # regenerado (mutação confirmada: rc 1 ao adicionar dep sem relockar).
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
       - name: uv lock --check
         run: uv lock --check
 
