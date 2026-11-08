@@ -34,7 +34,7 @@ def test_arquivos_nascem_0600_e_pasta_0700(tmp_path: Path) -> None:
 def test_ambiente_vence_e_nao_grava_nada(tmp_path: Path) -> None:
     pasta = tmp_path / "s"
     valores, origens = segredos.garantir(pasta, ambiente={"APP_TOKEN": "do-cofre-123"})
-    assert valores["APP_TOKEN"] == "do-cofre-123"
+    assert valores["APP_TOKEN"] == "do-cofre-123"  # noqa: S105  valor de fixture
     assert not (pasta / "APP_TOKEN").exists()
     assert [o.de_onde for o in origens if o.nome == "APP_TOKEN"] == ["ambiente"]
 

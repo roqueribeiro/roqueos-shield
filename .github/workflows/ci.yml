@@ -175,9 +175,8 @@ jobs:
   typecheck:
     name: Typecheck (mypy)
     runs-on: ubuntu-latest
-    # v0.1 baseline: codebase ainda nao passa em strict typecheck.
-    # Mantemos o job rodando (visibilidade) mas nao bloqueia merge.
-    continue-on-error: true
+    # Gate bloqueante: `mypy orchestrator` em strict (pyproject.toml, issue #7). O mypy
+    # é pinado no extra dev para uma release nova não reprovar o merge sozinha.
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

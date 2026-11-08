@@ -124,7 +124,7 @@ class TrivyAdapter:
 
         await cleanup_subprocess_handle(
             native_id=handle.native_id,
-            tasks=self._tasks,  # type: ignore[arg-type]
+            tasks=self._tasks,
             output_paths=self._outputs,
             adapter_name=self.name,
         )
@@ -170,8 +170,6 @@ class TrivyAdapter:
         placeholder = uuid4()
 
         artifact = raw.payload.get("ArtifactName", "unknown")
-        artifact_type = raw.payload.get("ArtifactType", "unknown")
-        target = Target(asset_type=AssetType.IMAGE, value=artifact, label=artifact_type)
 
         for result in raw.payload.get("Results") or []:
             target_in_result = result.get("Target", artifact)
@@ -180,12 +178,6 @@ class TrivyAdapter:
             for v in result.get("Vulnerabilities", []) or []:
                 sev = _TRIVY_SEVERITY.get(v.get("Severity", "LOW").upper(), Severity.LOW)
                 cwe = v.get("CweIDs") or []
-                cvss = v.get("CVSS", {})
-                cvss_score = None
-                for vendor in ("nvd", "redhat", "ubuntu"):
-                    if vendor in cvss and cvss[vendor].get("V3Score"):
-                        cvss_score = cvss[vendor]["V3Score"]
-                        break
 
                 findings.append(
                     Finding(
@@ -195,13 +187,20 @@ class TrivyAdapter:
                         source_rule_id=v.get("VulnerabilityID"),
                         vuln_id=v.get("VulnerabilityID"),
                         cwe=cwe,
-                        title=f"{v.get('PkgName')} {v.get('InstalledVersion')}: {v.get('Title') or v.get('VulnerabilityID')}",
+                        title=(
+                            f"{v.get('PkgName')} {v.get('InstalledVersion')}: "
+                            f"{v.get('Title') or v.get('VulnerabilityID')}"
+                        ),
                         description=v.get("Description", "")[:2000],
                         severity=sev,
                         confidence=Confidence.FIRM,
                         evidence=[
                             Evidence(
-                                description=f"Pacote vulnerável: {v.get('PkgName')} {v.get('InstalledVersion')} → {v.get('FixedVersion', '(sem fix)')}",
+                                description=(
+                                    f"Pacote vulnerável: {v.get('PkgName')} "
+                                    f"{v.get('InstalledVersion')} → "
+                                    f"{v.get('FixedVersion', '(sem fix)')}"
+                                ),
                                 snippet=v.get("PrimaryURL"),
                             )
                         ],

@@ -159,7 +159,7 @@ class TrufflehogAdapter:
 
         await cleanup_subprocess_handle(
             native_id=handle.native_id,
-            tasks=self._tasks,  # type: ignore[arg-type]
+            tasks=self._tasks,
             output_paths=self._outs,
             adapter_name=self.name,
         )

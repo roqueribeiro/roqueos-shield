@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 from orchestrator.domain.schemas import Finding, Severity
 
@@ -457,7 +458,7 @@ class ComplianceReport:
     risk_index: int = 0
     risk_grade: str = "A"
     max_cvss: float = 0.0
-    top_risks: tuple[dict, ...] = ()
+    top_risks: tuple[dict[str, Any], ...] = ()
     per_finding: dict[str, FindingCompliance] = field(default_factory=dict)
 
 
@@ -546,7 +547,7 @@ def build_compliance_report(findings: list[Finding], *, top_n: int = 10) -> Comp
     )
 
 
-def report_to_dict(r: ComplianceReport) -> dict:
+def report_to_dict(r: ComplianceReport) -> dict[str, Any]:
     """Serializa o `ComplianceReport` (frameworks + por-finding) pra JSON —
     consumível por GRC/SIEM (o banco pluga no fluxo de auditoria)."""
     return {

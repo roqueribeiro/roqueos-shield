@@ -72,10 +72,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 20
 
     # Scanners
-    # Ruleset do Semgrep embarcado na imagem (semgrep-rules, Semgrep Rules License v1.0, ver NOTICE; pinado no
-    # Dockerfile). Preferido sobre os packs `p/...` do registry porque funciona SEM
-    # egress — num banco a rede é restrita, e sem alcançar o registry o semgrep sai
-    # com código 0 e ZERO regras. Aponte para outro caminho se você mantém um
+    # Ruleset do Semgrep embarcado na imagem (semgrep-rules, Semgrep Rules License v1.0,
+    # ver NOTICE; pinado no Dockerfile). Preferido sobre os packs `p/...` do registry
+    # porque funciona SEM egress: num banco a rede é restrita, e sem alcançar o
+    # registry o semgrep sai com código 0 e ZERO regras. Aponte para outro caminho se você mantém um
     # ruleset próprio; vazio ou inexistente cai nos packs do registry.
     SEMGREP_RULES_DIR: str = "/opt/semgrep-rules"
     ZAP_BASE_URL: str = "http://zap:8090"
@@ -114,7 +114,8 @@ class Settings(BaseSettings):
     MCP_ALLOW_ACTIONS: bool = False
     # Pasta de dados do standalone (segredos gerados, SQLite, cache do trivy).
     DATA_DIR: Path = Path("./data")
-    APP_TOKEN: str = "dev-changeme"  # token simples API; trocar em prod
+    # Placeholder de exemplo, não credencial: o boot recusa subir com ele (SEC-01 abaixo).
+    APP_TOKEN: str = "dev-changeme"  # noqa: S105
     # SEC-01: o APP_TOKEN mapeia para um principal de serviço ADMIN e é a chave de
     # sessão no fallback. Subir com o token de exemplo entrega admin a quem lê o
     # repo. O boot recusa isso (ver `insecure_boot_errors`); em dev local, para usar

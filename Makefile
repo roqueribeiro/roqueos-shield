@@ -129,7 +129,7 @@ lint: ## ruff check + ruff format --check, como o CI (orchestrator, tests, scrip
 	$(UV_RUN) ruff check orchestrator tests scripts
 	$(UV_RUN) ruff format --check orchestrator tests scripts
 
-typecheck: ## mypy (no CI ainda não bloqueia o merge)
+typecheck: ## mypy strict (gate bloqueante no CI)
 	$(UV_RUN) mypy orchestrator
 
 ollama-pull: ## baixa modelos default no Ollama

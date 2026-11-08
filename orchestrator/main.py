@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -90,7 +91,7 @@ def _setup_logging() -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _setup_logging()
     log = structlog.get_logger(__name__)
 
@@ -292,7 +293,7 @@ _WEB_DIST = Path(__file__).parent / "web_dist"
 
 
 @app.get("/health")
-async def health() -> dict:
+async def health() -> dict[str, Any]:
     """Liveness simples (sem auth, leve). /health/full pra checagem completa."""
     return {"status": "ok", "version": app.version}
 

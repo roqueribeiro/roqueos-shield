@@ -2,29 +2,35 @@
 
 from __future__ import annotations
 
+import asyncio
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from orchestrator.api.deps import Principal, RequireScansRead, RequireScansRun, SessionDep
 from orchestrator.persistence.models import FindingRow, ScanRow, TargetRow
+
+if TYPE_CHECKING:
+    from orchestrator.domain.schemas import Finding
 
 log = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
-async def _load_findings(session, scan_id: UUID):
+async def _load_findings(session: AsyncSession, scan_id: UUID) -> list[Finding]:
     """Reconstrói os objetos `Finding` (Pydantic) a partir das linhas do scan."""
     from orchestrator.domain.schemas import Finding
 
     rows = (await session.exec(select(FindingRow).where(FindingRow.scan_id == scan_id))).all()
-    findings = []
+    findings: list[Finding] = []
     descartadas = 0
     for r in rows:
         try:
@@ -55,7 +61,7 @@ async def download_report(
     if scan is None or not scan.report_path:
         raise HTTPException(404, "relatório não encontrado")
     path = Path(scan.report_path)
-    if not path.exists():
+    if not await asyncio.to_thread(path.exists):
         raise HTTPException(404, f"arquivo {path} não existe no disco")
     return FileResponse(path, media_type="text/html", filename=path.name)
 
@@ -93,7 +99,7 @@ async def executive_report(
     from dataclasses import dataclass, field
     from typing import cast
 
-    from orchestrator.domain.schemas import AssetType, Finding, Severity, Target
+    from orchestrator.domain.schemas import AssetType, Severity, Target
     from orchestrator.jobs.pipelines import ScanResult
     from orchestrator.reporting.renderer import render_executive
 
@@ -119,14 +125,14 @@ async def executive_report(
     class _Result:
         scan_id: UUID
         target: Target
-        findings: list
+        findings: list[Finding]
         report_path: Path | None = None
-        errors: list = field(default_factory=list)
+        errors: list[str] = field(default_factory=list)
         # A cobertura vem da LINHA do scan. Antes estes três eram default vazio
         # hardcoded, então o executivo — o documento que vai para auditoria — não
         # tinha como saber que um scanner não rodou, e saía "nota A, zero achados".
-        scanners_ran: list = field(default_factory=list)
-        scanners_skipped: dict = field(default_factory=dict)
+        scanners_ran: list[str] = field(default_factory=list)
+        scanners_skipped: dict[str, str] = field(default_factory=dict)
 
     result = _Result(
         scan_id=scan_id,

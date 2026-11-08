@@ -175,7 +175,7 @@ class GitleaksAdapter:
 
         await cleanup_subprocess_handle(
             native_id=handle.native_id,
-            tasks=self._tasks,  # type: ignore[arg-type]
+            tasks=self._tasks,
             output_paths=self._workdirs,  # workdir e' dir; helper detecta is_dir()
             adapter_name=self.name,
         )

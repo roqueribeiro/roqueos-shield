@@ -327,14 +327,16 @@ async def complete_json(
         finding_count=finding_count,
     )
     try:
-        return json.loads(text)
+        dados: dict[str, Any] = json.loads(text)
+        return dados
     except json.JSONDecodeError:
         # tentativa 1: extrair primeiro objeto JSON balanceado
         start = text.find("{")
         end = text.rfind("}")
         if start >= 0 and end > start:
             try:
-                return json.loads(text[start : end + 1])
+                recortado: dict[str, Any] = json.loads(text[start : end + 1])
+                return recortado
             except json.JSONDecodeError:
                 pass
         # tentativa 2: output truncado de modelo de reasoning. Recortar

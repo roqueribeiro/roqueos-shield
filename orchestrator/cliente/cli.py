@@ -105,7 +105,7 @@ def _esperar(api: apimod.Api, scan_id: str, intervalo: float, prazo: float) -> d
     inicio = time.monotonic()
     ultima = None
     while True:
-        s = _chamar(api.get, f"/ui/api/scans/{scan_id}")
+        s: dict[str, Any] = _chamar(api.get, f"/ui/api/scans/{scan_id}")
         fase = (s.get("current_phase"), s.get("phase_progress"))
         if fase != ultima:
             ultima = fase
@@ -143,7 +143,8 @@ def status() -> None:
     h = _chamar(api.get, "/health")
     eu = _chamar(api.get, "/auth/session")
     out.print(
-        f"RoqueShield {h.get('version')} em {api.cfg.servidor}: {eu.get('email')} ({eu.get('role')})"
+        f"RoqueShield {h.get('version')} em {api.cfg.servidor}: "
+        f"{eu.get('email')} ({eu.get('role')})"
     )
     try:
         full = api.get("/health/full")

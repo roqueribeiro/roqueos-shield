@@ -27,13 +27,19 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+import structlog
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from orchestrator.config import settings
 from orchestrator.persistence.models import AppSettingRow
+
+if TYPE_CHECKING:
+    from cryptography.fernet import Fernet
+
+log = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -86,7 +92,7 @@ def travados(campos: tuple[Campo, ...], do_ambiente: frozenset[str] | None = Non
     return [c.chave for c in campos if c.env in amb]
 
 
-def _fernet():
+def _fernet() -> Fernet:
     from cryptography.fernet import Fernet
 
     if not settings.SECRETS_KEY:
@@ -141,7 +147,16 @@ async def aplicar(session: AsyncSession) -> list[str]:
         if campo.secreto and isinstance(bruto, str) and bruto.startswith(_PREFIXO_CIFRADO):
             try:
                 bruto = _decifrar(bruto)
-            except Exception:  # noqa: BLE001  chave trocada / dado corrompido
+            except Exception as e:  # noqa: BLE001  chave trocada / dado corrompido
+                # O campo fica no valor do ambiente, e isso precisa aparecer: quem
+                # gravou a chave pela tela acha que ela vale. Só o nome do campo e o
+                # tipo do erro vão para o log, nunca o valor.
+                log.error(
+                    "runtime_settings.segredo_ilegivel",
+                    chave=campo.chave,
+                    erro=type(e).__name__,
+                    detail="SECRETS_KEY trocada ou dado corrompido; valor gravado ignorado",
+                )
                 continue
         setattr(settings, campo.env, _para_settings(campo, bruto))
         aplicadas.append(campo.chave)

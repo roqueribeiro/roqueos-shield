@@ -20,6 +20,7 @@ estrutura prova serialização; só o que a produção grava prova comportamento
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 
 import pytest
@@ -192,7 +193,7 @@ async def test_report_path_persistido_para_o_relatorio_ser_baixavel() -> None:
     )
     row = await _linha(sid)
     assert row.report_path, "report_path não foi gravado — o download dá 404"
-    assert Path(row.report_path).exists()
+    assert await asyncio.to_thread(Path(row.report_path).exists)
 
 
 async def test_bundle_le_a_cobertura_da_linha_persistida() -> None:

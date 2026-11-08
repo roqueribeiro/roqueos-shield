@@ -195,7 +195,7 @@ def _detect_model_used(rows: Sequence[FindingRow]) -> str | None:
     for r in rows:
         triage = (r.payload or {}).get("ai_triage")
         if isinstance(triage, dict) and triage.get("model_used"):
-            return triage["model_used"]
+            return str(triage["model_used"])
     return None
 
 
@@ -581,7 +581,8 @@ def _build_remediation(
             "estimated_effort": "small" if approach == "config_change" else "medium",
             "blast_radius": "module" if approach == "code_change" else "service",
         },
-        "code_search_patterns": [],  # populado por agent fix-bundle-author quando enrich_with_ai=True
+        # populado pelo agent fix-bundle-author quando enrich_with_ai=True
+        "code_search_patterns": [],
         "before_after_examples": [],
         "dependency_upgrade": None,
         "config_change": None,

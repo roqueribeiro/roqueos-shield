@@ -341,7 +341,9 @@ async def _run_adapter(
     target: Target,
     options: dict[str, Any],
     poll_every: float = 5.0,
-    timeout: float = 1800.0,
+    # Orçamento do laço de poll, e não um cancelamento: esgotado, vira
+    # AdapterUnavailableError (scanners_skipped) e o cleanup do `finally` ainda roda.
+    timeout: float = 1800.0,  # noqa: ASYNC109
     scan_id_str: str | None = None,
 ) -> list[Finding]:
     """Lifecycle completo de um scan: start → poll → fetch → normalize → cleanup.

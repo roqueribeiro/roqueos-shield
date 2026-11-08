@@ -159,7 +159,7 @@ O Makefile esconde as flags do Compose. `make help` lista todos os alvos; são e
 | `make smoke` | `scripts/smoke.sh`: build, up e um scan ativo no Juice Shop |
 | `make migrate` / `make revision NAME=...` | `alembic upgrade head` / migration nova autogerada |
 | `make test` / `make lint` | pytest / `ruff check` e `ruff format --check`, no seu checkout por `uv run --frozen --extra dev` (`ARGS=tests/unit/test_x.py` para um alvo) |
-| `make typecheck` | mypy, que no CI ainda não bloqueia o merge |
+| `make typecheck` | mypy em modo strict, gate bloqueante no CI |
 | `make ollama-pull` | baixa os modelos padrão do Ollama |
 | `make greenbone-up` / `make greenbone-down` | a stack do Greenbone (feed sync de 30 min a 3 h, uns 5 GB) |
 | `make obs-up` / `make agent-up` / `make proxy-up` | Phoenix / `cai-expert` / Caddy |
@@ -231,7 +231,7 @@ python3.13 -m venv .venv
 | --- | --- | --- |
 | `.venv/bin/ruff check orchestrator tests scripts` | lint | `lint` |
 | `.venv/bin/ruff format --check orchestrator tests scripts` | formatação | `lint` |
-| `.venv/bin/mypy orchestrator` | tipos (não bloqueia o merge) | `typecheck` |
+| `.venv/bin/mypy orchestrator` | tipos, strict (bloqueia o merge) | `typecheck` |
 | `.venv/bin/pytest --cov=orchestrator --cov-fail-under=64` | a suíte e o piso de cobertura | `test` |
 | `python scripts/check_no_silence.py` | o contrato do silêncio, por AST | `silencio` |
 | `python scripts/check_docs_fresh.py` | a doc contra o código: scanners, contagem de adapters, `.env.example`, afirmações vencidas, versão do instalador, pares de docs e links | `docs` |
@@ -268,7 +268,7 @@ O `scripts/release-docker.sh` não é gate para rodar antes de um pull request. 
 | `secrets` | gitleaks no histórico inteiro, com `.gitleaks.toml` | sempre |
 | `self-scan` | Semgrep (`p/security-audit`, `p/secrets`) sobre `orchestrator/` e `scripts/` | sempre |
 | `efetividade` | `tests/integration/test_efetividade_e2e.py` com semgrep e checkov instalados | sempre |
-| `typecheck` | mypy, `continue-on-error: true` | sempre, nunca bloqueia |
+| `typecheck` | `mypy orchestrator` em modo strict, mypy pinado no extra dev | sempre |
 | `test` | pytest com `--cov-fail-under=64` | sempre |
 | `web` | idade do lock, `yarn install --frozen-lockfile`, `yarn build`, Playwright, `scripts/web_e2e.sh` | sempre |
 | `build-image` | builda a imagem do orchestrator, sem push | pull request |

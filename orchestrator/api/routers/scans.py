@@ -13,6 +13,7 @@ gate em dois lugares é o que deixava a CLI rodar fora do escopo.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from arq import create_pool
@@ -86,7 +87,7 @@ class ScanIn(BaseModel):
             "antigo era ['nmap','zap'] fixo, que zerava scan de IMAGE/REPO."
         ),
     )
-    options: dict = Field(default_factory=dict)
+    options: dict[str, Any] = Field(default_factory=dict)
     auth: AuthContext | None = Field(
         default=None,
         description="Scanning autenticado — headers efêmeros + OpenAPI (ver AuthContext).",
@@ -114,8 +115,8 @@ class ScanOut(BaseModel):
 
 
 def split_scan_auth(
-    options: dict, auth: AuthContext | None
-) -> tuple[dict, dict[str, str], str | None]:
+    options: dict[str, Any], auth: AuthContext | None
+) -> tuple[dict[str, Any], dict[str, str], str | None]:
     """Separa o que PODE persistir do segredo EFÊMERO (scanning autenticado).
 
     Retorna `(persisted_options, auth_headers, openapi_url)`:
@@ -141,7 +142,7 @@ def split_scan_auth(
 _ACTIVE_PROFILES: frozenset[str] = frozenset({"full", "active"})
 
 
-def apply_profile(options: dict, profile: str) -> dict:
+def apply_profile(options: dict[str, Any], profile: str) -> dict[str, Any]:
     """Traduz o `profile` do scan em opções concretas de adapter."""
     out = dict(options or {})
     if (profile or "").strip().lower() in _ACTIVE_PROFILES:
@@ -212,7 +213,7 @@ def scanners_do_scan(
     return nomes
 
 
-def redact_audit_auth(audit_body: dict) -> dict:
+def redact_audit_auth(audit_body: dict[str, Any]) -> dict[str, Any]:
     """Redige os VALORES dos auth headers no request_body do audit, mantendo os
     NOMES (a auditoria precisa saber QUAIS headers, não o segredo)."""
     auth = audit_body.get("auth")

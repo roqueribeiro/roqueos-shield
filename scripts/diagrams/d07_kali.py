@@ -190,9 +190,11 @@ def draw(theme):
         4,
         tr("lab_only_active() e dry_run", "lab_only_active() and dry_run"),
         tr(
-            "Com lab-only ligado, endereço interno só passa se estiver na allow-list. Em dry_run a decisão "
+            "Com lab-only ligado, endereço interno só passa se estiver na allow-list. "
+            "Em dry_run a decisão "
             "é calculada e registrada, e nada executa.",
-            "With lab-only on, an internal address passes only if allow-listed. In dry_run the decision is computed "
+            "With lab-only on, an internal address passes only if allow-listed. "
+            "In dry_run the decision is computed "
             "and recorded, and nothing runs.",
         ),
         color=P["red"],

@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections import deque
-from collections.abc import MutableMapping
+from collections.abc import AsyncIterator, MutableMapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -77,7 +77,7 @@ def get_phase(scan_id: str) -> dict[str, Any] | None:
     return _PHASE_BUFFER.get(scan_id)
 
 
-async def sse_stream(scan_id: str | None = None, max_idle_seconds: int = 30) -> Any:
+async def sse_stream(scan_id: str | None = None, max_idle_seconds: int = 30) -> AsyncIterator[str]:
     """Async generator que emite linhas SSE (`data: {...}\\n\\n`).
 
     - Logs novos: emite `event: log` com payload JSON.

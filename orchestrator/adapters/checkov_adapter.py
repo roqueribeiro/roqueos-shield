@@ -131,7 +131,7 @@ class CheckovAdapter:
 
         # Diretório local já presente (path) vs. URL de repo a clonar.
         local_dir = Path(target.value)
-        use_local = local_dir.is_dir()
+        use_local = await asyncio.to_thread(local_dir.is_dir)
         scan_dir = local_dir if use_local else (workdir / "repo")
 
         async def _run() -> tuple[int, Path]:
@@ -206,7 +206,7 @@ class CheckovAdapter:
 
         await cleanup_subprocess_handle(
             native_id=handle.native_id,
-            tasks=self._tasks,  # type: ignore[arg-type]
+            tasks=self._tasks,
             output_paths=self._workdirs,  # dir: o helper detecta is_dir()
             adapter_name=self.name,
         )

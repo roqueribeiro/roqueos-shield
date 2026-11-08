@@ -110,7 +110,7 @@ class NmapAdapter:
 
         await cleanup_subprocess_handle(
             native_id=handle.native_id,
-            tasks=self._tasks,  # type: ignore[arg-type]
+            tasks=self._tasks,
             output_paths=self._xml_paths,
             adapter_name=self.name,
         )
@@ -135,11 +135,6 @@ class NmapAdapter:
 
         for host in hosts:
             host_addr = host.address
-            host_target = Target(
-                asset_type=AssetType.HOST,
-                value=host_addr,
-                label=host.hostnames[0] if host.hostnames else None,
-            )
 
             for service in host.services:
                 if service.state != "open":
@@ -153,7 +148,8 @@ class NmapAdapter:
                 )
 
                 # nmap descobre, não classifica como vulnerabilidade per se.
-                # Severity baixa por padrão; o AIAnalyzer pode ajustar com base em serviço (ex.: telnet exposto = high).
+                # Severity baixa por padrão; o AIAnalyzer pode ajustar com base em serviço
+                # (ex.: telnet exposto = high).
                 severity = self._severity_for_service(service.service, service.port)
 
                 findings.append(

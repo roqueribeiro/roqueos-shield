@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (breaking)
+
+- **`ALLOW_CLOUD_FALLBACK` is now `false` by default.** When the local model fails, the findings no longer go to a cloud model without notice. Set `true` to get the old behavior.
+- **`POST /scans` refuses with `422`** what it used to run as something else: a profile that does not exist (such as `cloud`), an unknown scanner, a scanner that does not fit the target type, and a `k8s_resource` target (which used to fall back to nmap). The accepted profiles are `web`, `network`, `full`, `active` and `exposure`.
+- `cai scan` goes through the same gates as `POST /scans` (scope, `--authorization-ref`) and writes `scan.create` to the audit trail; without a database it refuses.
+- `make test`, `make lint` and the new `make typecheck` run on the checkout through `uv`, as the CI does. The local Ollama container left the default profile (`make ollama-up`), so `make up` works without an NVIDIA GPU.
+
+### Security
+
+- **The scrubber also redacts GitHub tokens** (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), **Slack tokens** (`xox?-`) and the value of password and secret assignments. No existing pattern was relaxed. It now runs on the AI Fix Bundle's title, rule name, remediation and AI triage too, not only on the evidence.
+- **gitleaks runs with `--redact`**, and the adapter removes the secret from `Match` even if the flag has no effect. **trufflehog** findings show `Redacted`, never `Raw`. Findings that deduplicated on the raw secret now use a hash of it, so their id in the bundle changes once.
+- **The old `/ui` dashboard (served only without the web build) gets a strict CSP and no CDN** (#10): `script-src 'self'` with no `unsafe-inline` or `unsafe-eval`; Alpine 3.17.5 (CSP build) and Chart.js 4.4.0 are vendored with their MIT licenses and SRI, Tailwind 3.4.19 is compiled into `styles.css`. The API token no longer lives in `localStorage` or in `?token=`: `/ui` uses the same HttpOnly session cookie as the new UI. `/ui/api/events` still accepts `?token=` for the RoqueOS proxy.
+- **The ZAP API key and the Redis password left the command line** in the development and production compose files: the entrypoint writes them to a `0600` file and drops them from the environment.
+- **Docker hardening** (#12): the orchestrator, the worker and the standalone image run with a read-only root and `tmpfs` for `/tmp`; ZAP and the API have healthchecks. nmap runs a connect scan (`-sT`, now explicit), so no container needs `NET_RAW`, and the separate nmap worker the issue proposed is not needed.
+- The DefectDojo export and `POST /exposure/scan` write to the audit trail before acting. New `GET /audit` route (`audit:read`): the `auditor` role can read the trail through the API.
+- The dead `kali_run_readonly` helper in `cai_expert.py`, which ran commands without the agent's leash, was removed.
+
+### Fixed
+
+- The `exposure` profile ran a plain web scan. It now runs the OSINT pipeline on the target's domain and writes to the same scan; each vector without credentials goes to `scanners_skipped`.
+- An unknown scanner was only logged; it now goes to `scanners_skipped`. Deduplication and `/findings/queue` have a deterministic order.
+- Semgrep findings in the AI Fix Bundle were filed as infrastructure (`host_port`) and counted as automatically patchable; they are now `sast` with file and line. `line` is filled for checkov, gitleaks and trufflehog too.
+- `install.sh --help` works through `curl | sh`, and `ROQUESHIELD_NO_BROWSER` only means yes for `1`, `true` or `yes`.
+- `make scan`, `scan-no-ai`, `exposure`, `scripts/smoke.sh` and the `.claude` skills that ran the CLI through `docker compose run` hit the `uvicorn` entrypoint; they call the CLI now. `make down` and `make clean` also stop Greenbone and the proxy. The GSA is `http://127.0.0.1:9392` (it was written as https).
+- The adapter templates in `.claude/` contradicted the silence contract; they follow it now, and a test runs `check_no_silence.py` over them.
+
+### Internal
+
+- mypy runs in strict mode with no global `ignore_missing_imports` (#7), and the CI typecheck job blocks the merge. The legacy ruff ignores are gone (#8); `S101` is allowed only under `tests/`.
+- CI actions: `actions/checkout` v7, `actions/setup-python` v7, `docker/build-push-action` v7, `docker/setup-buildx-action` v4.
+
 ### Documentation
 
 - **The documentation follows the aidlc-harness standard.** One entry point per language ([docs/INDEX.md](docs/INDEX.md), [docs/pt-BR/INDEX.md](docs/pt-BR/INDEX.md)); every document in English under `docs/` with its Brazilian Portuguese pair under `docs/pt-BR/`; new GETTING-STARTED, OPERATIONS, WHEN-IT-BREAKS, REFERENCE, GLOSSARY, DEVELOPMENT, TESTING and EXTENDING; ARCHITECTURE merges the old architecture and C4 documents. Every claim was checked against the code, and the old documents that said otherwise (`docs/usage.md` still described "CAI") were removed.

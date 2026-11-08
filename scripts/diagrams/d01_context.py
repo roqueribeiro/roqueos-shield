@@ -164,7 +164,8 @@ def draw(theme):
         "DefectDojo",
         tr("REST · opcional", "REST · optional"),
         tr(
-            "Destino de export dos achados para quem já tem gestão de vulnerabilidade centralizada.",
+            "Destino de export dos achados para quem já tem gestão de vulnerabilidade "
+            "centralizada.",
             "Export target for teams that already run centralized vulnerability management.",
         ),
         color=P["gray"],

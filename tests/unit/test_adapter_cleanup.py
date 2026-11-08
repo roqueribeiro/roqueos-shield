@@ -76,7 +76,7 @@ async def test_cleanup_removes_temp_dir_via_file_path() -> None:
     await cleanup_subprocess_handle(
         native_id="nid-4", tasks=tasks, output_paths=paths, adapter_name="test"
     )
-    assert not tmpdir.exists()
+    assert not await asyncio.to_thread(tmpdir.exists)
     assert "nid-4" not in paths
 
 
@@ -92,7 +92,7 @@ async def test_cleanup_removes_temp_dir_directly() -> None:
     await cleanup_subprocess_handle(
         native_id="nid-5", tasks=tasks, output_paths=paths, adapter_name="test"
     )
-    assert not tmpdir.exists()
+    assert not await asyncio.to_thread(tmpdir.exists)
 
 
 @pytest.mark.asyncio
@@ -109,7 +109,9 @@ async def test_cleanup_does_not_remove_unrelated_paths() -> None:
         await cleanup_subprocess_handle(
             native_id="nid-6", tasks=tasks, output_paths=paths, adapter_name="test"
         )
-        assert safe_dir.exists(), "salvaguarda falhou; removeu path fora de cai-*"
+        assert await asyncio.to_thread(safe_dir.exists), (
+            "salvaguarda falhou; removeu path fora de cai-*"
+        )
     finally:
         shutil.rmtree(safe_dir, ignore_errors=True)
 

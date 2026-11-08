@@ -99,7 +99,8 @@ def draw(theme):
                     "em /ui/api/events. Serve a tela em / (o painel antigo em /ui só sem o build).",
                     "51 routes in 14 routers. Checks scope, writes the audit trail in "
                     "the same commit as the scan, enqueues the job and streams phases "
-                    "over SSE at /ui/api/events. Serves the UI at / (the old /ui dashboard only without the build).",
+                    "over SSE at /ui/api/events. Serves the UI at / "
+                    "(the old /ui dashboard only without the build).",
                 ),
             ),
             dict(

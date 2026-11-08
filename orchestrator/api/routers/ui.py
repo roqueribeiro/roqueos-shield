@@ -16,6 +16,7 @@ from __future__ import annotations
 import hmac
 import statistics
 from collections import Counter
+from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -42,7 +43,7 @@ async def _principal_ou_nada(
     rs_session: Annotated[
         str | None, Cookie(alias=deps.COOKIE_SESSAO, include_in_schema=False)
     ] = None,
-    request: Request = None,  # type: ignore[assignment]
+    request: Request = None,  # type: ignore[assignment]  # o FastAPI sempre injeta
 ) -> deps.Principal | None:
     if not (x_api_token or bearer or rs_session):
         return None
@@ -292,7 +293,7 @@ async def events(
 ) -> StreamingResponse:
     """Server-Sent Events: live logs + phase updates pra um scan_id (opcional)."""
 
-    async def gen():
+    async def gen() -> AsyncIterator[str]:
         async for chunk in sse_stream(scan_id=scan_id):
             if await request.is_disconnected():
                 break

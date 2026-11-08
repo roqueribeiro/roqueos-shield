@@ -20,6 +20,7 @@ freio de força bruta; não é trilha de auditoria (essa é o `user.login_failed
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 LIVRES = 5  # falhas sem bloqueio, por e-mail+IP
@@ -37,7 +38,7 @@ class _Conta:
 
 
 class Freio:
-    def __init__(self, relogio=time.monotonic) -> None:
+    def __init__(self, relogio: Callable[[], float] = time.monotonic) -> None:
         self._relogio = relogio
         self._contas: dict[str, _Conta] = {}
 

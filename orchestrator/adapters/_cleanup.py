@@ -23,10 +23,10 @@ import structlog
 log = structlog.get_logger(__name__)
 
 
-async def cleanup_subprocess_handle(
+async def cleanup_subprocess_handle[T](
     *,
     native_id: str,
-    tasks: dict[str, asyncio.Task[object]],
+    tasks: dict[str, asyncio.Task[T]],
     output_paths: dict[str, Path] | None = None,
     adapter_name: str = "unknown",
 ) -> None:

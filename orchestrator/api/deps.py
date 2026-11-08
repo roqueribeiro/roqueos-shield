@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
@@ -159,7 +160,7 @@ async def get_principal(
 PrincipalDep = Annotated[Principal, Depends(get_principal)]
 
 
-def require_permission(permission: Permission):
+def require_permission(permission: Permission) -> Callable[[Principal], Awaitable[Principal]]:
     """Factory de dependency: exige `permission` do principal autenticado.
 
     Retorna o `Principal` (pra o endpoint usar como `actor`), ou 403.

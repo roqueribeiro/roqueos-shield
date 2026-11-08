@@ -25,6 +25,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from orchestrator.api.deps import COOKIE_SESSAO, PrincipalDep, SessionDep
 from orchestrator.audit import log_audit_event
@@ -55,7 +56,8 @@ class SetupIn(BaseModel):
     setup_code: str | None = Field(
         default=None,
         max_length=256,
-        description="Código de primeiro uso (`docker exec <container> cat /data/secrets/SETUP_CODE`). "
+        description="Código de primeiro uso "
+        "(`docker exec <container> cat /data/secrets/SETUP_CODE`). "
         "Dispensado com o APP_TOKEN no X-API-Token.",
     )
 
@@ -108,7 +110,7 @@ def _origem(request: Request) -> str:
     return request.client.host if request.client else "?"
 
 
-async def _total_de_usuarios(session) -> int:
+async def _total_de_usuarios(session: AsyncSession) -> int:
     return int((await session.exec(select(func.count()).select_from(UserRow))).one())
 
 

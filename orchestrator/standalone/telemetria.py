@@ -117,8 +117,9 @@ def servicos(proc: Path = PROC, cgroup: Path = CGROUP, janela: float = 0.25) -> 
     for s in SERVICOS:
         pid = achados[s.nome]
         cpu = None
-        if pid and t0.get(s.nome) is not None and t1.get(s.nome) is not None:
-            cpu = round(((t1[s.nome] - t0[s.nome]) / hz) / janela * 100, 1)  # type: ignore[operator]
+        antes, depois = t0.get(s.nome), t1.get(s.nome)
+        if pid and antes is not None and depois is not None:
+            cpu = round(((depois - antes) / hz) / janela * 100, 1)
         cartoes.append(
             {
                 "service": s.nome,

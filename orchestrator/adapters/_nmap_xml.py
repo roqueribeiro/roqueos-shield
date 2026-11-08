@@ -12,13 +12,15 @@ serviço e o banner (produto, versão e extra que o `-sV` preenche).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING
 
 from defusedxml import DefusedXmlException
 from defusedxml.ElementTree import ParseError, fromstring
 
-# Nó da árvore. Sem importar o `xml` da stdlib aqui: tudo passa pelo defusedxml.
-Element = Any
+# Nó da árvore. Sem importar o `xml` da stdlib em tempo de execução: tudo passa pelo
+# defusedxml. O import abaixo é só para o mypy (é o tipo que o `fromstring` devolve).
+if TYPE_CHECKING:
+    from xml.etree.ElementTree import Element
 
 
 class NmapXmlError(ValueError):

@@ -201,9 +201,13 @@ def scan(
 @app.command()
 def exposure(
     company_name: Annotated[str, typer.Argument(help="Nome da empresa/banco")],
-    domains: Annotated[list[str], typer.Option(help="Domínios do banco (repetir flag)")] = [],
-    github_orgs: Annotated[list[str], typer.Option(help="Orgs GitHub (repetir flag)")] = [],
-    dorks: Annotated[list[str], typer.Option(help="Dorks GitHub (repetir flag)")] = [],
+    domains: Annotated[
+        list[str] | None, typer.Option(help="Domínios do banco (repetir flag)")
+    ] = None,
+    github_orgs: Annotated[
+        list[str] | None, typer.Option(help="Orgs GitHub (repetir flag)")
+    ] = None,
+    dorks: Annotated[list[str] | None, typer.Option(help="Dorks GitHub (repetir flag)")] = None,
     config_file: Annotated[
         Path | None,
         typer.Option(help="YAML de config (sobrescreve flags)"),
@@ -212,6 +216,11 @@ def exposure(
 ) -> None:
     """Scan OSINT/Exposure externa (Fase 2.5). Read-only, sem autorizacao requerida."""
     _setup_logging()
+    # Default None em vez de `[]`: a lista default seria a mesma entre chamadas, e o
+    # `dorks.append` abaixo a mutaria (B006). Cópia local, sem tocar no argumento.
+    domains = list(domains or [])
+    github_orgs = list(github_orgs or [])
+    dorks = list(dorks or [])
 
     if config_file and config_file.exists():
         import yaml
@@ -268,7 +277,9 @@ def exposure(
 
 @app.command()
 def serve(
-    host: Annotated[str, typer.Option()] = "0.0.0.0",
+    # Default documentado em docs/REFERENCE.md: o mesmo bind do compose, onde quem limita
+    # a exposição é o publish de porta (127.0.0.1). Fora de container: --host 127.0.0.1.
+    host: Annotated[str, typer.Option()] = "0.0.0.0",  # noqa: S104
     port: Annotated[int, typer.Option()] = 8080,
 ) -> None:
     """Sobe a API REST (FastAPI + uvicorn)."""

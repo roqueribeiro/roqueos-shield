@@ -29,9 +29,9 @@ _redis = None
 async def _contar_no_redis(chave: str, janela: int) -> int:
     global _redis
     if _redis is None:
-        from redis.asyncio import from_url
+        from redis.asyncio import Redis
 
-        _redis = from_url(settings.REDIS_URL, socket_connect_timeout=1, socket_timeout=1)
+        _redis = Redis.from_url(settings.REDIS_URL, socket_connect_timeout=1, socket_timeout=1)
     pipe = _redis.pipeline()
     pipe.incr(chave)
     pipe.expire(chave, janela, nx=True)

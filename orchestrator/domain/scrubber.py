@@ -3,7 +3,8 @@
 Aplicado em `Evidence` e `description` de Findings durante a triagem AI.
 Uso defensivo: melhor um falso positivo de scrub do que vazar PAN/CPF/email pro Claude.
 
-Conformidade: LGPD Art. 46 (medidas técnicas adequadas), PCI DSS Req. 3 (proteção de dados de cartão).
+Conformidade: LGPD Art. 46 (medidas técnicas adequadas), PCI DSS Req. 3 (proteção de
+dados de cartão).
 """
 
 from __future__ import annotations

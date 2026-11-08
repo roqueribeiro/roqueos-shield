@@ -150,23 +150,13 @@ target-version = "py313"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "S"]
 ignore = [
-    "S101",     # assert OK em testes
     "S603",     # subprocess com argv list é seguro
     "S607",     # subprocess com path parcial OK (usamos PATH controlado)
-    # TODO(v0.2): backlog de cleanup — re-habilitar gradualmente
-    "E501",     # line-too-long: muitos hits em strings/f-strings longas
-    "F841",     # unused-variable em handlers de erro a limpar
-    "B006",     # mutable-argument-default em CLI args legados
-    "B017",     # assert raises Exception (testes de smoke)
-    "ASYNC109", # async function com argumento `timeout=`
-    "ASYNC240", # blocking-path-method em async (Path.exists)
-    "S104",     # hardcoded-bind-all-interfaces em compose/Settings (intencional)
-    "S105",     # hardcoded-password-string em fixtures de teste
-    "S112",     # try/except/continue documentado no audit log
-    "S314",     # xml.etree em adapters de scanners confiáveis
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# assert é a linguagem do pytest. Só nos testes: em produção ele some com `python -O`.
+"tests/**" = ["S101"]
 # c4lib e uma DSL de desenho, e o import estrela da aos nove diagramas as ~30
 # primitivas (node, edge, boundary, row, step, table, chip...) sem repetir uma lista
 # de import de 30 nomes em cada arquivo. O ganho de listar nao paga o ruido, e o

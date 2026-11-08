@@ -526,7 +526,7 @@ def edge(
 def title_block(c: Canvas, title, subtitle=None, level=None, x=48, y=52):
     t = c.theme
     if level:
-        w = c.pill(x, y - 30, level, PALETTE["rose"], size=10, h=20, filled=True)
+        c.pill(x, y - 30, level, PALETTE["rose"], size=10, h=20, filled=True)
         c.text(x, y + 26, title, size=25, weight=700, fill=t["ink"])
     else:
         c.text(x, y, title, size=25, weight=700, fill=t["ink"])

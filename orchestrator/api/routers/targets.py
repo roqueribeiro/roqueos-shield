@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -33,7 +34,7 @@ class TargetIn(BaseModel):
     label: str | None = None
     criticality: Severity = Severity.MEDIUM
     contains_pii: bool = False
-    metadata: dict = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class TargetOut(BaseModel):

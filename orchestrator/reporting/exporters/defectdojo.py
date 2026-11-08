@@ -107,7 +107,7 @@ async def export_scan(
             files=files,
         )
         resp.raise_for_status()
-        result = resp.json()
+        result: dict[str, Any] = resp.json()
 
     log.info(
         "defectdojo.exported", scan_id=str(scan_id), test_id=result.get("test"), count=len(rows)
