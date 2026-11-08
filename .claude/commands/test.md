@@ -4,15 +4,16 @@ allowed-tools: Bash
 argument-hint: "[caminho/teste/opcional.py]"
 ---
 
-Roda os testes unitários. Se `$ARGUMENTS` for vazio, roda todos. Senão, roda só o alvo.
+Roda a suíte no checkout (a imagem do orchestrator não leva `tests/` nem pytest). Se
+`$ARGUMENTS` for vazio, roda todos. Senão, roda só o alvo.
 
 ```bash
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml run --rm --entrypoint pytest orchestrator -q $ARGUMENTS
+make test ARGS="$ARGUMENTS"
 ```
 
-Para rodar com cobertura:
+Para rodar com cobertura, com o piso do CI:
 ```bash
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml run --rm --entrypoint pytest orchestrator --cov=orchestrator --cov-report=term-missing
+uv run --frozen --extra dev pytest --cov=orchestrator --cov-report=term-missing --cov-fail-under=64
 ```
 
 Reporte: total de testes, falhas, % de cobertura (se aplicável).

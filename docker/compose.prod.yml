@@ -14,7 +14,9 @@
 # - Workers separados e escaláveis (SHIELD_SERVICES=worker).
 #
 # Obrigatórios no .env: SHIELD_VERSION (a tag da imagem, ex. v0.5.0), POSTGRES_PASSWORD,
-# REDIS_PASSWORD, APP_TOKEN, SESSION_SECRET, SECRETS_KEY, ZAP_API_KEY. Em produção, gere-os
+# REDIS_PASSWORD, APP_TOKEN, SESSION_SECRET, SECRETS_KEY, ZAP_API_KEY. As chaves do ZAP e
+# do Redis chegam aos dois serviços por ambiente e viram arquivo 0600 no entrypoint:
+# nenhuma aparece na linha de comando. Em produção, gere-os
 # no cofre e injete aqui. O código de primeiro uso (SETUP_CODE) é gerado no volume
 # shield_data se não vier no .env:  docker compose ... exec shield cat /data/secrets/SETUP_CODE
 # Opcionais: SHIELD_BIND (padrão 127.0.0.1) e SHIELD_PORT (padrão 8080) para a porta
@@ -29,6 +31,13 @@ x-shield: &shield
   restart: unless-stopped
   cap_drop: [ALL]
   security_opt: ["no-new-privileges:true"]
+  # Raiz só de leitura (Issue #12). O supervisor e os scanners escrevem em /data
+  # (volume; HOME=/data na imagem) e em /tmp (tmpfs: mkdtemp dos adapters e clone do
+  # repo escaneado). O nmap faz connect scan (-sT -Pn) e não precisa de NET_RAW, por
+  # isso não existe uma rede ou um worker à parte para ele (decisão da #12).
+  read_only: true
+  tmpfs:
+    - /tmp:size=2g
   environment: &env
     DATABASE_URL: postgresql+asyncpg://roqueshield:${POSTGRES_PASSWORD:?}@postgres:5432/roqueshield
     REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/0
@@ -59,6 +68,13 @@ services:
       SHIELD_SERVICES: orchestrator
     ports:
       - "${SHIELD_BIND:-127.0.0.1}:${SHIELD_PORT:-8080}:8080"
+    healthcheck:
+      # O mesmo do HEALTHCHECK da imagem, escrito aqui para quem lê o compose.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   worker:
     <<: *shield
@@ -88,7 +104,18 @@ services:
     restart: unless-stopped
     # Senha obrigatória: o ZAP, na mesma rede, processa conteúdo hostil, e o arq
     # desserializa job com pickle. Redis aberto na rede era RCE no worker.
-    command: ["sh", "-c", 'exec redis-server --save "" --appendonly no --requirepass "$$REDIS_PASSWORD"']
+    # A senha vai por arquivo 0600 e não por `--requirepass`: argumento aparece em `ps` e
+    # em /proc/<pid>/cmdline. É o que o supervisor faz com o Redis embutido.
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        : "$${REDIS_PASSWORD:?REDIS_PASSWORD vazio}"
+        umask 077
+        printf 'requirepass %s\n' "$$REDIS_PASSWORD" > /tmp/redis-auth.conf
+        unset REDIS_PASSWORD
+        exec redis-server /tmp/redis-auth.conf --save "" --appendonly no
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?}
 
@@ -99,6 +126,25 @@ services:
     shm_size: "1gb"
     environment:
       ZAP_PORT: "8090"
+      ZAP_API_KEY: ${ZAP_API_KEY:?}
+    # A chave da API NÃO vai na linha de comando: `-config api.key=...` aparecia em `ps`,
+    # em /proc/<pid>/cmdline e no `docker inspect` (Config.Cmd). O entrypoint lê a
+    # chave do ambiente, grava um arquivo 0600 e acrescenta só o caminho (-configfile)
+    # ao command, como o supervisor do standalone já fazia. O `unset` tira a chave do
+    # ambiente do java antes do exec. Os $$ são do compose: quem expande é o sh do container.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        : "$${ZAP_API_KEY:?ZAP_API_KEY vazio}"
+        umask 077
+        arq="$${HOME:-/home/zap}/zap-api.properties"
+        printf 'api.disablekey=false\napi.key=%s\n' "$$ZAP_API_KEY" > "$$arq"
+        unset ZAP_API_KEY
+        exec "$$@" -configfile "$$arq"
+      - zap-entrypoint
+    # Só o que não é segredo vai no command; o entrypoint acrescenta o -configfile.
     command:
       - zap.sh
       - -daemon
@@ -107,13 +153,17 @@ services:
       - -port
       - "8090"
       - -config
-      - api.disablekey=false
-      - -config
-      - api.key=${ZAP_API_KEY:?}
-      - -config
       - api.addrs.addr.name=.*
       - -config
       - api.addrs.addr.regex=true
+    healthcheck:
+      # A mesma checagem do HEALTHCHECK da imagem, explícita e com start_period: o ZAP
+      # leva um a dois minutos para abrir a porta. Sem a chave na URL de propósito.
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8090/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
 
 volumes:
   shield_data:

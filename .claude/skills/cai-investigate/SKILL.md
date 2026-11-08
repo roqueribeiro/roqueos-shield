@@ -41,10 +41,12 @@ docker exec cai-postgres psql -U cai -d cai -c \
 ## 2. Disparar investigação
 
 ```bash
-TOKEN=$(grep APP_TOKEN .env | cut -d= -f2)
+H=$(mktemp) && chmod 600 "$H"   # o token vai por arquivo de header, nunca no argv do curl
+sed -n 's/^APP_TOKEN=\(.*\)/X-API-Token: \1/p' .env > "$H"
 curl -X POST http://127.0.0.1:8080/investigate/$FINDING_ID \
-  -H "X-API-Token: $TOKEN" -H "Content-Type: application/json" \
+  -H @"$H" -H "Content-Type: application/json" \
   -d '{"dry_run": true, "max_steps": 10}'
+rm -f "$H"
 ```
 
 ## 3. Interpretar saída
@@ -83,9 +85,12 @@ Resumo focado:
 Se usuário concordar e pedir `dry_run=false`:
 
 ```bash
+H=$(mktemp) && chmod 600 "$H"   # o token vai por arquivo de header, nunca no argv do curl
+sed -n 's/^APP_TOKEN=\(.*\)/X-API-Token: \1/p' .env > "$H"
 curl -X POST http://127.0.0.1:8080/investigate/$FINDING_ID \
-  -H "X-API-Token: $TOKEN" -H "Content-Type: application/json" \
+  -H @"$H" -H "Content-Type: application/json" \
   -d '{"dry_run": false, "max_steps": 5}'
+rm -f "$H"
 ```
 
 O agente vai rodar comandos read-only no kali-toolbox e enriquecer o assessment.

@@ -26,11 +26,14 @@ class Settings(BaseSettings):
     # Se vazio + LLM_API_BASE setado, fallback "lm-studio".
     LLM_API_KEY: str = ""
     # SEC-03: quando o modelo primário é LOCAL (soberania de dados) e falha, o
-    # gateway pode cair no LLM_FALLBACK_MODEL cloud — o que manda os findings pro
+    # gateway pode cair no LLM_FALLBACK_MODEL cloud, o que manda os findings pro
     # provider externo. Isso fura o isolamento que o modo local existe pra garantir.
-    # True mantém o fallback (com log de aviso); em ambiente regulado, defina False
-    # para PROIBIR o cruzamento local→cloud (o scan falha em vez de vazar).
-    ALLOW_CLOUD_FALLBACK: bool = True
+    # Default False desde 08/11/2026: num produto para ambiente regulado, quem escolheu
+    # modelo local escolheu não mandar dado para fora, e a travessia calada era o
+    # padrão de quem não leu esta linha. False faz a triagem falhar em vez de vazar.
+    # True volta a permitir, sempre com log de aviso. Só afeta primário local
+    # (LLM_API_BASE definido); fallback de nuvem para nuvem não muda.
+    ALLOW_CLOUD_FALLBACK: bool = False
     # Modelo do LOOP AGÊNTICO (investigação). Separado do LLM_MODEL de propósito:
     # a triagem em massa pode rodar local barato (soberania), mas o loop com
     # ferramenta exige raciocínio e contexto grande — Qwen 27B q4 com 8-16k satura
@@ -69,10 +72,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 20
 
     # Scanners
-    # Ruleset do Semgrep embarcado na imagem (semgrep-rules, Semgrep Rules License v1.0, ver NOTICE; pinado no
-    # Dockerfile). Preferido sobre os packs `p/...` do registry porque funciona SEM
-    # egress — num banco a rede é restrita, e sem alcançar o registry o semgrep sai
-    # com código 0 e ZERO regras. Aponte para outro caminho se você mantém um
+    # Ruleset do Semgrep embarcado na imagem (semgrep-rules, Semgrep Rules License v1.0,
+    # ver NOTICE; pinado no Dockerfile). Preferido sobre os packs `p/...` do registry
+    # porque funciona SEM egress: num banco a rede é restrita, e sem alcançar o
+    # registry o semgrep sai com código 0 e ZERO regras. Aponte para outro caminho se você mantém um
     # ruleset próprio; vazio ou inexistente cai nos packs do registry.
     SEMGREP_RULES_DIR: str = "/opt/semgrep-rules"
     ZAP_BASE_URL: str = "http://zap:8090"
@@ -111,7 +114,8 @@ class Settings(BaseSettings):
     MCP_ALLOW_ACTIONS: bool = False
     # Pasta de dados do standalone (segredos gerados, SQLite, cache do trivy).
     DATA_DIR: Path = Path("./data")
-    APP_TOKEN: str = "dev-changeme"  # token simples API; trocar em prod
+    # Placeholder de exemplo, não credencial: o boot recusa subir com ele (SEC-01 abaixo).
+    APP_TOKEN: str = "dev-changeme"  # noqa: S105
     # SEC-01: o APP_TOKEN mapeia para um principal de serviço ADMIN e é a chave de
     # sessão no fallback. Subir com o token de exemplo entrega admin a quem lê o
     # repo. O boot recusa isso (ver `insecure_boot_errors`); em dev local, para usar

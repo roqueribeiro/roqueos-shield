@@ -403,10 +403,20 @@ def _guarda_de_rede(host: str, *, rotulo: str) -> None:
 def liberavel_pela_tela(erro: AlvoForaDoEscopo) -> bool:
     """A tela pode oferecer "liberar no escopo" para este host?
 
-    Não para o próprio container (loopback: o scan bateria no shield, no Redis e no
-    ZAP), nem para metadata de nuvem (link-local, `metadata*`), nem para nome que não
-    resolve (liberar não faz ele resolver). Pela variável de ambiente o operador ainda
-    pode tudo; a tela só não oferece o atalho para o que quase nunca é intenção.
+    Só para `motivo == "rede_local"` com host que não é sensível. Não oferece para:
+
+    - nome que não resolve (liberar não faz ele resolver);
+    - os nomes de `_FORBIDDEN_HOSTNAMES` (`localhost`, `metadata`,
+      `metadata.google.internal`, `instance-data`), pelo nome, resolvam ou não;
+    - host cujo IP (literal ou resolvido, com IPv4 embutido em NAT64/6to4/mapeado
+      desembrulhado) é link-local (169.254.0.0/16, fe80::/10, onde mora o metadata da
+      nuvem), não especificado (0.0.0.0, ::) ou loopback (o próprio container).
+
+    Isto é só o atalho da tela. Link-local e não especificado não viram alvo de jeito
+    nenhum: `_guarda_dura` os recusa mesmo com `LAB_ONLY=false` ou na allowlist.
+    Loopback vira alvo só com o próprio endereço (`127.0.0.1`, `::1`, `localhost`) na
+    `TARGET_ALLOWLIST`, nunca por nome liberado. O resto da rede interna (RFC1918,
+    CGNAT, ULA) o operador libera pela allowlist ou com `LAB_ONLY=false`.
     """
     if erro.motivo != "rede_local":
         return False

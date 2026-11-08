@@ -75,7 +75,8 @@ class ZAPAdapter:
     async def _get(self, path: str, **params: Any) -> dict[str, Any]:
         r = await self._client.get(path, params=params)
         r.raise_for_status()
-        return r.json()
+        dados: dict[str, Any] = r.json()
+        return dados
 
     async def health(self) -> bool:
         try:
@@ -557,7 +558,7 @@ class ZAPAdapter:
         for u in urls:
             try:
                 out.append(adapter.validate_python(u))
-            except Exception:  # noqa: BLE001  silencio-ok: URL de REFERÊNCIA malformada
+            except Exception:  # noqa: BLE001, S112  silencio-ok: URL de REFERÊNCIA malformada
                 # Não é achado nem evidência — é o link "leia mais" que o ZAP anexa
                 # ao alerta. Descartar um link quebrado não esconde vulnerabilidade
                 # nenhuma; o alerta em si continua inteiro.

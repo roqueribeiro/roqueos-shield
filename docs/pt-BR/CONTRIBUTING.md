@@ -83,7 +83,7 @@ O `install.sh` tenta `docker pull` primeiro e, quando a tag não está no regist
 
 ### Testes, lint e gates sem Docker
 
-O `make test` e o `make lint` rodam dentro da imagem do orchestrator, que é buildada sem as dependências de desenvolvimento e sem `tests/`; use o ambiente local, do mesmo jeito que o CI:
+O `make test`, o `make lint` e o `make typecheck` rodam no seu checkout, não na imagem do orchestrator (a imagem é buildada sem as dependências de desenvolvimento e sem `tests/`): eles chamam `uv run --frozen --extra dev`, que instala o extra de dev a partir do `uv.lock`. Sem uv, as mesmas checagens num venv comum, do jeito que o CI roda:
 
 ```bash
 python3.13 -m venv .venv

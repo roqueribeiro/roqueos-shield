@@ -9,7 +9,7 @@ Read-only sobre dados públicos.
 from __future__ import annotations
 
 import asyncio
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import structlog
 
@@ -41,6 +41,8 @@ async def run_exposure_scan(
     dorks: list[str],
     skip_ai: bool = False,
     deep_secrets_in_top_repos: int = 5,
+    scan_id: UUID | None = None,
+    target: Target | None = None,
 ) -> ScanResult:
     """Pipeline OSINT — não toca em ativos do banco, só dados públicos.
 
@@ -58,8 +60,11 @@ async def run_exposure_scan(
     "nenhuma exposição encontrada, cobertura completa" tendo consultado NADA.
     """
 
-    scan_id = uuid4()
-    company_target = Target(asset_type=AssetType.DOMAIN, value=company_name)
+    # `scan_id` e `target` vêm do `POST /scans` com profile `exposure` (via `run_scan`):
+    # o job ATUALIZA o scan que a tela acompanha e grava contra o alvo cadastrado, em
+    # vez de criar um scan novo e um alvo com o nome da empresa.
+    scan_id = scan_id or uuid4()
+    company_target = target or Target(asset_type=AssetType.DOMAIN, value=company_name)
     result = ScanResult(scan_id=scan_id, target=company_target)
 
     def pulou(nome: str, motivo: str) -> None:

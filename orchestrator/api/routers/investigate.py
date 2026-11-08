@@ -10,6 +10,7 @@ ANTES de executar — o threat-model lista este fluxo como crítico a auditar.
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -35,7 +36,7 @@ class InvestigationIn(BaseModel):
 
 class InvestigationOut(BaseModel):
     finding_id: UUID
-    transcript: list[dict]
+    transcript: list[dict[str, Any]]
     final_assessment: str
     dry_run: bool
     trace_url: str | None = None

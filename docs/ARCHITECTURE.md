@@ -84,7 +84,7 @@ The split that matters is **orchestrator versus worker**: the same image with a 
 | `domain/schemas.py` | `Target`, `Finding`, `AITriage`, `RawResults`, `AssetType`. `Finding.deduped_key` is `sha256(target::rule[::discriminator])[:32]` |
 | `domain/target_validator.py` | The scope gate (section 10) |
 | `domain/scrubber.py` | Redaction before any text goes to an external LLM (section 7) |
-| `domain/dedup.py` | `heuristic_dedup`: keeps the highest severity per `deduped_key` |
+| `domain/dedup.py` | `heuristic_dedup`: keeps the highest severity per `deduped_key` (ties: confidence, then tool, rule and id) and returns the list sorted by severity and key, the same for any input order |
 | `jobs/pipelines.py` | `resolve_scanners`, the adapter factory in `_build_adapters`, `_run_adapter` (the lifecycle) and `run_scan` |
 | `jobs/exposure.py` | The OSINT pipeline, which instantiates its adapters directly |
 | `adapters/` | 15 adapters implementing the `ScannerAdapter` Protocol of `adapters/base.py` |
@@ -94,7 +94,7 @@ The split that matters is **orchestrator versus worker**: the same image with a 
 | `audit/logger.py` | `log_audit_event`, append-only |
 | `standalone/` | The supervisor and first-boot secrets of the single-container image (section 11) |
 
-**What runs, and when.** The scanner list is never free-form. `resolve_scanners(requested, asset_type, profile)` applies, in order: the caller's explicit list, then the UI profile (`web`, `network`, `full` in `_PROFILE_SCANNERS`), then the default for the asset type (`_DEFAULT_SCANNERS`). The result is always filtered by what each adapter accepts (`_SCANNER_ASSET_SUPPORT`). Before this filter, an incompatible scanner was instantiated, raised `ValueError`, the error was swallowed and the scan closed with zero findings.
+**What runs, and when.** The scanner list is never free-form. `resolve_scanners(requested, asset_type, profile)` applies, in order: the caller's explicit list, then the UI profile (`web`, `network`, `full` in `_PROFILE_SCANNERS`), then the default for the asset type (`_DEFAULT_SCANNERS`). The result is always filtered by what each adapter accepts (`_SCANNER_ASSET_SUPPORT`). Before this filter, an incompatible scanner was instantiated, raised `ValueError`, the error was swallowed and the scan closed with zero findings. What stays out (unknown name, incompatible type, a target no scanner accepts) comes back with the reason from `resolve_scanners_com_motivo`: `POST /scans` refuses it with 422, and `run_scan` writes it to `scanners_skipped`. The profile must be one of `PERFIS_DO_SCAN` (`web`, `network`, `full`, `active`, `exposure`); `exposure` hands the target's domain to the OSINT pipeline (`jobs/exposure.py`) and records the result in the same scan. `cai scan` goes through the same gates and the same audit event as `POST /scans` (`gates_do_scan`, `scanners_do_scan`).
 
 The factory builds nine scanners. The other six adapters belong to the OSINT pipeline or to no pipeline at all:
 
@@ -192,7 +192,7 @@ Then the API answers `202`, `arq` enqueues `run_scan_job` (job id `scan-<uuid>`)
 
 **Triage** (`ai/analyzer.py`, `triage_batch`) sends findings in batches of 6 and fills `Finding.ai_triage`: adjusted severity, rationale, business impact, suggested remediation, OWASP category, likely false positive. The scanner's own `Finding.severity` is never overwritten. `run_scan` passes `skip_severities=set()`, so every finding is triaged: a hardened target yields only low and info findings, and skipping them meant the AI never ran. Without a key and without a local endpoint, the triage is not attempted; each finding gets a deterministic triage that says the AI was not configured, instead of a red error on every scan.
 
-**The scrubber** (`domain/scrubber.py`) redacts CPF, CNPJ, card numbers (with a Luhn check), CVV, e-mail, Brazilian phone numbers, JWTs, AWS keys, `Authorization` headers and `Cookie` / `Set-Cookie` values. It runs on the free-text fields the triage sends (title, description, evidence), on what the investigation loop sends, on the AI Fix Bundle before it is served, and on audit metadata. With a local model the findings never leave the machine; with a cloud model the scrubber is the barrier. Changing its patterns requires review by the DPO (see `CLAUDE.md`).
+**The scrubber** (`domain/scrubber.py`) redacts CPF, CNPJ, card numbers (with a Luhn check), CVV, e-mail, Brazilian phone numbers, JWTs, AWS keys, GitHub tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), Slack tokens (`xox?-`), the value of password and secret assignments, `Authorization` headers and `Cookie` / `Set-Cookie` values. It runs on the free-text fields the triage sends (title, description, evidence), on what the investigation loop sends, on the AI Fix Bundle before it is served, and on audit metadata. With a local model the findings never leave the machine; with a cloud model the scrubber is the barrier. Changing its patterns requires review by the DPO (see `CLAUDE.md`).
 
 **Deduplication.** `heuristic_dedup` is deterministic. A semantic, LLM-based `semantic_dedup` exists in `domain/dedup.py` and is not called by the pipeline.
 
@@ -340,7 +340,7 @@ Before testing a real asset: written authorization and an agreed window. Metaspl
 
 ## 15. Known limits
 
-- **Two adapters are never constructed.** `censys` and `kube_bench` exist and are tested, but no production path instantiates them. A `k8s_resource` target therefore has no working scanner in the scan pipeline: the resolution falls back to `nmap`, which refuses the type, and the scan ends `FAILED`.
+- **Two adapters are never constructed.** `censys` and `kube_bench` exist and are tested, but no production path instantiates them. A `k8s_resource` target therefore has no scanner in the scan pipeline: `POST /scans` refuses it with 422, and a direct `run_scan` ends `FAILED` with the reason under `scanners_skipped`.
 - **Sequential adapters, one host.** The pipeline runs one adapter after another; there is no distributed scan. The production compose can run more workers (`--scale worker=N`), which spreads scans, not the adapters of one scan.
 - **No scheduling and no diff between runs.** Each scan is one-shot; comparison between runs is left to the caller (the `deduped_key` makes it possible).
 - **DNS rebinding.** The scope gate resolves names at validation time; it does not resolve again at scan time.

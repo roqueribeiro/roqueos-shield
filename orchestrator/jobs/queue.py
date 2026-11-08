@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from typing import Any
+
 import structlog
 from arq.connections import RedisSettings
 
@@ -15,17 +18,17 @@ def _redis_settings() -> RedisSettings:
     return RedisSettings.from_dsn(settings.REDIS_URL)
 
 
-async def startup(ctx: dict) -> None:
+async def startup(ctx: dict[str, Any]) -> None:
     log.info("worker.startup")
 
 
-async def shutdown(ctx: dict) -> None:
+async def shutdown(ctx: dict[str, Any]) -> None:
     log.info("worker.shutdown")
 
 
 # Late import pra evitar ciclo: queue.py é importado pelos workers,
 # que por sua vez importam pipelines.
-def _functions() -> list:
+def _functions() -> list[Callable[..., Awaitable[Any]]]:
     from orchestrator.jobs import workers
 
     return [
@@ -47,7 +50,7 @@ class WorkerSettings:
     # logo abaixo, após a classe estar definida, pra preservar o late import de
     # `workers` (evita o ciclo queue<->workers) sem quebrar arq >=0.26 (0.28
     # falhava: `'classmethod' object is not iterable`).
-    functions: list = []
+    functions: list[Callable[..., Awaitable[Any]]] = []
 
 
 # Bind após a definição da classe + do módulo: o late import de `workers` roda

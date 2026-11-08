@@ -25,7 +25,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import case, func
+from sqlalchemy import Case, Subquery, case, func
 from sqlmodel import col, select
 
 from orchestrator.api.deps import (
@@ -47,15 +47,15 @@ router = APIRouter(prefix="/findings", tags=["findings"])
 _SEV_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 
 
-def _sev_case():
+def _sev_case() -> Case[int]:
     """Expressão SQL: severity → rank (critical=0 … info=4; desconhecido=99)."""
     return case(
-        *[(FindingRow.severity == s, i) for s, i in _SEV_RANK.items()],
+        *[(col(FindingRow.severity) == s, i) for s, i in _SEV_RANK.items()],
         else_=99,
     )
 
 
-def _latest_per_key():
+def _latest_per_key() -> Subquery:
     """Subquery: o `discovered_at` MAIS RECENTE por `deduped_key`.
 
     Colapsa N instâncias (de N scans) do mesmo problema num único item.
@@ -63,7 +63,7 @@ def _latest_per_key():
     """
     return (
         select(
-            FindingRow.deduped_key.label("dk"),
+            col(FindingRow.deduped_key).label("dk"),
             func.max(FindingRow.discovered_at).label("max_at"),
         )
         .group_by(FindingRow.deduped_key)
@@ -148,7 +148,8 @@ async def findings_queue(
         select(FindingRow, FindingStatusRow)
         .join(
             latest,
-            (FindingRow.deduped_key == latest.c.dk) & (FindingRow.discovered_at == latest.c.max_at),
+            (col(FindingRow.deduped_key) == latest.c.dk)
+            & (col(FindingRow.discovered_at) == latest.c.max_at),
         )
         .outerjoin(
             FindingStatusRow, col(FindingRow.deduped_key) == col(FindingStatusRow.deduped_key)
@@ -163,8 +164,17 @@ async def findings_queue(
 
     total = (await session.exec(select(func.count()).select_from(base.subquery()))).one()
 
+    # `deduped_key` e `id` desempatam: sem eles, dois problemas da mesma severity e do
+    # mesmo instante trocavam de lugar entre páginas, e a fila repetia ou pulava item.
     page = (
-        base.order_by(_sev_case(), col(FindingRow.discovered_at).desc()).offset(offset).limit(limit)
+        base.order_by(
+            _sev_case(),
+            col(FindingRow.discovered_at).desc(),
+            col(FindingRow.deduped_key),
+            col(FindingRow.id),
+        )
+        .offset(offset)
+        .limit(limit)
     )
     rows = (await session.exec(page)).all()
 
@@ -226,7 +236,8 @@ async def findings_summary(
         select(FindingRow.severity, eff_status, func.count().label("n"))
         .join(
             latest,
-            (FindingRow.deduped_key == latest.c.dk) & (FindingRow.discovered_at == latest.c.max_at),
+            (col(FindingRow.deduped_key) == latest.c.dk)
+            & (col(FindingRow.discovered_at) == latest.c.max_at),
         )
         .outerjoin(
             FindingStatusRow, col(FindingRow.deduped_key) == col(FindingStatusRow.deduped_key)

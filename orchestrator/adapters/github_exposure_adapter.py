@@ -203,7 +203,9 @@ class GitHubExposureAdapter:
                     confidence=Confidence.TENTATIVE,
                     evidence=[
                         Evidence(
-                            description=f"dork={item['dork']} repo={item['repo']} path={item['path']}",
+                            description=(
+                                f"dork={item['dork']} repo={item['repo']} path={item['path']}"
+                            ),
                             snippet=item.get("url"),
                         )
                     ],

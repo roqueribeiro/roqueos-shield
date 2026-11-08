@@ -122,6 +122,9 @@ The container log is the supervisor's: lines start with `[supervisor]`, followed
 | The AI key cannot be saved, or the worker cannot read it | `SECRETS_KEY` is not a Fernet key | generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 | `/health` still answers the old version after an update | the `shield` container was not recreated, or the migration failed | `docker compose ... ps` and the `shield` service log |
 | Scans pile up in **Queued** | no worker is running, or the workers do not reach Redis | `docker compose ... ps worker`, the worker log, and `REDIS_PASSWORD` equal on every service |
+| `zap` or `redis` exits at start with `ZAP_API_KEY vazio` or `REDIS_PASSWORD vazio` (empty) | the variable reached the container empty; the entrypoint refuses to start a ZAP or a Redis without a key | put the value in `.env` and `up -d` again |
+| `zap` stays `starting` or `unhealthy` | ZAP takes one to two minutes to open port 8090, or it was killed for memory | wait for the `start_period` (120 s); then `docker compose ... logs zap` and the 6 GB ceiling |
+| A scanner fails with `Read-only file system` | the root of `shield` and `worker` is read-only; the scanner writes outside `/data` and `/tmp` | point the scanner's cache at `/data` or `/tmp`, or add a tmpfs for that path in the compose. Do not drop `read_only` |
 
 ## 8. Incident response
 

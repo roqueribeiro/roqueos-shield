@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from orchestrator.domain.schemas import (
     AssetType,
@@ -54,7 +55,7 @@ def test_severity_enum_string_values() -> None:
 
 
 def test_finding_extra_forbidden() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Finding(
             scan_id=uuid4(),
             target=Target(asset_type=AssetType.URL, value="http://x"),
@@ -82,5 +83,5 @@ def test_finding_evidence_optional() -> None:
 
 def test_target_frozen() -> None:
     t = Target(asset_type=AssetType.URL, value="http://x")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         t.value = "other"  # type: ignore[misc]

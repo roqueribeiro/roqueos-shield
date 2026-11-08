@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 import secrets
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -63,7 +64,9 @@ class PasswordUpdate(BaseModel):
     password: str = Field(min_length=1, max_length=256)
 
 
-async def _rebaixar_se_sobrar_admin(session: SessionDep, alvo: UUID, valores: dict) -> None:
+async def _rebaixar_se_sobrar_admin(
+    session: SessionDep, alvo: UUID, valores: dict[str, Any]
+) -> None:
     """Aplica a mudança num UPDATE só, condicionado a existir OUTRO admin ativo.
 
     A checagem e a escrita no mesmo comando: no SQLite o SELECT de antes não segura
@@ -107,6 +110,7 @@ async def _sobra_admin_ativo(session: SessionDep, sem: UUID) -> bool:
     if bind.dialect.name == "postgresql":
         from sqlalchemy import text
 
+        # O `exec` do SQLModel só tipa Select/Update/Delete; o lock é SQL cru de propósito.
         await session.exec(text("SELECT pg_advisory_xact_lock(73113)"))  # type: ignore[call-overload]
     outros = (
         await session.exec(

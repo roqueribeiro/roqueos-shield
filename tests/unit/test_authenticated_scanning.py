@@ -15,7 +15,8 @@ from orchestrator.api.routers.scans import (
 from orchestrator.domain.schemas import AssetType, Target
 from orchestrator.domain.scrubber import scrub
 
-_SECRET = "sid=Sup3rSecretSessionToken-abcdef0123456789"
+# Segredo falso de propósito: o teste prova que ele NÃO aparece em log nem no relatório.
+_SECRET = "sid=Sup3rSecretSessionToken-abcdef0123456789"  # noqa: S105
 
 
 # --- split_scan_auth: o INVARIANTE de segurança --------------------------------

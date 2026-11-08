@@ -11,12 +11,14 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from orchestrator.api.deps import Principal, RequireConfigManage, SessionDep
 from orchestrator.audit import log_audit_event
 from orchestrator.runtime_settings import (
     CAMPOS_ESCOPO,
     CAMPOS_IA,
+    Campo,
     SemChaveDeCifra,
     escopo,
     gravar,
@@ -71,7 +73,13 @@ class EscopoIn(BaseModel):
     allowCloudFallback: bool | None = None
 
 
-async def _salvar(session, campos, body: BaseModel, principal: Principal, acao: str) -> list[str]:
+async def _salvar(
+    session: AsyncSession,
+    campos: tuple[Campo, ...],
+    body: BaseModel,
+    principal: Principal,
+    acao: str,
+) -> list[str]:
     valores: dict[str, Any] = body.model_dump(exclude_unset=True)
     try:
         gravadas = await gravar(session, campos, valores, ator=principal.email)

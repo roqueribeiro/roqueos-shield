@@ -47,7 +47,8 @@ Regras:
 - Retorne UMA entrada por finding, na mesma ordem.
 - finding_id deve bater com o do input.
 - Não invente CVEs. Se não souber, omita.
-- Se o finding parece falso positivo claro, marque is_likely_false_positive=true E ajuste severity pra "info".
+- Se o finding parece falso positivo claro, marque is_likely_false_positive=true E \
+ajuste severity pra "info".
 - owasp_top10 quando aplicável (web/API). Para infra/CVE/secret, pode ser null.
 - Justificativa curta e objetiva — sem floreios. Pentester recebe relatório, não palestra.
 """

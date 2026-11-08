@@ -103,7 +103,9 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
     "ruff==0.16.5",   # pinado: formatação do ruff muda entre releases e quebra o gate
-    "mypy>=1.13.0",
+    "mypy==2.4.1",    # pinado: o typecheck é gate e regra nova do mypy não pode quebrar o CI sozinha
+    "types-defusedxml>=0.7.0",
+    "types-PyYAML>=6.0.0",
     "semgrep>=1.100.0",               # roda o e2e do semgrep_adapter no CI
 ]
 
@@ -148,23 +150,13 @@ target-version = "py313"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "S"]
 ignore = [
-    "S101",     # assert OK em testes
     "S603",     # subprocess com argv list é seguro
     "S607",     # subprocess com path parcial OK (usamos PATH controlado)
-    # TODO(v0.2): backlog de cleanup — re-habilitar gradualmente
-    "E501",     # line-too-long: muitos hits em strings/f-strings longas
-    "F841",     # unused-variable em handlers de erro a limpar
-    "B006",     # mutable-argument-default em CLI args legados
-    "B017",     # assert raises Exception (testes de smoke)
-    "ASYNC109", # async function com argumento `timeout=`
-    "ASYNC240", # blocking-path-method em async (Path.exists)
-    "S104",     # hardcoded-bind-all-interfaces em compose/Settings (intencional)
-    "S105",     # hardcoded-password-string em fixtures de teste
-    "S112",     # try/except/continue documentado no audit log
-    "S314",     # xml.etree em adapters de scanners confiáveis
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# assert é a linguagem do pytest. Só nos testes: em produção ele some com `python -O`.
+"tests/**" = ["S101"]
 # c4lib e uma DSL de desenho, e o import estrela da aos nove diagramas as ~30
 # primitivas (node, edge, boundary, row, step, table, chip...) sem repetir uma lista
 # de import de 30 nomes em cada arquivo. O ganho de listar nao paga o ruido, e o
@@ -173,17 +165,29 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.13"
-# Backlog de tipos zerado em 2026-11-06 (`mypy orchestrator` = 0 erros): as queries
-# SQLModel passaram a usar `col()` nas expressões de coluna, os enums de Target são
-# construídos explicitamente, e os `type: ignore` órfãos saíram. strict ainda OFF: ligar
-# é um passo à parte (traz uma leva nova de regras), não parte deste cleanup.
-strict = false
-warn_return_any = false
+# strict ligado em 2026-11-08 (issue #7). O escopo é o mesmo do job Typecheck do CI
+# (`mypy orchestrator`). Não há relaxamento global: lib sem stub entra nominalmente
+# no override abaixo, e `type: ignore` só pontual, com o código e o motivo na linha.
+strict = true
+warn_unreachable = true
+
+# Libs sem stub nem py.typed. Só elas ignoram import ausente; o resto do código é
+# checado contra os tipos reais. censys, openinference e weasyprint são extras
+# opcionais (podem nem estar instalados); shodan e authlib não publicam tipos.
+[[tool.mypy.overrides]]
+module = [
+    "shodan",
+    "shodan.*",
+    "censys",
+    "censys.*",
+    "openinference",
+    "openinference.*",
+    "authlib",
+    "authlib.*",
+    "weasyprint",
+    "weasyprint.*",
+]
 ignore_missing_imports = true
-# Mantemos opções uteis sem o strict pesado
-warn_unused_ignores = true
-warn_redundant_casts = true
-disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

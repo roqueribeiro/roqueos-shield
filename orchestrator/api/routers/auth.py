@@ -11,10 +11,12 @@ estão setados; senão os endpoints retornam 503.
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from orchestrator.api.deps import PrincipalDep, SessionDep
 from orchestrator.audit import log_audit_event
@@ -47,11 +49,12 @@ def _require_oidc() -> None:
 
 
 @router.get("/login")
-async def login(request: Request):
+async def login(request: Request) -> Response:
     """Inicia o fluxo OIDC — redireciona o browser pro IdP."""
     _require_oidc()
     redirect_uri = settings.OIDC_REDIRECT_URI or str(request.url_for("oidc_callback"))
-    return await oauth.idp.authorize_redirect(request, redirect_uri)
+    resposta: Response = await oauth.idp.authorize_redirect(request, redirect_uri)
+    return resposta
 
 
 @router.get("/callback", name="oidc_callback")
@@ -112,7 +115,7 @@ async def callback(request: Request, session: SessionDep) -> JSONResponse:
 
 
 @router.get("/me")
-async def me(principal: PrincipalDep) -> dict:
+async def me(principal: PrincipalDep) -> dict[str, Any]:
     """Identidade autenticada corrente (serve pra qualquer credencial válida)."""
     return {
         "id": principal.id,

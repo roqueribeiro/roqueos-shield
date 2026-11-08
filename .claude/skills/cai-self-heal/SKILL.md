@@ -15,7 +15,7 @@ Você é o "primeiro responder" do CAI. Quando algo quebra, esta skill investiga
 ### 1. Status containers
 
 ```bash
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml ps
+docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml ps
 ```
 
 Capture quem está `Up`, `Exited`, `unhealthy`, `Restarting`. Casos óbvios:
@@ -77,21 +77,23 @@ Padrões a procurar:
 |---|---|---|
 | `scan_id.*invalid.*0.*Bad Request` | ZAP retornou `scan_id="0"` após newSession | `zap_adapter._start_spider_with_retry` já cobre; se persistir, restart ZAP container |
 | `context.*overflow.*n_keep` | Batch grande estourou janela LM Studio | Reduzir `triage_batch(batch_size=10)` ou aumentar context window LM Studio |
-| `connection refused.*postgres` | Postgres down/iniciando | `docker compose --env-file .env up -d postgres && sleep 5 && make migrate` |
+| `connection refused.*postgres` | Postgres down/iniciando | `docker compose --env-file .env --project-directory docker -f docker/compose.yml --profile default up -d postgres && sleep 5 && make migrate` |
 | `OPENAI_API_KEY.*invalid\|401` | Chave Anthropic/OpenAI inválida ou expirada | Trocar `.env`; testar com skill `cai-llm-debug` |
 | `response_format.*json_object` | LM Studio rejeitou (não suporta) | Gateway já cobre quando `LLM_API_BASE` setado; conferir `.env` |
 | `relation .* does not exist` | Migration nova faltando | `make migrate` |
 | `Found orphan containers` | Container antigo sem definição | Adicionar `--remove-orphans` ou ignorar |
 | `host\.docker\.internal.*unreachable` | Container não consegue alcançar host (LM Studio) | Verificar `extra_hosts` no compose |
-| `cai-zap.*unhealthy` mas API responde | Healthcheck cosmético desconfigurado | Cosmético — ignorar |
+| `cai-zap` em `starting` nos primeiros minutos | `start_period: 120s` do healthcheck; o ZAP demora a abrir a porta | Esperar; `unhealthy` depois disso é falha real, ver `docker logs cai-zap` |
 | `ai_runs` table vazia + scans rodaram com AI | DB session falhou no `_persist_ai_run` | Conferir que migration 0003 rodou; reiniciar orchestrator |
 | LM Studio "não usado" mas configurado | Scan rodou com `--skip-ai` ou `LLM_API_BASE` vazio | Conferir `.env`: `LLM_MODEL` deve começar com `openai/` + `LLM_API_BASE` setado |
 
 ### 6. Saúde de dependências em paralelo (rápido)
 
 ```bash
-TOKEN=$(grep '^APP_TOKEN' .env | cut -d= -f2)
-curl -sf "http://127.0.0.1:8080/health/full" -H "X-API-Token: $TOKEN" | jq
+H=$(mktemp) && chmod 600 "$H"   # o token vai por arquivo de header, nunca no argv do curl
+sed -n 's/^APP_TOKEN=\(.*\)/X-API-Token: \1/p' .env > "$H"
+curl -sf "http://127.0.0.1:8080/health/full" -H @"$H" | jq
+rm -f "$H"
 ```
 
 `overall: degraded` mostra qual componente está `down`. Latência alta em LM Studio (>5s pra `/v1/models`) sugere modelo grande não totalmente carregado.
@@ -140,4 +142,4 @@ Se houver MÚLTIPLOS bugs concorrentes, listar cada um com a mesma estrutura.
 
 - Esta skill é leitor + sugestor. **Não modifica código**.
 - Cobertura é melhor pra falhas operacionais. Para bugs novos no código, usa o agent `security-auditor` ou `adapter-author`.
-- Se o orchestrator está totalmente down (Postgres + ZAP + workers tudo morto), começar por `docker compose --env-file .env -f docker/compose.yml ... up -d`.
+- Se o orchestrator está totalmente down (Postgres + ZAP + workers tudo morto), começar por `make up` (o mesmo que `docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml --profile default --profile scanners --profile lab up -d`).

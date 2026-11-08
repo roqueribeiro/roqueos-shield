@@ -40,7 +40,7 @@ async def test_service_token_maps_to_admin_principal():
 
 
 async def test_user_token_maps_to_user_principal():
-    token = "cai_user_operator_token"
+    token = "cai_user_operator_token"  # noqa: S105  token de fixture do teste
     user = UserRow(
         email="op@bank.com",
         role="operator",
@@ -56,14 +56,14 @@ async def test_user_token_maps_to_user_principal():
 
 async def test_invalid_token_is_401():
     session = _session_returning(None)
-    token = "cai_does_not_exist"
+    token = "cai_does_not_exist"  # noqa: S105  token de fixture do teste
     with pytest.raises(HTTPException) as ei:
         await get_principal(session=session, x_api_token=token)
     assert ei.value.status_code == 401
 
 
 async def test_inactive_user_is_401():
-    token = "cai_inactive_admin"
+    token = "cai_inactive_admin"  # noqa: S105  token de fixture do teste
     user = UserRow(
         email="ghost@bank.com",
         role="admin",  # mesmo admin: inativo não autentica

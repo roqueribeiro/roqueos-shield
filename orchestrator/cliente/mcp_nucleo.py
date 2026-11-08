@@ -53,13 +53,17 @@ FERRAMENTAS_DE_LEITURA: list[dict[str, Any]] = [
     },
     {
         "name": "get_scan",
-        "description": "Detalhe de um scan, incluindo a cobertura: que scanners rodaram e quais não, e por quê.",
+        "description": (
+            "Detalhe de um scan, incluindo a cobertura: que scanners rodaram e quais não, "
+            "e por quê."
+        ),
         "inputSchema": _schema({"scan_id": _ID}, ["scan_id"]),
     },
     {
         "name": "get_findings",
         "description": (
-            "Os achados de um scan. Se o scan falhou ou a cobertura veio incompleta, o resultado vem "
+            "Os achados de um scan. Se o scan falhou ou a cobertura veio incompleta, "
+            "o resultado vem "
             "marcado como erro: zero achado de scanner que não rodou não é alvo limpo."
         ),
         "inputSchema": _schema(
@@ -76,7 +80,10 @@ FERRAMENTAS_DE_LEITURA: list[dict[str, Any]] = [
     },
     {
         "name": "get_ai_bundle",
-        "description": "O AI Fix Bundle do scan (schema 1.0.0): o que corrigir, onde, em que ordem, e como verificar.",
+        "description": (
+            "O AI Fix Bundle do scan (schema 1.0.0): o que corrigir, onde, em que ordem, "
+            "e como verificar."
+        ),
         "inputSchema": _schema({"scan_id": _ID}, ["scan_id"]),
     },
     {
@@ -90,7 +97,8 @@ FERRAMENTAS_DE_ACAO: list[dict[str, Any]] = [
     {
         "name": "start_scan",
         "description": (
-            "Registra o alvo e dispara um scan. Só use contra alvo que o operador está autorizado a "
+            "Registra o alvo e dispara um scan. Só use contra alvo que o operador está "
+            "autorizado a "
             "testar; a referência da autorização é obrigatória e vai para a trilha de auditoria."
         ),
         "inputSchema": _schema(
@@ -101,9 +109,16 @@ FERRAMENTAS_DE_ACAO: list[dict[str, Any]] = [
                 },
                 "asset_type": {
                     "type": "string",
-                    "enum": ["url", "domain", "host", "image", "repo", "k8s_resource"],
+                    # Sem k8s_resource: nenhum scanner do pipeline aceita o tipo, e o
+                    # POST /scans o recusa com 422.
+                    "enum": ["url", "domain", "host", "port", "image", "repo"],
                 },
-                "profile": {"type": "string", "enum": ["web", "network", "full", "exposure"]},
+                # Os profiles que o pipeline executa (PERFIS_DO_SCAN). `exposure` roda o
+                # pipeline OSINT sobre o domínio do alvo.
+                "profile": {
+                    "type": "string",
+                    "enum": ["web", "network", "full", "active", "exposure"],
+                },
                 "authorization_ref": {
                     "type": "string",
                     "minLength": 3,
@@ -215,7 +230,8 @@ class Servidor:
                 "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {"name": NOME, "version": self.versao},
                 "instructions": (
-                    "RoqueShield: teste de segurança. Zero achado só é limpo com coverage_complete=true. "
+                    "RoqueShield: teste de segurança. "
+                    "Zero achado só é limpo com coverage_complete=true. "
                     "Ferramenta que volta com isError explica o que não foi verificado."
                 ),
             }

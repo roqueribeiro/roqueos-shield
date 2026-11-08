@@ -1,5 +1,5 @@
 ---
-description: E2E smoke test — sobe lab, build orchestrator, dispara scan no Juice Shop, gera HTML
+description: E2E smoke test, sobe lab, build orchestrator, dispara scan no Juice Shop, gera HTML
 allowed-tools: Bash
 argument-hint: ""
 ---
@@ -12,10 +12,10 @@ bash scripts/smoke.sh
 
 O script:
 1. Cria `.env` se não existir (cópia de `.env.example`)
-2. Build do orchestrator
-3. Sobe stack (orchestrator + workers + scanners + lab)
-4. Aguarda ZAP e Juice Shop
-5. Dispara scan via CLI (`--skip-ai` por padrão se não houver API key)
+2. Build do orchestrator, do worker e do kali-toolbox
+3. Sobe stack (orchestrator + worker + scanners + lab)
+4. Aguarda ZAP, Juice Shop e a API
+5. Dispara scan ativo via CLI no Juice Shop
 6. Lista relatórios em `reports/`
 
 Após terminar, reporte:

@@ -13,6 +13,7 @@ CVE-2024-33663 (confusão de algoritmo) e CVE-2024-33664 (JWE que estoura memór
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 import jwt
@@ -56,7 +57,7 @@ def issue_session(
     return jwt.encode(claims, _key(), algorithm=_ALG)
 
 
-def verify_session(token: str | None) -> dict | None:
+def verify_session(token: str | None) -> dict[str, Any] | None:
     """Valida assinatura + expiração + `typ`. Retorna os claims, ou None se
     inválido/expirado/adulterado. Nunca lança."""
     if not token:

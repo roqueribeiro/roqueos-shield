@@ -339,14 +339,16 @@ def check_command(
     Devolve sempre uma `ExecDecision`; `allowed=False` traz o motivo nomeado.
     """
     binary = _binary_of(command)
-    d = lambda ok, why: ExecDecision(  # noqa: E731
-        allowed=ok,
-        executed=False,
-        reason=why,
-        command=list(command),
-        phase=phase.value,
-        target=target,
-    )
+
+    def d(ok: bool, why: str) -> ExecDecision:
+        return ExecDecision(
+            allowed=ok,
+            executed=False,
+            reason=why,
+            command=list(command),
+            phase=phase.value,
+            target=target,
+        )
 
     if not command or not binary:
         return d(False, "comando vazio")
@@ -463,7 +465,9 @@ async def run_in_kali(
     target: str | None,
     asset_type: str | None = None,
     dry_run: bool = True,
-    timeout: float = DEFAULT_TIMEOUT,
+    # O timeout é regra da coleira, não escopo de cancelamento do chamador: é limitado
+    # a MAX_TIMEOUT aqui dentro, cobre só a execução e vira uma ExecDecision.
+    timeout: float = DEFAULT_TIMEOUT,  # noqa: ASYNC109
     container: str = "cai-kali-toolbox",
     runner: Any = None,
     mode: str | None = None,

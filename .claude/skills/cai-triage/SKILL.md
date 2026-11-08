@@ -70,8 +70,9 @@ docker exec cai-postgres psql -U cai -d cai -c \
 Se usuário quer relatório executivo (HTML):
 
 ```bash
-TOKEN=$(grep APP_TOKEN .env | cut -d= -f2)
-curl http://127.0.0.1:8080/reports/$SCAN_ID -H "X-API-Token: $TOKEN" -o report.html
+H=$(mktemp) && chmod 600 "$H"   # o token vai por arquivo de header, nunca no argv do curl
+sed -n 's/^APP_TOKEN=\(.*\)/X-API-Token: \1/p' .env > "$H"
+curl -fsS http://127.0.0.1:8080/reports/$SCAN_ID -H @"$H" -o report.html
 ```
 
 ## 5. AI Fix Bundle (handoff pra patcher)
@@ -79,11 +80,12 @@ curl http://127.0.0.1:8080/reports/$SCAN_ID -H "X-API-Token: $TOKEN" -o report.h
 Se o usuário quer entregar pra outra IA corrigir o código:
 
 ```bash
-# Via API
-curl http://127.0.0.1:8080/reports/$SCAN_ID/ai-bundle -H "X-API-Token: $TOKEN" -o ai-bundle.json
+# Via API ($H do passo 4)
+curl -fsS http://127.0.0.1:8080/reports/$SCAN_ID/ai-bundle -H @"$H" -o ai-bundle.json
 
-# Via CLI
-docker compose --env-file .env -f docker/compose.yml run --rm orchestrator bundle $SCAN_ID
+# Via CLI (entrypoint trocado: o compose tem `entrypoint: uvicorn` no orchestrator)
+docker compose --env-file .env --project-directory docker -f docker/compose.yml \
+  run --rm --entrypoint python orchestrator -m orchestrator.cli bundle "$SCAN_ID"
 ```
 
 Use o skill `cai-handoff-fix` pra empacotar com `HANDOFF.md` legível pra Claude Code/Cursor.
@@ -94,7 +96,8 @@ Se DefectDojo configurado em `.env`:
 
 ```bash
 curl -X POST http://127.0.0.1:8080/reports/$SCAN_ID/export/defectdojo \
-  -H "X-API-Token: $TOKEN"
+  -H @"$H"
+rm -f "$H"
 ```
 
 ## 7. Próximos passos sugeridos

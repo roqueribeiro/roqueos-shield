@@ -1,24 +1,29 @@
 ---
-description: Diagnóstico rápido da stack — containers, DB, ZAP, AI gateway
+description: Diagnóstico rápido da stack, containers, DB, ZAP, AI gateway
 allowed-tools: Bash
 argument-hint: ""
 ---
 
-Verifique saúde da stack em ordem rápida:
+Verifique saúde da stack em ordem rápida. Nenhum segredo vai para a linha de comando
+nem para a tela: o token vai por arquivo de header (`curl -H @arquivo`), e o ZAP é
+checado pelo healthcheck do container, não pela URL com `apikey=`.
 
 ```bash
 echo "=== Containers ==="
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml ps
+docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml ps
 
 echo ""
 echo "=== Orchestrator API ==="
-TOKEN=$(grep '^APP_TOKEN' .env | cut -d= -f2)
-curl -sf http://127.0.0.1:8080/health -H "X-API-Token: $TOKEN" | jq 2>/dev/null || echo "DOWN"
+curl -sf http://127.0.0.1:8080/health || echo "DOWN"
+echo ""
+H=$(mktemp) && chmod 600 "$H"
+sed -n 's/^APP_TOKEN=\(.*\)/X-API-Token: \1/p' .env > "$H"
+curl -sf http://127.0.0.1:8080/health/full -H @"$H" | jq 2>/dev/null || echo "health/full falhou"
+rm -f "$H"
 
 echo ""
-echo "=== ZAP API ==="
-ZAP_KEY=$(grep '^ZAP_API_KEY' .env | cut -d= -f2)
-curl -sf "http://127.0.0.1:8090/JSON/core/view/version/?apikey=$ZAP_KEY" | jq 2>/dev/null || echo "DOWN"
+echo "=== ZAP (healthcheck do container) ==="
+docker inspect -f '{{.State.Health.Status}}' cai-zap 2>/dev/null || echo "cai-zap não existe"
 
 echo ""
 echo "=== Juice Shop ==="
@@ -35,8 +40,8 @@ docker exec cai-redis redis-cli ping 2>/dev/null
 docker exec cai-redis redis-cli LLEN arq:queue 2>/dev/null
 
 echo ""
-echo "=== AI keys ==="
-grep -E '^ANTHROPIC_API_KEY|^OPENAI_API_KEY|^LLM_LOCAL_BASE_URL|^LLM_MODEL' .env | sed 's/=.*/=<set>/' | sed 's/=<set>$/=(empty)/' 2>/dev/null
+echo "=== AI keys (só se estão definidas, nunca o valor) ==="
+grep -E '^(ANTHROPIC_API_KEY|OPENAI_API_KEY|LLM_API_BASE|LLM_MODEL)=' .env | sed -E 's/=.+$/=(definida)/; s/=$/=(vazia)/' 2>/dev/null
 ```
 
 Sumarize em 5-7 linhas o que está UP, DOWN, o que falta. Sugira próximo passo de remediação se houver problema.

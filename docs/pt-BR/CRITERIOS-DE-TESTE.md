@@ -185,7 +185,7 @@ make smoke                                        # o laboratório: scan ativo n
 
 Os pulados são os testes que precisam de um binário que não está instalado. O teste principal de efetividade pula sem semgrep e checkov, com o motivo `precisa de semgrep e checkov instalados`. Pulado não é aprovado: o job `efetividade` do CI instala os dois para ele rodar.
 
-Não existe marcador `integration`: `pytest -m integration` não seleciona nada (56 deselected). Os testes de integração rodam com `pytest` puro, a partir de `tests/integration`. O `make test` não funciona como está escrito; [DESENVOLVIMENTO.md](DESENVOLVIMENTO.md#5-dia-a-dia) explica por quê.
+Não existe marcador `integration`: `pytest -m integration` não seleciona nada (56 deselected). Os testes de integração rodam com `pytest` puro, a partir de `tests/integration`. O `make test` roda o mesmo `pytest -q tests/` no seu checkout, por `uv run --frozen --extra dev`, não na imagem; [DESENVOLVIMENTO.md](DESENVOLVIMENTO.md#5-dia-a-dia) explica por quê.
 
 A evidência de qualquer entrega é a saída crua destes comandos, colada sem resumo. Scan de laboratório sempre; nunca apontar teste para ativo real nem para qualquer alvo externo.
 

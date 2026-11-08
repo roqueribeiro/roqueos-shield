@@ -105,7 +105,7 @@ def _esperar(api: apimod.Api, scan_id: str, intervalo: float, prazo: float) -> d
     inicio = time.monotonic()
     ultima = None
     while True:
-        s = _chamar(api.get, f"/ui/api/scans/{scan_id}")
+        s: dict[str, Any] = _chamar(api.get, f"/ui/api/scans/{scan_id}")
         fase = (s.get("current_phase"), s.get("phase_progress"))
         if fase != ultima:
             ultima = fase
@@ -143,7 +143,8 @@ def status() -> None:
     h = _chamar(api.get, "/health")
     eu = _chamar(api.get, "/auth/session")
     out.print(
-        f"RoqueShield {h.get('version')} em {api.cfg.servidor}: {eu.get('email')} ({eu.get('role')})"
+        f"RoqueShield {h.get('version')} em {api.cfg.servidor}: "
+        f"{eu.get('email')} ({eu.get('role')})"
     )
     try:
         full = api.get("/health/full")
@@ -157,10 +158,15 @@ def status() -> None:
 @scan_app.command("start")
 def scan_start(
     alvo: Annotated[str, typer.Argument(help="URL, domínio, host, imagem ou repositório")],
-    tipo: Annotated[
-        str, typer.Option("--type", help="url|domain|host|image|repo|k8s_resource")
-    ] = "url",
-    perfil: Annotated[str, typer.Option("--profile", help="web|network|full")] = "web",
+    tipo: Annotated[str, typer.Option("--type", help="url|domain|host|port|image|repo")] = "url",
+    perfil: Annotated[
+        str,
+        typer.Option(
+            "--profile",
+            help="web|network|full|active|exposure (full e active ligam o ZAP active "
+            "scan; exposure roda o OSINT sobre o domínio do alvo)",
+        ),
+    ] = "web",
     scanner: Annotated[
         list[str] | None, typer.Option("--scanner", help="Repetir para mais de um")
     ] = None,
@@ -312,13 +318,26 @@ def settings_ai() -> None:
 @settings_app.command("scope")
 def settings_scope(
     allow: Annotated[
-        list[str] | None, typer.Option("--allow", help="Substitui a lista de alvos autorizados")
+        list[str] | None,
+        typer.Option(
+            "--allow",
+            help="Substitui a TARGET_ALLOWLIST inteira (repetir; host, IP, CIDR, *.dominio). "
+            "Com LAB_ONLY, libera rede interna; link-local nunca, loopback só pelo endereço",
+        ),
     ] = None,
     exigir_ref: Annotated[
-        bool | None, typer.Option("--require-auth-ref/--no-require-auth-ref")
+        bool | None,
+        typer.Option(
+            "--require-auth-ref/--no-require-auth-ref",
+            help="Exige authorization_ref em todo scan (REQUIRE_AUTH_REF)",
+        ),
     ] = None,
 ) -> None:
-    """Mostra o escopo; com opções, troca (exige config:manage)."""
+    """Mostra o escopo; com opções, troca. Ler e trocar exigem config:manage.
+
+    Campo definido por variável de ambiente fica travado e volta em `locked`: a troca
+    por aqui não vale para ele.
+    """
     api = _api()
     corpo: dict[str, Any] = {}
     if allow is not None:

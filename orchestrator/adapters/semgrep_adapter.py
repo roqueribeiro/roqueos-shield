@@ -214,7 +214,7 @@ class SemgrepAdapter:
 
         # Diretório local já presente (path) vs. URL de repo a clonar.
         local_dir = Path(target.value)
-        use_local = local_dir.is_dir()
+        use_local = await asyncio.to_thread(local_dir.is_dir)
         clone_dir = local_dir if use_local else (workdir / "repo")
         # Só dá pra detectar linguagem quando o código já está em disco; num clone,
         # a seleção acontece depois (dentro de `_run`).
@@ -381,13 +381,13 @@ class SemgrepAdapter:
 
         await cleanup_subprocess_handle(
             native_id=handle.native_id,
-            tasks=self._tasks,  # type: ignore[arg-type]
+            tasks=self._tasks,
             output_paths=self._workdirs,
             adapter_name=self.name,
         )
 
 
-def _rules_ran(payload: dict[str, Any]) -> int:
+def _rules_ran(payload: object) -> int:
     """Quantas regras o semgrep realmente executou (`--time` popula `time.rules`)."""
     if not isinstance(payload, dict):
         return 0

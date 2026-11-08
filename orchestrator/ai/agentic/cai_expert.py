@@ -12,8 +12,6 @@ abstração que aceita ambos os caminhos.
 
 from __future__ import annotations
 
-import asyncio
-import shutil
 from typing import Any
 
 import structlog
@@ -262,7 +260,8 @@ def _parse_args(raw: Any) -> dict[str, Any]:
     if isinstance(raw, dict):
         return raw
     try:
-        return _json.loads(raw or "{}")
+        dados: dict[str, Any] = _json.loads(raw or "{}")
+        return dados
     except (ValueError, TypeError):
         return {}
 
@@ -343,36 +342,3 @@ Investigue. Retorne JSON com:
         "final_assessment": text,
         "trace_url": None,
     }
-
-
-async def kali_run_readonly(cmd: list[str], timeout: float = 60.0) -> dict[str, Any]:
-    """Executa comando read-only no kali-toolbox via docker exec.
-
-    Permite apenas comandos da allowlist (curl, dig, whois, host, nslookup, etc.).
-    Para Fase 4 com dry_run=False — ainda assim com revisão humana.
-    """
-    SAFE_BINS = {"curl", "wget", "dig", "host", "nslookup", "whois", "openssl", "ping"}
-    if not cmd or cmd[0] not in SAFE_BINS:
-        return {"error": f"comando '{cmd[0] if cmd else ''}' não está na allowlist read-only"}
-
-    docker = shutil.which("docker")
-    if not docker:
-        return {"error": "docker não disponível"}
-
-    full = [docker, "exec", "cai-kali-toolbox", *cmd]
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *full,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        return {
-            "exit_code": proc.returncode,
-            "stdout": stdout.decode(errors="replace")[:8000],
-            "stderr": stderr.decode(errors="replace")[:2000],
-        }
-    except TimeoutError:
-        return {"error": "timeout"}
-    except Exception as e:  # noqa: BLE001
-        return {"error": str(e)}

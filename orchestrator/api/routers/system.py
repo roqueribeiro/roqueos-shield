@@ -28,9 +28,9 @@ _redis: Any = None
 def _cliente() -> Any:
     global _redis
     if _redis is None:
-        from redis.asyncio import from_url
+        from redis.asyncio import Redis
 
-        _redis = from_url(settings.REDIS_URL, socket_connect_timeout=1, socket_timeout=2)
+        _redis = Redis.from_url(settings.REDIS_URL, socket_connect_timeout=1, socket_timeout=2)
     return _redis
 
 

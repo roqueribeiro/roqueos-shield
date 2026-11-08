@@ -122,6 +122,9 @@ O log do container é o do supervisor: as linhas começam com `[supervisor]`, se
 | A chave de IA não grava, ou o worker não consegue ler | a `SECRETS_KEY` não é uma chave Fernet | gere com `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 | O `/health` ainda responde a versão antiga depois de atualizar | o container `shield` não foi recriado, ou a migração falhou | `docker compose ... ps` e o log do serviço `shield` |
 | Os scans se acumulam em **Na fila** | nenhum worker rodando, ou os workers não alcançam o Redis | `docker compose ... ps worker`, o log do worker, e o `REDIS_PASSWORD` igual em todos os serviços |
+| `zap` ou `redis` sai na partida com `ZAP_API_KEY vazio` ou `REDIS_PASSWORD vazio` | a variável chegou vazia ao container; o entrypoint se recusa a subir ZAP ou Redis sem chave | ponha o valor no `.env` e rode `up -d` de novo |
+| `zap` fica em `starting` ou `unhealthy` | o ZAP leva um a dois minutos para abrir a porta 8090, ou foi morto por memória | espere o `start_period` (120 s); depois `docker compose ... logs zap` e o teto de 6 GB |
+| Um scanner falha com `Read-only file system` | a raiz de `shield` e `worker` é só de leitura; o scanner escreve fora de `/data` e `/tmp` | aponte o cache do scanner para `/data` ou `/tmp`, ou acrescente um tmpfs para esse caminho no compose. Não tire o `read_only` |
 
 ## 8. Resposta a incidente
 

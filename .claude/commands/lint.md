@@ -1,21 +1,22 @@
 ---
-description: Roda ruff + mypy no código do orchestrator
+description: Roda ruff (check + format --check) e mypy no checkout
 allowed-tools: Bash
 argument-hint: ""
 ---
 
-Lint + type check:
+Lint + type check, no checkout (a imagem do orchestrator não tem ruff, mypy nem
+`tests/`: é buildada com `--no-dev`):
 
 ```bash
-docker compose --env-file .env -f docker/compose.yml run --rm --entrypoint sh orchestrator -c \
-  "ruff check orchestrator && ruff format --check orchestrator && mypy orchestrator"
+make lint        # ruff check + ruff format --check em orchestrator, tests e scripts, como o CI
+make typecheck   # mypy orchestrator (no CI ainda não bloqueia o merge)
 ```
 
 Para auto-fix:
 
 ```bash
-docker compose --env-file .env -f docker/compose.yml run --rm --entrypoint sh orchestrator -c \
-  "ruff format orchestrator && ruff check --fix orchestrator"
+uv run --frozen --extra dev ruff format orchestrator tests scripts
+uv run --frozen --extra dev ruff check --fix orchestrator tests scripts
 ```
 
 Reporte número de erros/warnings por categoria.

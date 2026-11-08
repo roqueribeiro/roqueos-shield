@@ -18,8 +18,8 @@ jobs:
     name: Lint (ruff)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -42,7 +42,7 @@ jobs:
     # decoração: este gate reprova se o pyproject mudar sem o uv.lock ser
     # regenerado (mutação confirmada: rc 1 ao adicionar dep sem relockar).
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
       - name: uv lock --check
         run: uv lock --check
@@ -56,8 +56,8 @@ jobs:
     # scanner novo sem documentar, Settings sem .env.example, e doc chamando de
     # "stub" o que já roda — os três dão exit 1.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: check docs fresh
@@ -73,8 +73,8 @@ jobs:
     # confirmada: texto mudado num modulo sem regerar e arquivo orfao na pasta
     # dao exit 1; arvore regerada da exit 0.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: check diagrams fresh
@@ -95,8 +95,8 @@ jobs:
     # escape `# silencio-ok: motivo` e aceito, e o motivo escrito e o que denuncia
     # um abuso na revisao.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: check no silence
@@ -112,7 +112,7 @@ jobs:
     # e a chave de LLM e o segredo mais provavel deste projeto. Mutacao confirmada:
     # chave Anthropic e token do GitHub plantados dao exit 1; repo limpo, exit 0.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # o historico inteiro: segredo antigo tambem vaza
       - name: gitleaks
@@ -128,8 +128,8 @@ jobs:
     # tem credibilidade para escanear o codigo dos outros. Roda o mesmo Semgrep que
     # o adapter usa, sobre este repo.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: install semgrep
@@ -153,8 +153,8 @@ jobs:
     # confirmada: com o default antigo (`--config auto`, incompativel com
     # `--metrics off`) o SAST nao roda e o gate reprova em ~5s.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -175,12 +175,11 @@ jobs:
   typecheck:
     name: Typecheck (mypy)
     runs-on: ubuntu-latest
-    # v0.1 baseline: codebase ainda nao passa em strict typecheck.
-    # Mantemos o job rodando (visibilidade) mas nao bloqueia merge.
-    continue-on-error: true
+    # Gate bloqueante: `mypy orchestrator` em strict (pyproject.toml, issue #7). O mypy
+    # é pinado no extra dev para uma release nova não reprovar o merge sozinha.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -198,8 +197,8 @@ jobs:
     # era o SEC-02, agora consertado). O piso de cobertura é catraca que só sobe —
     # hoje 65%; a varredura do silêncio (adapters + integridade) subiu o piso de 34.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -215,10 +214,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
       - name: Build (no push)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/images/orchestrator/Dockerfile
@@ -235,8 +234,8 @@ jobs:
     name: Tela standalone (build + e2e)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -281,7 +280,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Libera disco do runner
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Build do engine
@@ -326,8 +325,8 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
       - name: Owner em minusculas
         id: owner
         run: echo "lc=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
@@ -338,7 +337,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build e push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/images/orchestrator/Dockerfile

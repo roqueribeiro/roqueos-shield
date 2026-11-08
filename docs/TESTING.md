@@ -185,7 +185,7 @@ make smoke                                        # the lab: active scan of the 
 
 The skips are the tests that need a binary that is not installed. The main effectiveness test skips without semgrep and checkov, with the reason `precisa de semgrep e checkov instalados` (needs semgrep and checkov installed). A skip is not a pass: the CI job `efetividade` installs both so it does run.
 
-There is no `integration` marker: `pytest -m integration` selects nothing (56 deselected). The integration tests run with plain `pytest`, from `tests/integration`. `make test` does not work as written; [DEVELOPMENT.md](DEVELOPMENT.md#5-day-to-day) explains why.
+There is no `integration` marker: `pytest -m integration` selects nothing (56 deselected). The integration tests run with plain `pytest`, from `tests/integration`. `make test` runs the same `pytest -q tests/` on your checkout through `uv run --frozen --extra dev`, not in the image; [DEVELOPMENT.md](DEVELOPMENT.md#5-day-to-day) explains why.
 
 The evidence of any delivery is the raw output of these commands, pasted with no summary. Lab scans always; never point a test at a real asset or at any external target.
 

@@ -84,7 +84,7 @@ O `docker/compose.agent.yml` declara um container `cai-expert` da época em que 
 | `domain/schemas.py` | `Target`, `Finding`, `AITriage`, `RawResults`, `AssetType`. O `Finding.deduped_key` é `sha256(alvo::regra[::discriminador])[:32]` |
 | `domain/target_validator.py` | O portão de escopo (seção 10) |
 | `domain/scrubber.py` | Redação antes de qualquer texto ir para um LLM externo (seção 7) |
-| `domain/dedup.py` | `heuristic_dedup`: mantém a maior severidade por `deduped_key` |
+| `domain/dedup.py` | `heuristic_dedup`: mantém a maior severidade por `deduped_key` (empate: confidence, depois ferramenta, regra e id) e devolve a lista ordenada por severidade e chave, igual para qualquer ordem de entrada |
 | `jobs/pipelines.py` | `resolve_scanners`, a fábrica de adapters em `_build_adapters`, `_run_adapter` (o ciclo de vida) e `run_scan` |
 | `jobs/exposure.py` | A esteira OSINT, que instancia os adapters dela diretamente |
 | `adapters/` | 15 adapters implementando o Protocol `ScannerAdapter` de `adapters/base.py` |
@@ -94,7 +94,7 @@ O `docker/compose.agent.yml` declara um container `cai-expert` da época em que 
 | `audit/logger.py` | `log_audit_event`, append-only |
 | `standalone/` | O supervisor e os segredos de primeiro boot da imagem de container único (seção 11) |
 
-**O que roda, e quando.** A lista de scanners nunca é livre. `resolve_scanners(pedido, asset_type, profile)` aplica, nesta ordem: a lista explícita de quem chamou, depois o profile da tela (`web`, `network`, `full` em `_PROFILE_SCANNERS`), depois o default do tipo de ativo (`_DEFAULT_SCANNERS`). O resultado é sempre filtrado pelo que cada adapter aceita (`_SCANNER_ASSET_SUPPORT`). Antes desse filtro, um scanner incompatível era instanciado, levantava `ValueError`, o erro era engolido e o scan fechava com zero achados.
+**O que roda, e quando.** A lista de scanners nunca é livre. `resolve_scanners(pedido, asset_type, profile)` aplica, nesta ordem: a lista explícita de quem chamou, depois o profile da tela (`web`, `network`, `full` em `_PROFILE_SCANNERS`), depois o default do tipo de ativo (`_DEFAULT_SCANNERS`). O resultado é sempre filtrado pelo que cada adapter aceita (`_SCANNER_ASSET_SUPPORT`). Antes desse filtro, um scanner incompatível era instanciado, levantava `ValueError`, o erro era engolido e o scan fechava com zero achados. O que fica de fora (nome desconhecido, tipo incompatível, alvo que scanner nenhum aceita) volta com o motivo de `resolve_scanners_com_motivo`: o `POST /scans` recusa com 422, e o `run_scan` grava em `scanners_skipped`. O profile precisa ser um dos `PERFIS_DO_SCAN` (`web`, `network`, `full`, `active`, `exposure`); o `exposure` entrega o domínio do alvo ao pipeline OSINT (`jobs/exposure.py`) e grava o resultado no mesmo scan. O `cai scan` passa pelos mesmos portões e pelo mesmo evento de auditoria do `POST /scans` (`gates_do_scan`, `scanners_do_scan`).
 
 A fábrica constrói nove scanners. Os outros seis adapters pertencem à esteira OSINT ou a esteira nenhuma:
 
@@ -192,7 +192,7 @@ Depois a API responde `202`, o `arq` enfileira o `run_scan_job` (job id `scan-<u
 
 **A triagem** (`ai/analyzer.py`, `triage_batch`) manda os achados em lotes de 6 e preenche `Finding.ai_triage`: severidade ajustada, justificativa, impacto de negócio, remediação sugerida, categoria OWASP, provável falso positivo. A `Finding.severity` do próprio scanner nunca é sobrescrita. O `run_scan` passa `skip_severities=set()`, então todo achado é triado: alvo endurecido rende só achado low e info, e pular esses fazia a IA nunca rodar. Sem chave e sem endpoint local, a triagem nem é tentada; cada achado recebe uma triagem determinística que diz que a IA não está configurada, em vez de um erro vermelho em todo scan.
 
-**O scrubber** (`domain/scrubber.py`) redige CPF, CNPJ, número de cartão (com checagem de Luhn), CVV, e-mail, telefone brasileiro, JWT, chave AWS, cabeçalho `Authorization` e valores de `Cookie` / `Set-Cookie`. Ele roda nos campos de texto livre que a triagem envia (título, descrição, evidência), no que o laço de investigação envia, no AI Fix Bundle antes de ser servido e nos metadados da auditoria. Com modelo local, os achados não saem da máquina; com modelo de nuvem, o scrubber é a barreira. Mudar os padrões dele exige revisão do DPO (veja o `CLAUDE.md`).
+**O scrubber** (`domain/scrubber.py`) redige CPF, CNPJ, número de cartão (com checagem de Luhn), CVV, e-mail, telefone brasileiro, JWT, chave AWS, token do GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), token do Slack (`xox?-`), o valor de atribuições de senha e segredo, cabeçalho `Authorization` e valores de `Cookie` / `Set-Cookie`. Ele roda nos campos de texto livre que a triagem envia (título, descrição, evidência), no que o laço de investigação envia, no AI Fix Bundle antes de ser servido e nos metadados da auditoria. Com modelo local, os achados não saem da máquina; com modelo de nuvem, o scrubber é a barreira. Mudar os padrões dele exige revisão do DPO (veja o `CLAUDE.md`).
 
 **Deduplicação.** O `heuristic_dedup` é determinístico. Existe um `semantic_dedup`, por LLM, em `domain/dedup.py`, e a esteira não o chama.
 
@@ -340,7 +340,7 @@ Antes de testar um ativo real: autorização por escrito e janela combinada. O M
 
 ## 15. Limites conhecidos
 
-- **Dois adapters nunca são construídos.** `censys` e `kube_bench` existem e têm teste, mas caminho de produção nenhum os instancia. Por isso um alvo `k8s_resource` não tem scanner que funcione na esteira do scan: a resolução cai no `nmap`, que recusa o tipo, e o scan termina `FAILED`.
+- **Dois adapters nunca são construídos.** `censys` e `kube_bench` existem e têm teste, mas caminho de produção nenhum os instancia. Por isso um alvo `k8s_resource` não tem scanner na esteira do scan: o `POST /scans` o recusa com 422, e um `run_scan` direto termina `FAILED` com o motivo em `scanners_skipped`.
 - **Adapters em sequência, um host.** A esteira roda um adapter depois do outro; não há scan distribuído. O compose de produção pode rodar mais workers (`--scale worker=N`), o que espalha scans, não os adapters de um scan.
 - **Sem agendamento e sem diff entre execuções.** Cada scan é avulso; a comparação entre rodadas fica com quem chama (o `deduped_key` é o que permite).
 - **DNS rebinding.** O portão de escopo resolve o nome na validação; não resolve de novo na hora do scan.

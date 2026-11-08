@@ -219,7 +219,7 @@ The environment wins over the UI. A field set by a variable shows as locked in t
 | `SHIELD_SERVICES` | all | processes to start (`orchestrator`, `worker`); how the production compose splits API and workers |
 | `LAB_ONLY`, `TARGET_ALLOWLIST`, `REQUIRE_AUTH_REF` | from the UI | lock the authorized scope |
 | `LLM_MODEL`, `LLM_API_BASE`, `ANTHROPIC_API_KEY` and the other keys | from the UI | lock the AI configuration |
-| `ALLOW_CLOUD_FALLBACK` | `true` | `false` forbids a local model from falling back to a cloud one |
+| `ALLOW_CLOUD_FALLBACK` | `false` | `false` forbids a local model from falling back to a cloud one; `true` allows it |
 | `AGENT_LIVE_EXECUTION` | `false` | lets an admin run the AI agent's planned commands for real (`dry_run=false`); off, the agent only plans |
 | `MCP_ALLOW_ACTIONS` | `false` | lets `POST /mcp` start scans (always with an authorization reference) |
 | `RATE_LIMIT_PER_MINUTE` | `20` | ceiling per user and route on the routes that start expensive work; `0` turns it off |
@@ -238,6 +238,9 @@ Every variable, with its default and what reads it, is in [REFERENCE.md](REFEREN
 - **Redis** with a password and **ZAP** as separate services. The supervisor sees `REDIS_URL` and `ZAP_BASE_URL` pointing outside and does not start the built-in ones.
 - **`shield`** runs only the API (`SHIELD_SERVICES=orchestrator`) and is the one that migrates the database. **`worker`** runs only workers and can be scaled.
 - `REQUIRE_AUTH_REF` defaults to `true` and `ALLOW_CLOUD_FALLBACK` to `false`. Every container has `cap_drop: [ALL]` and `no-new-privileges`.
+- `shield` and `worker` run with a **read-only root** (`read_only: true`): they write only to the `/data` volume (which is also their `HOME`) and to `/tmp`, a 2 GB tmpfs where the adapters keep their temporary files and the scanned repository is cloned. `shield` and `zap` have healthchecks; `shield` reuses the image's `/health` check.
+- **No secret on a command line.** ZAP and Redis receive their key and password through the environment; their entrypoint writes a `0600` file, unsets the variable and passes only the path (`-configfile` for ZAP, the config file for Redis). Neither shows up in `ps`, `/proc/<pid>/cmdline` or `docker inspect` (`Config.Cmd`), the same mechanism the supervisor uses in the standalone. Before 08/11/2026 the compose passed `-config api.key=...` and `--requirepass ...`.
+- **No raw socket, no separate nmap worker.** The nmap adapter does a connect scan (`-sT -Pn`), which needs no `NET_RAW`. Issue #12 considered a dedicated nmap worker on its own network to hold that capability; with no capability to hold, it was dropped (08/11/2026). If a SYN scan is ever needed, the capability goes to a service of its own, never to the worker that runs the other scanners.
 
 ```bash
 # .env at the repository root, from your secrets vault:
@@ -259,7 +262,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ## 11. AI provider and a local model
 
-AI is optional. Without it, the scanners run and the findings keep their own classification. With it, the model triages the findings (adjusted severity, false-positive likelihood, remediation) and writes the executive narrative. Before anything goes to an external model, the scrubber redacts personal and card data from the evidence and descriptions: CPF and CNPJ, card numbers and CVV, e-mails, Brazilian phone numbers, JWTs, AWS keys, and `Authorization` and `Cookie` headers.
+AI is optional. Without it, the scanners run and the findings keep their own classification. With it, the model triages the findings (adjusted severity, false-positive likelihood, remediation) and writes the executive narrative. Before anything goes to an external model, the scrubber redacts personal and card data from the evidence and descriptions: CPF and CNPJ, card numbers (Luhn-checked) and CVV, e-mails, Brazilian phone numbers, JWTs, AWS keys, GitHub tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), Slack tokens (`xoxb-`, `xoxp-`, `xoxa-`, `xoxr-`, `xoxs-`), the value of password and secret assignments (`password=`, `senha:`, `api_key=`, `client_secret` and the like; the key stays, only the value goes), and `Authorization` and `Cookie` headers.
 
 Configure it in **AI**: Anthropic, OpenAI, OpenRouter, or a local OpenAI-compatible server. The key is stored encrypted and never comes back to the UI. The same fields can be locked by the environment (`LLM_MODEL`, `LLM_FALLBACK_MODEL`, `LLM_API_BASE`, `LLM_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`).
 
@@ -291,7 +294,7 @@ GREENBONE_USERNAME=admin
 GREENBONE_PASSWORD=<the password you set>
 ```
 
-The repository brings a minimal compose for it, made for the development stack: `make greenbone-up` starts it, `bash scripts/feed-sync.sh` follows the feed, the web console is at `https://127.0.0.1:9392` and GMP at `127.0.0.1:9390`. The default login is `admin/admin`: **change it** before any scan. For a real environment, use Greenbone's official compose. Both publish on the host's `127.0.0.1`, which the standalone container does not reach through `host.docker.internal` on Linux; put the shield and Greenbone on the same Docker network, or publish GMP where the container can reach it. [DEVELOPMENT.md](DEVELOPMENT.md) has the development side.
+The repository brings a minimal compose for it, made for the development stack: `make greenbone-up` starts it, `bash scripts/feed-sync.sh` follows the feed, the web console is at `http://127.0.0.1:9392` (plain HTTP: the `cai-gsa` container serves port 80, published only on `127.0.0.1`) and GMP at `127.0.0.1:9390`. The default login is `admin/admin`: **change it** before any scan. For a real environment, use Greenbone's official compose. Both publish on the host's `127.0.0.1`, which the standalone container does not reach through `host.docker.internal` on Linux; put the shield and Greenbone on the same Docker network, or publish GMP where the container can reach it. [DEVELOPMENT.md](DEVELOPMENT.md) has the development side.
 
 ## 13. Logs and health
 

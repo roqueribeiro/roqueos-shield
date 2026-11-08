@@ -16,7 +16,7 @@ log = structlog.get_logger(__name__)
 
 
 async def run_scan_job(
-    ctx: dict,
+    ctx: dict[str, Any],
     *,
     target_value: str,
     asset_type: str,
@@ -83,7 +83,7 @@ async def run_scan_job(
 
 
 async def run_exposure_job(
-    ctx: dict,
+    ctx: dict[str, Any],
     *,
     company_name: str,
     domains: list[str] | None = None,

@@ -170,7 +170,8 @@ def draw(theme):
             tr("o agente edita o código", "the agent edits the code"),
             P["cyan"],
             tr(
-                "Aplica a correção no repositório, com o CWE e a remediação sugerida como contexto.",
+                "Aplica a correção no repositório, com o CWE e a remediação sugerida "
+                "como contexto.",
                 "Applies the fix in the repository, with the CWE and the suggested fix as context.",
             ),
         ),

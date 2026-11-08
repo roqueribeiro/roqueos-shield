@@ -13,7 +13,9 @@ paths:
 
 - pytest + pytest-asyncio (`asyncio_mode = "auto"` em `pyproject.toml`)
 - Coverage via `--cov=orchestrator`
-- Rodar via `make test` (dentro do container) ou `pytest -q tests/` local
+- Rodar via `make test`, que roda **no checkout**, não no container: `uv run --frozen --extra dev pytest -q tests/`. A imagem não leva `tests/` nem as dependências de dev (o Dockerfile instala com `--no-dev`), então `docker compose run ... pytest` não funciona.
+- Alvo específico: `make test ARGS=tests/unit/test_scrubber.py`. Sem uv, com o venv já criado: `.venv/bin/pytest -q tests/`.
+- `make lint` (ruff check + ruff format --check) e `make typecheck` (mypy) também rodam no checkout pelo mesmo `uv run --frozen --extra dev`.
 
 ## Estrutura
 

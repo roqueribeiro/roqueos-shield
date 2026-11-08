@@ -13,7 +13,7 @@ from uuid import UUID
 
 import httpx
 import structlog
-from sqlmodel import select
+from sqlmodel import col, select
 
 from orchestrator.config import settings
 from orchestrator.persistence.db import session
@@ -51,7 +51,14 @@ async def export_scan(
         if scan is None:
             raise ValueError(f"scan {scan_id} não encontrado")
         target = await s.get(TargetRow, scan.target_id)
-        rows = (await s.exec(select(FindingRow).where(FindingRow.scan_id == scan_id))).all()
+        # Ordem fixa: o mesmo scan exportado duas vezes gera o mesmo arquivo.
+        rows = (
+            await s.exec(
+                select(FindingRow)
+                .where(FindingRow.scan_id == scan_id)
+                .order_by(col(FindingRow.deduped_key), col(FindingRow.id))
+            )
+        ).all()
 
     # Generic Findings Import format
     findings_json = {
@@ -100,7 +107,7 @@ async def export_scan(
             files=files,
         )
         resp.raise_for_status()
-        result = resp.json()
+        result: dict[str, Any] = resp.json()
 
     log.info(
         "defectdojo.exported", scan_id=str(scan_id), test_id=result.get("test"), count=len(rows)

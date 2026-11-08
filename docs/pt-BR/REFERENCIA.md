@@ -93,8 +93,8 @@ Opções do `scan start`:
 
 | Opção | Default | Valores |
 | --- | --- | --- |
-| `--type` | `url` | `url`, `domain`, `host`, `image`, `repo`, `k8s_resource` |
-| `--profile` | `web` | `web`, `network`, `full` ([seção 8](#8-perfis-de-scan)) |
+| `--type` | `url` | `url`, `domain`, `host`, `port`, `image`, `repo`. O `k8s_resource` se registra como alvo, mas nenhum scanner o aceita e o `POST /scans` o recusa com 422 |
+| `--profile` | `web` | `web`, `network`, `full`, `active`, `exposure` ([seção 8](#8-perfis-de-scan)) |
 | `--scanner` | nenhum | repetir para mais de um; passa por cima do perfil ([seção 7](#7-scanners-e-suas-opções)) |
 | `--auth-ref` | nenhum | a referência da autorização (ticket, mudança); obrigatória com `REQUIRE_AUTH_REF=true` |
 | `--wait / --no-wait` | `--no-wait` | acompanha até o fim e sai pelo contrato |
@@ -123,16 +123,15 @@ O 3 vence o 0 e o 1 de propósito: zero achado com scanner que não rodou não �
 
 | Comando | O que faz |
 | --- | --- |
-| `cai scan TARGET [--asset-type url] [--criticality medium] [--contains-pii/--no-contains-pii] [--skip-ai/--no-skip-ai] [--active-zap/--no-active-zap] [--ajax/--no-ajax]` | Roda o pipeline contra `TARGET` e grava o relatório HTML. Sem lista de scanners, usa o default do tipo de alvo ([seção 8](#8-perfis-de-scan)). O `--ajax`, quando não informado, acompanha o `--active-zap` |
+| `cai scan TARGET [--asset-type url] [--criticality medium] [--contains-pii/--no-contains-pii] [--skip-ai/--no-skip-ai] [--active-zap/--no-active-zap] [--ajax/--no-ajax] [--authorization-ref REF]` | Roda o pipeline contra `TARGET` e grava o relatório HTML, depois dos mesmos portões do `POST /scans`. Sem lista de scanners, usa o default do tipo de alvo ([seção 8](#8-perfis-de-scan)). O `--ajax`, quando não informado, acompanha o `--active-zap` |
 | `cai exposure COMPANY_NAME [--domains D ...] [--github-orgs O ...] [--dorks Q ...] [--config-file ARQ.yaml] [--skip-ai]` | O pipeline OSINT (dorks no GitHub, gitleaks e trufflehog nos repos achados, dnstwist, shodan, subdomain takeover). Só leitura de dado público. O YAML passa por cima das flags |
 | `cai serve [--host 0.0.0.0] [--port 8080]` | Sobe a API REST com uvicorn |
 | `cai bundle SCAN_ID [--out CAMINHO]` | Grava o AI Fix Bundle de um scan terminado. Default: `$REPORTS_DIR/scan-<id>/ai-bundle.json` |
 
 Limites que importam, lidos de `orchestrator/cli.py` e `orchestrator/jobs/pipelines.py`:
 
-- O `cai scan` **não** passa pelos portões do `POST /scans`: sem validação do alvo contra `LAB_ONLY` e a allowlist, sem `authorization_ref`, sem evento de auditoria. É ferramenta de quem já tem shell no motor. Para o que precisa estar no escopo e auditado, use `roqueshield scan start` ou a API.
-- O `--asset-type` diz `host|url|domain` na ajuda, mas aceita qualquer tipo do enum.
-- O `--contains-pii` diz "rota AI local" na ajuda. No código ele só marca o alvo e vai ao modelo como contexto no payload da triagem; não muda qual modelo é chamado.
+- O `cai scan` passa pelos mesmos portões do `POST /scans`, pelas mesmas funções (`gates_do_scan` e `scanners_do_scan` em `orchestrator/api/routers/scans.py`): o alvo é conferido contra `LAB_ONLY` e a allowlist, o `--authorization-ref` é obrigatório com `REQUIRE_AUTH_REF=true`, e o `scan.create` vai para a trilha de auditoria antes de o scan começar, com ator `cli:<usuário do sistema>` e `"via": "cai scan"`. Ele lê antes o escopo gravado pela tela, como o worker. Recusa sai com código 2 e `scan recusado (<status>): <motivo>`. Sem banco não há trilha, e então o scan também não roda.
+- O `--contains-pii` só marca o alvo e vai ao modelo como contexto no payload da triagem; não muda qual modelo é chamado. Para modelo local, defina `LLM_API_BASE`.
 
 ## 4. API REST
 
@@ -183,8 +182,9 @@ Permissão `pública` quer dizer sem credencial; `qualquer` quer dizer qualquer 
 | reports | `GET /reports/{scan_id}/ai-bundle` | `scans:read` | AI Fix Bundle, schema 1.0.0 |
 | reports | `GET /reports/{scan_id}/executive` | `scans:read` | HTML executivo: nota de risco de A a F e mapeamento de conformidade |
 | reports | `GET /reports/{scan_id}/compliance` | `scans:read` | Mapeamento de conformidade em JSON |
-| reports | `POST /reports/{scan_id}/export/defectdojo` | `scans:run` | Exporta para o DefectDojo (`DEFECTDOJO_URL`, `DEFECTDOJO_API_KEY`) |
-| exposure | `POST /exposure/scan` | `scans:run` | Enfileira o pipeline OSINT (`company_name`, `domains`, `github_orgs`, `dorks`) |
+| reports | `POST /reports/{scan_id}/export/defectdojo` | `scans:run` | Exporta para o DefectDojo (`DEFECTDOJO_URL`, `DEFECTDOJO_API_KEY`). Grava `scan.export.defectdojo` na trilha de auditoria antes de enviar |
+| exposure | `POST /exposure/scan` | `scans:run` | Enfileira o pipeline OSINT (`company_name`, `domains`, `github_orgs`, `dorks`). Grava `exposure.scan` na trilha de auditoria antes de enfileirar |
+| audit | `GET /audit` | `audit:read` | A trilha de auditoria, mais recente primeiro. Filtros `action`, `actor`, `resource_id`, `authorization_ref`, `since`; `offset`, `limit` (1 a 500, default 100). Só leitura |
 | investigate | `POST /investigate/{finding_id}` | `scans:run`; `dry_run=false` exige também `config:manage` e `AGENT_LIVE_EXECUTION=true` | O agente de investigação sobre um achado. Corpo: `instructions`, `dry_run` (default `true`), `max_steps` (default 10) |
 | settings | `GET`/`PUT /settings/ai` | `config:manage` | Modelos, API base e chaves. Chave é gravada cifrada e nunca volta (`hasApiKey`). Campo definido pelo ambiente volta em `locked` |
 | settings | `POST /settings/ai/models` | `config:manage` | Os modelos que cada chave alcança, buscados do lado do servidor |
@@ -202,8 +202,8 @@ Corpo do `POST /scans` (`ScanIn`):
 | Campo | Default | Notas |
 | --- | --- | --- |
 | `target_id` | obrigatório | Vem do `POST /targets` |
-| `profile` | `web` | Texto livre; a [seção 8](#8-perfis-de-scan) diz o que cada valor faz |
-| `scanners` | `null` | Lista explícita; vence o perfil. Filtrada pelo que aceita o tipo de alvo |
+| `profile` | `web` | `web`, `network`, `full`, `active` ou `exposure`, sem distinguir maiúscula; outro valor é 422 `profile '<x>' não existe (aceitos: ...)`. Ver a [seção 8](#8-perfis-de-scan) |
+| `scanners` | `null` | Lista explícita; vence o perfil. Nome que o pipeline não constrói, ou scanner que não aceita o tipo de alvo, é 422 `scanners recusados: <scanner>: <motivo>` |
 | `options` | `{}` | `{scanner: {campo: valor}}`, validado contra uma lista fechada ([seção 7](#7-scanners-e-suas-opções)); o resto é 422 com o nome do campo |
 | `auth` | `null` | `{headers: {...}, openapi_url}` para scan autenticado. O valor dos headers nunca chega à tabela `scans`; vai só no job e sai redigido na auditoria |
 | `authorization_ref` | `null` | Obrigatório (403) com `REQUIRE_AUTH_REF=true` |
@@ -229,7 +229,7 @@ Um núcleo de protocolo (`orchestrator/cliente/mcp_nucleo.py`, escrito à mão: 
 | `get_findings` | `scan_id`, `severity`, `limit` (1 a 500) | Volta com `isError: true` e os achados parciais quando o scan falhou, não terminou ou tem cobertura incompleta |
 | `get_ai_bundle` | `scan_id` | A mesma regra do `get_findings`, com o bundle parcial |
 | `list_targets` | nenhum | Alvos registrados |
-| `start_scan` | `target`, `authorization_ref` (3+ caracteres, obrigatório), `asset_type`, `profile` (`web`, `network`, `full`, `exposure`) | Só aparece com as ações ligadas. Registra o alvo e dispara o scan sob o RBAC do token |
+| `start_scan` | `target`, `authorization_ref` (3+ caracteres, obrigatório), `asset_type` (`url`, `domain`, `host`, `port`, `image`, `repo`), `profile` (`web`, `network`, `full`, `active`, `exposure`) | Só aparece com as ações ligadas. Registra o alvo e dispara o scan sob o RBAC do token |
 
 As `instructions` do servidor dizem ao agente: `Zero achado só é limpo com coverage_complete=true`.
 
@@ -247,7 +247,7 @@ Os campos de IA e de escopo também podem ser definidos na tela (tabela `app_set
 | `LLM_FALLBACK_MODEL` | `anthropic/claude-haiku-4-5-20251001` | Modelo usado quando o principal falha |
 | `LLM_API_BASE` | vazio | API base de um backend local compatível com OpenAI (LM Studio, Ollama). Vazio usa o default do provedor |
 | `LLM_API_KEY` | vazio | Chave do backend local. Vinda do ambiente, trava também o `LLM_API_BASE` |
-| `ALLOW_CLOUD_FALLBACK` | `true` | `false` proíbe que um modelo local que falhou caia num cloud: a triagem falha em vez de mandar os achados para fora |
+| `ALLOW_CLOUD_FALLBACK` | `false` | Com modelo primário local (`LLM_API_BASE` definido) que falha, a triagem falha em vez de mandar os achados para o `LLM_FALLBACK_MODEL` na nuvem. `true` permite essa travessia, sempre com aviso no log. Fallback de nuvem para nuvem não muda |
 | `LLM_INVESTIGATION_MODEL` | vazio | Modelo do loop do agente; vazio usa o `LLM_MODEL` |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` | vazio | Chaves dos provedores |
 | `LLM_LOCAL_BASE_URL`, `LLM_LOCAL_MODEL` | `http://ollama:11434/v1`, `ollama/qwen2.5:32b-instruct-q4_K_M` | Aliases legados, não lidos pelo gateway |
@@ -341,7 +341,7 @@ São **15** adapters em `orchestrator/adapters/`. Um scan comum (`POST /scans`, 
 | `censys` | nenhum | n/a | só o adapter |
 | `kube_bench` | nenhum | n/a | só o adapter |
 
-Scanner pedido para um tipo de alvo que ele não aceita sai da lista antes do scan (`scanner.skipped_incompatible` no log). Scanner que não consegue rodar (health check falhou, sem handle válido, status de falha, timeout, `ScanIntegrityError`) vai para `scanners_skipped` com o motivo. Nome desconhecido sai com `scanner.unknown`.
+O `POST /scans` recusa com 422 nome de scanner que o pipeline não constrói, scanner pedido para um tipo de alvo que ele não aceita, e alvo que scanner nenhum aceita (`k8s_resource`). Chamado direto (`run_scan`), os mesmos três casos vão para `scanners_skipped` com o motivo, e scan em que nada rodou termina `failed`; quando a lista explícita não tem nada que sirva, roda no lugar o perfil ou o default do tipo. Scanner que não consegue rodar (health check falhou, sem handle válido, status de falha, timeout, `ScanIntegrityError`) vai para `scanners_skipped` com o motivo.
 
 ### Opções que a API aceita
 
@@ -376,7 +376,7 @@ Texto de consulta não pode ter caractere de controle nem começar com `-`. Opç
 
 ## 8. Perfis de scan
 
-`profile` é texto livre no scan. Ele faz duas coisas: escolhe a lista de scanners quando `scanners` não vem, e `full` ou `active` ligam o active scan e o AJAX spider do ZAP (`apply_profile` em `orchestrator/api/routers/scans.py`). Ordem de precedência: `scanners` explícito, depois o perfil, depois o default do tipo de alvo, sempre filtrado pelo que aceita o tipo e nunca vazio.
+`profile` é um dos `PERFIS_DO_SCAN` (`orchestrator/jobs/pipelines.py`): `web`, `network`, `full`, `active`, `exposure`. Outro valor é recusado com 422, em vez de rodar outra coisa com aquele rótulo. Ele escolhe a lista de scanners quando `scanners` não vem, e `full` ou `active` ligam o active scan e o AJAX spider do ZAP (`apply_profile` em `orchestrator/api/routers/scans.py`). Ordem de precedência: `scanners` explícito, depois o perfil, depois o default do tipo de alvo, sempre filtrado pelo que aceita o tipo.
 
 | Tipo de alvo | `web` | `network` | `full` | Default (perfil sem entrada) |
 | --- | --- | --- | --- | --- |
@@ -386,9 +386,11 @@ Texto de consulta não pode ter caractere de controle nem começar com `-`. Opç
 | `port` | default | nmap | nmap | nmap |
 | `image` | default | default | trivy | trivy |
 | `repo` | default | default | semgrep, gitleaks, trufflehog, trivy, checkov | semgrep, gitleaks, trufflehog, trivy, checkov |
-| `k8s_resource` | default | default | default | nmap, como último recurso (nenhum scanner declara suporte a este tipo) |
+| `k8s_resource` | nenhum | nenhum | nenhum | nenhum: scanner nenhum do pipeline de scan aceita este tipo, e o `POST /scans` o recusa com 422 (o `kube_bench` existe como adapter, sem pipeline que o construa) |
 
-O `web` é ZAP passivo. O `full` acrescenta o ZAP ativo (payloads de injeção de verdade, mais lento e mais intrusivo), ainda sob `LAB_ONLY`, allowlist e `authorization_ref`. O `active` é aceito e liga o active scan, com os scanners da coluna default. Qualquer outro valor, inclusive `exposure` e `cloud`, só rotula o scan e usa a coluna default: o pipeline OSINT só roda pelo `POST /exposure/scan` ou pelo `cai exposure`.
+O `web` é ZAP passivo. O `full` acrescenta o ZAP ativo (payloads de injeção de verdade, mais lento e mais intrusivo), ainda sob `LAB_ONLY`, allowlist e `authorization_ref`. O `active` liga o active scan, com os scanners da coluna default.
+
+O `exposure` não usa o pipeline de scan: entrega o alvo ao pipeline OSINT (`orchestrator/jobs/exposure.py`) e grava o resultado no mesmo scan, então tela, cobertura e relatório funcionam como em qualquer scan. Aceita alvo `url`, `domain` e `host` (422 para os outros) e toma o domínio do alvo (o host de uma URL) como domínio da empresa: o `github_exposure` roda a dork `"<domínio>"` (precisa de `GITHUB_TOKEN`), `gitleaks` e `trufflehog` varrem os 5 primeiros repositórios achados, o `dnstwist` procura typosquatting do domínio, o `shodan` busca `org:"<rótulo do alvo ou domínio>"` (precisa de `SHODAN_API_KEY`) e o `subdomain_takeover` enumera o domínio (precisa de `subfinder` e `httpx`). Cada vetor que não roda vai para `scanners_skipped` com o motivo. `scanners` não se aplica a este perfil (422). Para vários domínios, orgs do GitHub ou dorks próprias, use o `POST /exposure/scan` ou o `cai exposure`.
 
 A lista de scanners usada de fato fica gravada em `requested_scanners` e aparece como `scanners_requested`.
 
@@ -411,7 +413,7 @@ De `orchestrator/domain/roles.py`. Cada papel é um conjunto fixo de permissões
 | `auditor` | `scans:read`, `audit:read` |
 | `viewer` | `scans:read` |
 
-Segregação de funções: o `operator` dispara scan mas não gerencia usuário nem escopo; o `auditor` lê mas não dispara. Limite conhecido: nenhuma rota da API atual confere `audit:read`, então pela API o `auditor` vê o mesmo que o `viewer`. A trilha em si é a tabela `audit_log`, append-only no Postgres com as migrations aplicadas.
+Segregação de funções: o `operator` dispara scan mas não gerencia usuário nem escopo; o `auditor` lê mas não dispara. O `GET /audit` é a rota que confere `audit:read`: o `auditor` lê a trilha ali, e `viewer` ou `operator` recebem 403. A trilha em si é a tabela `audit_log`, append-only no Postgres com as migrations aplicadas.
 
 O último admin ativo não pode ser rebaixado nem desativado (409).
 

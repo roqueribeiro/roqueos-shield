@@ -32,6 +32,7 @@ async def _check_postgres() -> dict[str, Any]:
         async with session() as s:
             # SQLModel.exec() não tipa TextClause (só Select de modelos); pro health
             # check de texto cru o runtime é ok, o ignore é o gap conhecido do SQLModel.
+            # O `exec` do SQLModel só tipa Select/Update/Delete; o ping é SQL cru de propósito.
             await s.exec(text("SELECT 1"))  # type: ignore[call-overload]
         return _ok(_nome_do_banco(), t0)
     except Exception as e:  # noqa: BLE001
@@ -51,9 +52,9 @@ def _nome_do_banco() -> str:
 async def _check_redis() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
-        from redis.asyncio import from_url
+        from redis.asyncio import Redis
 
-        client = from_url(settings.REDIS_URL, socket_connect_timeout=2.0)
+        client = Redis.from_url(settings.REDIS_URL, socket_connect_timeout=2.0)
         try:
             pong = await client.ping()
             if pong:

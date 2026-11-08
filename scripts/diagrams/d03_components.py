@@ -55,7 +55,8 @@ def draw(theme):
                 desc=tr(
                     "Resolve identidade por X-API-Token, Bearer OIDC ou cookie de sessão, e injeta "
                     "a sessão do banco. É onde o papel do usuário entra na requisição.",
-                    "Resolves identity from X-API-Token, Bearer OIDC or the session cookie, and injects "
+                    "Resolves identity from X-API-Token, Bearer OIDC or the session cookie, "
+                    "and injects "
                     "the database session. This is where the user role enters the request.",
                 ),
             ),

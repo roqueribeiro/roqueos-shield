@@ -10,13 +10,13 @@ Mostre logs recentes. Se `$ARGUMENTS` vazio, default = `orchestrator`.
 CONTAINER="${1:-orchestrator}"
 
 # se for serviço do compose
-docker compose --env-file .env -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml logs --tail 100 $CONTAINER
+docker compose --env-file .env --project-directory docker -f docker/compose.yml -f docker/compose.scanners.yml -f docker/compose.lab.yml logs --tail 100 $CONTAINER
 
 # alternativamente direto
 # docker logs cai-$CONTAINER --tail 100
 ```
 
-Containers disponíveis: `orchestrator`, `worker`, `postgres`, `redis`, `zap`, `juice-shop`, `dvwa`, `webgoat`, `ollama`, `kali-toolbox`.
+Containers disponíveis: `orchestrator`, `worker`, `postgres`, `redis`, `zap`, `trivy`, `juice-shop`, `dvwa`, `webgoat`, `kali-toolbox`. O `ollama` só existe com `make ollama-up` (profile `ollama`): use `docker logs cai-ollama`.
 
 Se `$ARGUMENTS` for `--all`, mostre todos os serviços ativos.
 

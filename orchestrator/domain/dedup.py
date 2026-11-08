@@ -17,29 +17,58 @@ from orchestrator.domain.schemas import Finding
 log = structlog.get_logger(__name__)
 
 
-def heuristic_dedup(findings: Iterable[Finding]) -> list[Finding]:
-    """Mantém o de maior severity para cada deduped_key. Determinístico, rápido."""
+_SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
+_CONFIDENCE_RANK = {"certain": 2, "firm": 1, "tentative": 0}
 
-    _SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
+
+def _peso(f: Finding) -> tuple[int, int, str, str, str]:
+    """Quem fica num empate de `deduped_key`, sem depender da ordem de chegada.
+
+    Severity maior, depois confidence maior, depois o menor (source_tool,
+    source_rule_id, id): um critério total. Antes o empate ficava com o primeiro que
+    chegou, e a ordem de chegada é a dos adapters e a de cada scanner (alertas do
+    ZAP, JSONL do nuclei), que não é garantida. O mesmo scan podia gravar um achado
+    num rescan e outro no seguinte.
+    """
+    return (
+        _SEVERITY_RANK.get(str(f.severity), 0),
+        _CONFIDENCE_RANK.get(str(f.confidence), 0),
+        # nos três últimos, a MENOR string ganha (ver `_ganha`)
+        f.source_tool,
+        f.source_rule_id or "",
+        str(f.id),
+    )
+
+
+def heuristic_dedup(findings: Iterable[Finding]) -> list[Finding]:
+    """Um achado por `deduped_key`, escolhido e ordenado de forma determinística.
+
+    Fica o de maior severity (desempate: confidence, depois source_tool,
+    source_rule_id e id). A saída sai ordenada por severity decrescente e depois por
+    `deduped_key`: a mesma entrada, em qualquer ordem, dá a mesma lista.
+    """
+    lista = list(findings)
     keep: dict[str, Finding] = {}
-    for f in findings:
+    for f in lista:
         if not f.deduped_key:
             continue
         existing = keep.get(f.deduped_key)
-        if existing is None:
-            keep[f.deduped_key] = f
-            continue
-        # mantém o de severity maior
-        if _SEVERITY_RANK.get(f.severity, 0) > _SEVERITY_RANK.get(existing.severity, 0):
+        if existing is None or _ganha(f, existing):
             keep[f.deduped_key] = f
 
-    deduped = list(keep.values())
-    log.info(
-        "dedup.heuristic_done",
-        before=sum(1 for _ in findings) if hasattr(findings, "__len__") else None,
-        after=len(deduped),
+    deduped = sorted(
+        keep.values(),
+        key=lambda f: (-_SEVERITY_RANK.get(str(f.severity), 0), f.deduped_key),
     )
+    log.info("dedup.heuristic_done", before=len(lista), after=len(deduped))
     return deduped
+
+
+def _ganha(novo: Finding, atual: Finding) -> bool:
+    a, b = _peso(novo), _peso(atual)
+    if a[:2] != b[:2]:
+        return a[:2] > b[:2]
+    return a[2:] < b[2:]
 
 
 _SEMANTIC_PROMPT = """\

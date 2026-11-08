@@ -172,7 +172,9 @@ def servicos(env: dict[str, str], data: Path) -> list[Servico]:
                 "uvicorn",
                 "orchestrator.main:app",
                 "--host",
-                "0.0.0.0",
+                # Todas as interfaces de propósito: é o processo da API dentro do
+                # container, e a exposição é decidida no publish de porta.
+                "0.0.0.0",  # noqa: S104
                 "--port",
                 porta,
                 "--proxy-headers",
@@ -254,7 +256,8 @@ async def _rodar(svc: Servico, redis_cliente: Any, parar: asyncio.Event) -> None
             tee.linha(f"[supervisor] {svc.nome} não iniciou: {type(e).__name__}: {e}\n")
             svc.processo = None
         else:
-            assert svc.processo.stdout is not None
+            if svc.processo.stdout is None:  # stdout=PIPE acima: só se o asyncio mudar
+                raise RuntimeError(f"{svc.nome}: subprocesso sem stdout com stdout=PIPE")
             await _bombear(svc, svc.processo.stdout, tee)
             codigo = await svc.processo.wait()
             if parar.is_set():
@@ -290,7 +293,7 @@ async def _encerrar(lista: list[Servico], prazo: float = 8.0) -> None:
 async def principal(env: dict[str, str] | None = None) -> int:
     base = dict(os.environ if env is None else env)
     data = Path(base.get("DATA_DIR", "/data"))
-    data.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(data.mkdir, parents=True, exist_ok=True)
     valores, origens = segredos.garantir(data / "secrets", ambiente=base)
     for o in origens:
         print(f"[supervisor] segredo {o.nome}: {o.de_onde}", flush=True)
@@ -300,7 +303,8 @@ async def principal(env: dict[str, str] | None = None) -> int:
         svc.env = ambiente_de(svc.nome, filho)
     if any(o.nome == "SETUP_CODE" and o.de_onde != "ambiente" for o in origens):
         print(
-            "[supervisor] se o primeiro uso ainda não foi feito, o código para criar o admin está em "
+            "[supervisor] se o primeiro uso ainda não foi feito, "
+            "o código para criar o admin está em "
             f"{data / 'secrets' / 'SETUP_CODE'} "
             "(docker exec <container> cat /data/secrets/SETUP_CODE)",
             flush=True,

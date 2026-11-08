@@ -85,7 +85,9 @@ class GreenboneAdapter:
         # O transform que confere levanta GmpError, e o pipeline registra cobertura
         # incompleta. Verificado na lib instalada: EtreeTransform.__call__ só chama
         # _convert_response; EtreeCheckCommandTransform chama check_command_status.
-        return Gmp(connection=self._connect(), transform=EtreeCheckCommandTransform())
+        # O `__init__` herdado do EtreeTransform não tem anotação no python-gvm.
+        transform = EtreeCheckCommandTransform()  # type: ignore[no-untyped-call]
+        return Gmp(connection=self._connect(), transform=transform)
 
     async def health(self) -> bool:
         def _check() -> bool:
@@ -213,7 +215,6 @@ class GreenboneAdapter:
             name = result.findtext("name", default="")
             threat = result.findtext("threat", default="Low")
             severity = _OPENVAS_THREAT.get(threat, Severity.LOW)
-            cvss_score = result.findtext("severity")
             cve = ""
             if nvt is not None:
                 refs = nvt.find("refs")

@@ -219,7 +219,7 @@ O ambiente vence a tela. Campo definido por variável aparece travado na tela, c
 | `SHIELD_SERVICES` | todos | processos que sobem (`orchestrator`, `worker`); é como o compose de produção separa API e workers |
 | `LAB_ONLY`, `TARGET_ALLOWLIST`, `REQUIRE_AUTH_REF` | da tela | travam o escopo autorizado |
 | `LLM_MODEL`, `LLM_API_BASE`, `ANTHROPIC_API_KEY` e as outras chaves | da tela | travam a configuração de IA |
-| `ALLOW_CLOUD_FALLBACK` | `true` | `false` proíbe um modelo local de cair num de nuvem |
+| `ALLOW_CLOUD_FALLBACK` | `false` | `false` proíbe um modelo local de cair num de nuvem; `true` permite |
 | `AGENT_LIVE_EXECUTION` | `false` | deixa um admin executar de verdade os comandos que o agente de IA planeja (`dry_run=false`); desligado, o agente só planeja |
 | `MCP_ALLOW_ACTIONS` | `false` | deixa o `POST /mcp` disparar scans (sempre com referência de autorização) |
 | `RATE_LIMIT_PER_MINUTE` | `20` | teto por usuário e rota nas rotas que disparam trabalho caro; `0` desliga |
@@ -238,6 +238,9 @@ O `docker/compose.prod.yml` roda a **mesma imagem** do standalone, com cada peç
 - **Redis** com senha e **ZAP** como serviços separados. O supervisor vê `REDIS_URL` e `ZAP_BASE_URL` apontando para fora e não sobe os embutidos.
 - **`shield`** roda só a API (`SHIELD_SERVICES=orchestrator`) e é quem migra o banco. **`worker`** roda só workers e escala.
 - `REQUIRE_AUTH_REF` vem `true` por padrão e `ALLOW_CLOUD_FALLBACK`, `false`. Todo container tem `cap_drop: [ALL]` e `no-new-privileges`.
+- `shield` e `worker` rodam com a **raiz só de leitura** (`read_only: true`): escrevem só no volume `/data` (que também é o `HOME` deles) e em `/tmp`, um tmpfs de 2 GB onde os adapters guardam os temporários e o repo escaneado é clonado. `shield` e `zap` têm healthcheck; o do `shield` repete o `/health` da imagem.
+- **Nenhum segredo em linha de comando.** ZAP e Redis recebem a chave e a senha pelo ambiente; o entrypoint deles grava um arquivo `0600`, apaga a variável e passa só o caminho (`-configfile` no ZAP, o arquivo de config no Redis). Nenhuma das duas aparece no `ps`, no `/proc/<pid>/cmdline` nem no `docker inspect` (`Config.Cmd`): é o mesmo mecanismo que o supervisor usa no standalone. Antes de 08/11/2026 o compose passava `-config api.key=...` e `--requirepass ...`.
+- **Sem raw socket e sem worker separado para o nmap.** O adapter do nmap faz connect scan (`-sT -Pn`), que não precisa de `NET_RAW`. A Issue #12 considerou um worker só do nmap, numa rede própria, para segurar essa capability; sem capability para segurar, ele foi descartado (08/11/2026). Se um dia o SYN scan for necessário, a capability vai para um serviço próprio, nunca para o worker que roda os outros scanners.
 
 ```bash
 # .env na raiz do repositório, vindo do seu cofre de segredos:
@@ -259,7 +262,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ## 11. Provedor de IA e modelo local
 
-A IA é opcional. Sem ela, os scanners rodam e os achados ficam com a classificação deles. Com ela, o modelo faz a triagem dos achados (severidade ajustada, chance de falso positivo, remediação) e escreve a narrativa executiva. Antes de qualquer coisa ir para um modelo externo, o scrubber redige dado pessoal e de cartão da evidência e da descrição: CPF e CNPJ, número de cartão e CVV, e-mails, telefones brasileiros, JWTs, chaves da AWS, e os cabeçalhos `Authorization` e `Cookie`.
+A IA é opcional. Sem ela, os scanners rodam e os achados ficam com a classificação deles. Com ela, o modelo faz a triagem dos achados (severidade ajustada, chance de falso positivo, remediação) e escreve a narrativa executiva. Antes de qualquer coisa ir para um modelo externo, o scrubber redige dado pessoal e de cartão da evidência e da descrição: CPF e CNPJ, número de cartão (validado por Luhn) e CVV, e-mails, telefones brasileiros, JWTs, chaves da AWS, tokens do GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), tokens do Slack (`xoxb-`, `xoxp-`, `xoxa-`, `xoxr-`, `xoxs-`), o valor de atribuições de senha e segredo (`password=`, `senha:`, `api_key=`, `client_secret` e afins; a chave fica, só o valor some), e os cabeçalhos `Authorization` e `Cookie`.
 
 Configure em **IA**: Anthropic, OpenAI, OpenRouter, ou um servidor local compatível com OpenAI. A chave fica guardada cifrada e nunca volta para a tela. Os mesmos campos podem ser travados pelo ambiente (`LLM_MODEL`, `LLM_FALLBACK_MODEL`, `LLM_API_BASE`, `LLM_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`).
 
@@ -291,7 +294,7 @@ GREENBONE_USERNAME=admin
 GREENBONE_PASSWORD=<a senha que você definiu>
 ```
 
-O repositório traz um compose mínimo para ele, feito para a stack de desenvolvimento: `make greenbone-up` sobe, `bash scripts/feed-sync.sh` acompanha o feed, o console web fica em `https://127.0.0.1:9392` e o GMP em `127.0.0.1:9390`. O login padrão é `admin/admin`: **troque** antes de qualquer scan. Para ambiente real, use o compose oficial do Greenbone. Os dois publicam no `127.0.0.1` do host, que o container standalone não alcança por `host.docker.internal` no Linux; ponha o shield e o Greenbone na mesma rede Docker, ou publique o GMP onde o container alcance. O lado de desenvolvimento está em [DESENVOLVIMENTO.md](DESENVOLVIMENTO.md).
+O repositório traz um compose mínimo para ele, feito para a stack de desenvolvimento: `make greenbone-up` sobe, `bash scripts/feed-sync.sh` acompanha o feed, o console web fica em `http://127.0.0.1:9392` (HTTP simples: o container `cai-gsa` serve a porta 80, publicada só no `127.0.0.1`) e o GMP em `127.0.0.1:9390`. O login padrão é `admin/admin`: **troque** antes de qualquer scan. Para ambiente real, use o compose oficial do Greenbone. Os dois publicam no `127.0.0.1` do host, que o container standalone não alcança por `host.docker.internal` no Linux; ponha o shield e o Greenbone na mesma rede Docker, ou publique o GMP onde o container alcance. O lado de desenvolvimento está em [DESENVOLVIMENTO.md](DESENVOLVIMENTO.md).
 
 ## 13. Logs e saúde
 

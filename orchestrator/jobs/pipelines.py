@@ -96,26 +96,166 @@ _PROFILE_SCANNERS: dict[str, dict[AssetType, list[str]]] = {
 }
 
 
+# Os profiles que o pipeline sabe executar. `web`, `network` e `full` escolhem a lista
+# de scanners (`_PROFILE_SCANNERS`); `active` usa a lista padrão do tipo e liga o
+# active scan do ZAP (`apply_profile`, em `api/routers/scans.py`). Antes, qualquer
+# string passava: `exposure` e `cloud` eram aceitos por `POST /scans`, oferecidos
+# pelo MCP, gravados no scan, e rodavam a lista padrão como se fossem `web`. O
+# operador pedia OSINT e recebia um scan web passivo, sem aviso.
+PERFIS_DO_SCAN: tuple[str, ...] = ("web", "network", "full", "active", "exposure")
+
+# `exposure` não escolhe adapters do pipeline de scan: ele entrega o alvo ao pipeline
+# OSINT (`jobs/exposure.py`), com o domínio do alvo como domínio da empresa e a dork
+# `"<domínio>"` no GitHub (código público que cita o domínio). O roqueos-front oferece
+# esse profile no POST /scans; antes ele rodava a lista padrão do tipo, um scan web
+# passivo com o rótulo "Exposure (OSINT)". Os nomes aqui são os vetores que o
+# pipeline OSINT registra em `scanners_ran`/`scanners_skipped`.
+PERFIL_EXPOSURE = "exposure"
+SCANNERS_EXPOSURE: list[str] = [
+    "github_exposure",
+    "gitleaks",
+    "trufflehog",
+    "dnstwist",
+    "shodan",
+    "subdomain_takeover",
+]
+_TIPOS_EXPOSURE: frozenset[AssetType] = frozenset({AssetType.DOMAIN, AssetType.URL, AssetType.HOST})
+
+# Perfis que existem em outro lugar e por isso merecem um caminho na mensagem.
+_PERFIS_DE_OUTRO_PIPELINE: dict[str, str] = {}
+
+# Chave de `scanners_skipped` quando nenhum scanner do pipeline aceita o alvo.
+SEM_SCANNER = "pipeline"
+
+
+class PerfilRecusado(ValueError):
+    """`profile` que o pipeline não executa. Recusar é melhor que rodar outra coisa."""
+
+
+def validar_perfil(profile: str | None) -> str:
+    """Normaliza o profile e recusa o que não existe, dizendo o que existe."""
+    p = (profile or "").strip().lower()
+    if p in PERFIS_DO_SCAN:
+        return p
+    aceitos = ", ".join(PERFIS_DO_SCAN)
+    if p in _PERFIS_DE_OUTRO_PIPELINE:
+        raise PerfilRecusado(
+            f"profile {p!r} não é um scan: {_PERFIS_DE_OUTRO_PIPELINE[p]} (aceitos: {aceitos})"
+        )
+    raise PerfilRecusado(f"profile {p!r} não existe (aceitos: {aceitos})")
+
+
 def resolve_scanners(
     requested: list[str] | None, asset_type: AssetType, profile: str | None = None
 ) -> list[str]:
     """A lista EFETIVA de scanners: pedido explícito > profile > default do tipo.
 
-    Sempre filtrada pelo que aceita o asset_type, e nunca vazia. É o que o scan roda
-    e o que fica em `requested_scanners` (o front mostra isso como "Scanners").
+    Sempre filtrada pelo que aceita o asset_type. Vazia quando nenhum scanner do
+    pipeline aceita o tipo (`k8s_resource`): quem chama recusa ou registra em
+    `scanners_skipped`. Os motivos estão em `resolve_scanners_com_motivo`.
     """
+    return resolve_scanners_com_motivo(requested, asset_type, profile)[0]
+
+
+def resolve_scanners_com_motivo(
+    requested: list[str] | None, asset_type: AssetType, profile: str | None = None
+) -> tuple[list[str], dict[str, str]]:
+    """Como `resolve_scanners`, e também o que ficou de fora e por quê.
+
+    O segundo item vai para `scanners_skipped`: scanner pedido com nome desconhecido,
+    scanner pedido que não aceita o tipo do alvo, e (com a chave `SEM_SCANNER`) o
+    caso em que nenhum scanner aceita o alvo. O fallback antigo para `["nmap"]`
+    mandava um k8s_resource para o nmap, que recusava o tipo: o scan fechava com
+    zero achados e parecia limpo.
+    """
+    pulados: dict[str, str] = {}
+    if (profile or "").strip().lower() == PERFIL_EXPOSURE:
+        return _resolve_exposure(requested, asset_type)
     if requested:
-        names = _supported_for(requested, asset_type)
-        if names:
-            return names
+        conhecidos: list[str] = []
+        for n in requested:
+            if n not in _SCANNER_ASSET_SUPPORT:
+                pulados[n] = (
+                    f"scanner desconhecido (o pipeline de scan constrói: "
+                    f"{', '.join(sorted(_SCANNER_ASSET_SUPPORT))})"
+                )
+            elif asset_type not in _SCANNER_ASSET_SUPPORT[n]:
+                pulados[n] = f"{n} não aceita asset_type {asset_type.value}"
+            else:
+                conhecidos.append(n)
+        if conhecidos:
+            return conhecidos, pulados
     by_profile = _PROFILE_SCANNERS.get((profile or "").strip().lower(), {}).get(asset_type)
     if by_profile:
         names = _supported_for(by_profile, asset_type)
         if names:
-            return names
-    return _supported_for(_DEFAULT_SCANNERS.get(asset_type, ["nmap", "zap"]), asset_type) or [
-        "nmap"
-    ]
+            return names, pulados
+    names = _supported_for(_DEFAULT_SCANNERS.get(asset_type, []), asset_type)
+    if not names:
+        pulados[SEM_SCANNER] = (
+            f"nenhum scanner do pipeline de scan aceita asset_type {asset_type.value}: "
+            "este alvo não foi verificado"
+        )
+    return names, pulados
+
+
+def _resolve_exposure(
+    requested: list[str] | None, asset_type: AssetType
+) -> tuple[list[str], dict[str, str]]:
+    """O profile `exposure` roda o pipeline OSINT inteiro, ou nada.
+
+    `scanners` explícito não se aplica (o pipeline OSINT decide os vetores pelo que
+    está configurado), e o alvo precisa ter um domínio: imagem, repo, porta e k8s não
+    têm. Os dois casos voltam como motivo, e o `POST /scans` os recusa com 422.
+    """
+    pulados: dict[str, str] = {}
+    if requested:
+        for n in requested:
+            pulados[n] = (
+                "o profile exposure roda o pipeline OSINT inteiro; `scanners` não se aplica"
+            )
+        return [], pulados
+    if asset_type not in _TIPOS_EXPOSURE:
+        pulados[SEM_SCANNER] = (
+            f"o profile exposure precisa de um domínio (url, domain ou host), "
+            f"não de asset_type {asset_type.value}"
+        )
+        return [], pulados
+    return list(SCANNERS_EXPOSURE), pulados
+
+
+def dominio_do_alvo(target: Target) -> str:
+    """O domínio que o pipeline OSINT investiga a partir do alvo do scan."""
+    from urllib.parse import urlparse
+
+    valor = target.value.strip()
+    if target.asset_type == AssetType.URL or "://" in valor:
+        return (urlparse(valor).hostname or "").lower()
+    return valor.lower().rstrip(".")
+
+
+async def _run_exposure_como_scan(target: Target, *, scan_id: UUID, skip_ai: bool) -> ScanResult:
+    """O profile `exposure` de um scan: o pipeline OSINT, gravado no MESMO scan."""
+    from orchestrator.jobs.exposure import run_exposure_scan
+
+    sid = str(scan_id)
+    await _ensure_scan_row(scan_id, target)
+    await _update_phase(scan_id, "exposure_running")
+    emit_phase(sid, "exposure_running")
+    dominio = dominio_do_alvo(target)
+    result = await run_exposure_scan(
+        company_name=target.label or dominio,
+        domains=[dominio] if dominio else [],
+        github_orgs=[],
+        dorks=[f'"{dominio}"'] if dominio else [],
+        skip_ai=skip_ai,
+        scan_id=scan_id,
+        target=target,
+    )
+    final = "failed" if (result.scanners_skipped and not result.scanners_ran) else "done"
+    await _update_phase(scan_id, final)
+    emit_phase(sid, final)
+    return result
 
 
 def _supported_for(names: list[str], asset_type: AssetType) -> list[str]:
@@ -130,8 +270,15 @@ def _supported_for(names: list[str], asset_type: AssetType) -> list[str]:
     return out
 
 
-def _build_adapters(names: list[str]) -> list[ScannerAdapter]:
-    """Instancia adapters a partir dos nomes pedidos; desconhecidos → warning."""
+def _build_adapters(
+    names: list[str], skipped: dict[str, str] | None = None
+) -> list[ScannerAdapter]:
+    """Instancia adapters a partir dos nomes pedidos.
+
+    Nome desconhecido não vira só log: com `skipped`, entra lá com o motivo (é o
+    `scanners_skipped` do resultado). Sem isso o scan pedia um scanner, não rodava, e
+    a cobertura saía completa.
+    """
     from orchestrator.adapters.checkov_adapter import CheckovAdapter
     from orchestrator.adapters.gitleaks_adapter import GitleaksAdapter
     from orchestrator.adapters.greenbone_adapter import GreenboneAdapter
@@ -164,6 +311,8 @@ def _build_adapters(names: list[str]) -> list[ScannerAdapter]:
         factory = factories.get(n)
         if factory is None:
             log.warning("scanner.unknown", scanner=n)
+            if skipped is not None:
+                skipped[n] = "scanner desconhecido: o pipeline de scan não sabe construí-lo"
             continue
         out.append(factory())
     return out
@@ -192,7 +341,9 @@ async def _run_adapter(
     target: Target,
     options: dict[str, Any],
     poll_every: float = 5.0,
-    timeout: float = 1800.0,
+    # Orçamento do laço de poll, e não um cancelamento: esgotado, vira
+    # AdapterUnavailableError (scanners_skipped) e o cleanup do `finally` ainda roda.
+    timeout: float = 1800.0,  # noqa: ASYNC109
     scan_id_str: str | None = None,
 ) -> list[Finding]:
     """Lifecycle completo de um scan: start → poll → fetch → normalize → cleanup.
@@ -292,27 +443,42 @@ async def run_scan(
 
     Args:
         target: alvo da varredura.
-        adapters: lista de adapters; default = [Nmap, ZAP].
+        adapters: lista de adapters; None = resolve por `scanners`, profile e
+            asset_type (`resolve_scanners_com_motivo`).
         skip_ai: se True, pula AIAnalyzer (útil quando não há API key).
         options: dict por adapter — `{"nmap": {...}, "zap": {...}}`.
         scan_id: id do scan a ATUALIZAR (criado por POST /scans). None = cria novo.
     """
     scan_id = scan_id or uuid4()
     options = dict(options or {})
+    if adapters is None and (profile or "").strip().lower() == PERFIL_EXPOSURE:
+        _, pulados = _resolve_exposure(scanners, target.asset_type)
+        if not pulados:
+            return await _run_exposure_como_scan(target, scan_id=scan_id, skip_ai=skip_ai)
+    # O que ficou de fora já na resolução (nome desconhecido, tipo incompatível, alvo
+    # sem scanner) entra em `scanners_skipped` com o motivo, junto com o que falhar
+    # ao rodar. Sem scanner nenhum o scan termina `failed`: nada foi verificado.
+    pulados_na_resolucao: dict[str, str] = {}
     if adapters is None:
-        names = resolve_scanners(scanners, target.asset_type, profile)
-        log.info("scan.scanners_resolved", scanners=names, profile=profile)
-        adapters = _build_adapters(names)
-        if not adapters:
-            fallback = _DEFAULT_SCANNERS.get(target.asset_type, ["nmap"])
-            log.warning("scan.no_adapters_resolved", requested=names, fallback=fallback)
-            adapters = _build_adapters(fallback)
+        names, pulados_na_resolucao = resolve_scanners_com_motivo(
+            scanners, target.asset_type, profile
+        )
+        log.info(
+            "scan.scanners_resolved",
+            scanners=names,
+            profile=profile,
+            skipped=list(pulados_na_resolucao),
+        )
+        adapters = _build_adapters(names, pulados_na_resolucao)
     # Trivy: default internal scanners to vuln+secret+misconfig (CVEs + embedded
     # secrets + Dockerfile/IaC misconfig) unless the caller already set it.
     if any(getattr(a, "name", "") == "trivy" for a in adapters):
         options.setdefault("trivy", {}).setdefault("scanners", "vuln,secret,misconfig")
 
     result = ScanResult(scan_id=scan_id, target=target)
+    for nome, motivo in pulados_na_resolucao.items():
+        result.scanners_skipped[nome] = motivo
+        result.errors.append(f"{nome}: {motivo}")
     sid = str(scan_id)
     # Cria ScanRow upfront pra que AIRun.scan_id (FK) seja válido durante triage
     await _ensure_scan_row(scan_id, target)

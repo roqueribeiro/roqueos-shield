@@ -1,19 +1,20 @@
 ---
-description: Backup de Postgres + reports
+description: Backup do Postgres (inclui a trilha de auditoria) + reports
 allowed-tools: Bash
 argument-hint: ""
 ---
 
-Roda o script de backup:
+Roda o script de backup da stack de desenvolvimento:
 
 ```bash
-bash scripts/backup.sh
+make backup
 ```
 
-Gera em `backups/YYYYMMDD-HHMMSS/`:
-- `cai.sql.gz` — pg_dump do Postgres
-- `reports.tar.gz` — todos os relatórios HTML
+O `scripts/backup.sh` gera em `backups/YYYYMMDD-HHMMSS/`:
+- `cai.sql.gz`: `pg_dump` do `cai-postgres`. A trilha de auditoria (`audit_log`) é tabela dele e vai junto.
+- `reports.tar.gz`: a pasta `reports/` inteira.
 
-Em produção: este script seria agendado via cron + sync pra storage off-host (S3/Azure Blob).
+Não há alvo de restore: o dump é SQL puro, restaurar é dar ele ao `psql` num banco vazio.
+O backup do container standalone é outro procedimento (docs/OPERATIONS.md, seção 3).
 
 Reporte tamanho de cada artefato e caminho final.
