@@ -47,7 +47,10 @@ echo "==> [5/5] Disparando scan via CLI (síncrono, gera HTML)"
 # ativo de propósito, porque o ponto dele é PROVAR que a ferramenta acha de verdade.
 # O compose tem `entrypoint: uvicorn` no orchestrator: a CLI precisa trocar o entrypoint,
 # senão `run orchestrator scan ...` vira `uvicorn scan ...` (mesmo padrão do Makefile).
-$COMPOSE run --rm --entrypoint python orchestrator -m orchestrator.cli scan "http://juice-shop:3000" --asset-type url --criticality medium --active-zap "$@"
+# O `cai scan` passa pelo mesmo escopo do POST /scans: com LAB_ONLY=true, o juice-shop
+# (rede interna do compose) só é alvo estando na TARGET_ALLOWLIST. O smoke libera só ele,
+# só nesta execução, em vez de pedir para afrouxar o .env.
+$COMPOSE run --rm -e TARGET_ALLOWLIST=juice-shop --entrypoint python orchestrator -m orchestrator.cli scan "http://juice-shop:3000" --asset-type url --criticality medium --active-zap "$@"
 
 echo ""
 echo "==> DONE. Veja o relatório em reports/scan-*.html"
