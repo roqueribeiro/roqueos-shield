@@ -168,6 +168,23 @@ def test_raiz_so_de_leitura_com_tmp_gravavel(arquivo: str, servico: str) -> None
     assert "cap_add" not in svc  # nmap faz connect scan: NET_RAW não volta
 
 
+@pytest.mark.parametrize("servico", ["orchestrator", "worker"])
+def test_home_em_tmpfs_e_gravavel_pelo_uid_1000(servico: str) -> None:
+    """Sem `mode`, o tmpfs nasce root 0700 e o UID 1000 não lê o próprio HOME.
+
+    Medido no Mac em 08/11/2026: o asyncpg tentava ~/.postgresql/postgresql.key, levava
+    Permission denied, e o `cai scan` recusava o scan por não conseguir auditar.
+    """
+    svc = _carregar("compose.yml")["services"][servico]
+    home = [
+        v
+        for v in svc.get("volumes") or []
+        if isinstance(v, dict) and v.get("type") == "tmpfs" and v["target"] == "/home/roqueos"
+    ]
+    assert home, "HOME do UID 1000 precisa de tmpfs com a raiz só de leitura"
+    assert home[0]["tmpfs"].get("mode") == 0o1777
+
+
 @pytest.mark.parametrize(
     ("arquivo", "servico"),
     [

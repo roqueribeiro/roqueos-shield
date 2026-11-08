@@ -55,6 +55,9 @@ services:
         target: /home/roqueos
         tmpfs:
           size: 67108864 # 64 MiB
+          # Sem mode, o tmpfs nasce root 0700 e o UID 1000 não lê o próprio HOME
+          # (medido: o asyncpg falhava em ~/.postgresql e o cai scan não auditava).
+          mode: 01777
     ports:
       - "127.0.0.1:8080:8080"
     networks:
@@ -109,6 +112,9 @@ services:
         target: /home/roqueos
         tmpfs:
           size: 536870912 # 512 MiB: config e cache de semgrep, nuclei e trivy
+          # Sem mode, o tmpfs nasce root 0700 e o UID 1000 não lê o próprio HOME
+          # (medido: o asyncpg falhava em ~/.postgresql e o cai scan não auditava).
+          mode: 01777
     networks:
       - cai-net
     extra_hosts:
