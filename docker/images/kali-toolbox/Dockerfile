@@ -54,7 +54,7 @@ RUN set -eux; \
              /usr/local/bin/gitleaks /usr/local/bin/trufflehog /usr/local/bin/trivy /usr/local/bin/kube-bench; \
     for b in subfinder httpx nuclei naabu gitleaks trufflehog trivy kube-bench; do \
       "$b" -version >/dev/null 2>&1 || "$b" --version >/dev/null 2>&1 || "$b" version >/dev/null 2>&1 \
-        || { echo "$b nao executa em $ARCH" >&2; exit 1; }; \
+        || { echo "$b nao executa em $ARCH:" >&2; "$b" -version 2>&1 | tail -5 >&2; exit 1; }; \
     done
 
 # Cloud / IaC
