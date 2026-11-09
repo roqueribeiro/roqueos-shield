@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed (breaking)
 
 - **`ALLOW_CLOUD_FALLBACK` is now `false` by default.** When the local model fails, the findings no longer go to a cloud model without notice. Set `true` to get the old behavior.
-- **`POST /scans` refuses with `422`** what it used to run as something else: a profile that does not exist (such as `cloud`), an unknown scanner, a scanner that does not fit the target type, and a `k8s_resource` target (which used to fall back to nmap). The accepted profiles are `web`, `network`, `full`, `active` and `exposure`.
+- **`POST /scans` refuses with `422`** what it used to run as something else: a profile that does not exist (such as `cloud`), an unknown scanner name, and a `k8s_resource` target (which used to fall back to nmap). A known scanner that does not apply to the target type still just stays out, so the RoqueOS UI, which sends `["nmap", "zap"]` for every type, keeps working; with `exposure` the list is ignored. The accepted profiles are `web`, `network`, `full`, `active` and `exposure`.
 - `cai scan` goes through the same gates as `POST /scans` (scope, `--authorization-ref`) and writes `scan.create` to the audit trail; without a database it refuses.
 - `make test`, `make lint` and the new `make typecheck` run on the checkout through `uv`, as the CI does. The local Ollama container left the default profile (`make ollama-up`), so `make up` works without an NVIDIA GPU.
 

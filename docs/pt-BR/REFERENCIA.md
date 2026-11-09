@@ -203,7 +203,7 @@ Corpo do `POST /scans` (`ScanIn`):
 | --- | --- | --- |
 | `target_id` | obrigatório | Vem do `POST /targets` |
 | `profile` | `web` | `web`, `network`, `full`, `active` ou `exposure`, sem distinguir maiúscula; outro valor é 422 `profile '<x>' não existe (aceitos: ...)`. Ver a [seção 8](#8-perfis-de-scan) |
-| `scanners` | `null` | Lista explícita; vence o perfil. Nome que o pipeline não constrói, ou scanner que não aceita o tipo de alvo, é 422 `scanners recusados: <scanner>: <motivo>` |
+| `scanners` | `null` | Lista explícita; vence o perfil. Nome que o pipeline não constrói é 422 `scanners recusados: <scanner>: <motivo>`. Scanner que não se aplica ao tipo de alvo fica de fora e o scan roda os que se aplicam; se nenhum se aplica, vale o perfil ou o padrão do tipo. No perfil `exposure` a lista é ignorada |
 | `options` | `{}` | `{scanner: {campo: valor}}`, validado contra uma lista fechada ([seção 7](#7-scanners-e-suas-opções)); o resto é 422 com o nome do campo |
 | `auth` | `null` | `{headers: {...}, openapi_url}` para scan autenticado. O valor dos headers nunca chega à tabela `scans`; vai só no job e sai redigido na auditoria |
 | `authorization_ref` | `null` | Obrigatório (403) com `REQUIRE_AUTH_REF=true` |

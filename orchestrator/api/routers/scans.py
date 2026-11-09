@@ -202,13 +202,15 @@ def scanners_do_scan(
 ) -> list[str]:
     """A lista efetiva de scanners, ou `GateRecusado(422)`.
 
-    Recusa scanner pedido que não existe ou não aceita o tipo do alvo, e alvo que
-    scanner nenhum aceita (`k8s_resource`). Antes os dois viravam outra coisa calada:
-    o scanner sumia num log e o k8s ia para o nmap, que o recusava. Zero achados,
-    cobertura completa. `profile=None` (a CLI `cai scan`) usa a lista padrão do tipo.
+    Recusa nome de scanner que não existe e alvo que scanner nenhum aceita
+    (`k8s_resource`). Antes os dois viravam outra coisa calada: o nome sumia num log
+    e o k8s ia para o nmap, que o recusava. Zero achados, cobertura completa.
+    Scanner conhecido que não se aplica ao tipo só fica de fora: o roqueos-front manda
+    `["nmap", "zap"]` para todo tipo, e o scan roda os que se aplicam.
+    `profile=None` (a CLI `cai scan`) usa a lista padrão do tipo.
     """
     nomes, pulados = resolve_scanners_com_motivo(scanners, asset_type, profile)
-    if pulados:
+    if pulados or not nomes:
         motivos = "; ".join(f"{k}: {v}" for k, v in pulados.items())
         raise GateRecusado(422, f"scanners recusados: {motivos}")
     return nomes
