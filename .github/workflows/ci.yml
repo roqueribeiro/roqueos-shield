@@ -266,7 +266,7 @@ jobs:
         run: scripts/web_e2e.sh
       - name: Prints do e2e
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-e2e-shots
           path: web/e2e/shots
