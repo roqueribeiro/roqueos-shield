@@ -162,11 +162,11 @@ def resolve_scanners_com_motivo(
 ) -> tuple[list[str], dict[str, str]]:
     """Como `resolve_scanners`, e também o que ficou de fora e por quê.
 
-    O segundo item vai para `scanners_skipped`: scanner pedido com nome desconhecido,
-    scanner pedido que não aceita o tipo do alvo, e (com a chave `SEM_SCANNER`) o
-    caso em que nenhum scanner aceita o alvo. O fallback antigo para `["nmap"]`
-    mandava um k8s_resource para o nmap, que recusava o tipo: o scan fechava com
-    zero achados e parecia limpo.
+    O segundo item vai para `scanners_skipped`: scanner pedido com nome desconhecido
+    e (com a chave `SEM_SCANNER`) o caso em que nenhum scanner aceita o alvo. Scanner
+    conhecido que não se aplica ao tipo só fica de fora (log), sem virar lacuna.
+    O fallback antigo para `["nmap"]` mandava um k8s_resource para o nmap, que
+    recusava o tipo: o scan fechava com zero achados e parecia limpo.
     """
     pulados: dict[str, str] = {}
     if (profile or "").strip().lower() == PERFIL_EXPOSURE:
@@ -180,7 +180,11 @@ def resolve_scanners_com_motivo(
                     f"{', '.join(sorted(_SCANNER_ASSET_SUPPORT))})"
                 )
             elif asset_type not in _SCANNER_ASSET_SUPPORT[n]:
-                pulados[n] = f"{n} não aceita asset_type {asset_type.value}"
+                # Não se aplica ao tipo: fica de fora, e não é lacuna de cobertura (o
+                # alvo é verificado pelos que se aplicam). O roqueos-front manda
+                # `["nmap", "zap"]` para qualquer tipo; recusar com 422 quebrava os
+                # scans de imagem e de repo da tela do RoqueOS.
+                log.info("scanner.nao_se_aplica", scanner=n, asset_type=asset_type.value)
             else:
                 conhecidos.append(n)
         if conhecidos:
@@ -205,16 +209,14 @@ def _resolve_exposure(
     """O profile `exposure` roda o pipeline OSINT inteiro, ou nada.
 
     `scanners` explícito não se aplica (o pipeline OSINT decide os vetores pelo que
-    está configurado), e o alvo precisa ter um domínio: imagem, repo, porta e k8s não
-    têm. Os dois casos voltam como motivo, e o `POST /scans` os recusa com 422.
+    está configurado) e é ignorado. O alvo precisa ter um domínio: imagem, repo,
+    porta e k8s não têm, e esse caso volta como motivo (o `POST /scans` recusa com 422).
     """
     pulados: dict[str, str] = {}
     if requested:
-        for n in requested:
-            pulados[n] = (
-                "o profile exposure roda o pipeline OSINT inteiro; `scanners` não se aplica"
-            )
-        return [], pulados
+        # O roqueos-front manda `scanners` junto de qualquer profile. No exposure eles
+        # não se aplicam: o pipeline OSINT roda inteiro, e a lista pedida só vai ao log.
+        log.info("exposure.scanners_ignorados", scanners=list(requested))
     if asset_type not in _TIPOS_EXPOSURE:
         pulados[SEM_SCANNER] = (
             f"o profile exposure precisa de um domínio (url, domain ou host), "

@@ -203,7 +203,7 @@ Permission `public` means no credential; `any` means any valid credential.
 | --- | --- | --- |
 | `target_id` | required | From `POST /targets` |
 | `profile` | `web` | `web`, `network`, `full`, `active` or `exposure`, case-insensitive; anything else is 422 `profile '<x>' não existe (aceitos: ...)` (does not exist; accepted: ...). See [section 8](#8-scan-profiles) |
-| `scanners` | `null` | Explicit list; wins over the profile. A name the pipeline does not build, or a scanner that does not accept the asset type, is 422 `scanners recusados: <scanner>: <reason>` (scanners refused) |
+| `scanners` | `null` | Explicit list; wins over the profile. A name the pipeline does not build is 422 `scanners recusados: <scanner>: <reason>` (scanners refused). A scanner that does not apply to the asset type stays out and the scan runs the ones that apply; if none applies, the profile or the type default is used. With the `exposure` profile the list is ignored |
 | `options` | `{}` | `{scanner: {field: value}}`, validated against a closed list ([section 7](#7-scanners-and-their-options)); anything else is 422 with the field's name |
 | `auth` | `null` | `{headers: {...}, openapi_url}` for authenticated scanning. Header values never reach the `scans` table; they ride only in the job and are redacted in the audit |
 | `authorization_ref` | `null` | Required (403) when `REQUIRE_AUTH_REF=true` |

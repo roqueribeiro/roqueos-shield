@@ -204,11 +204,12 @@ def test_k8s_resource_nao_cai_mais_no_nmap() -> None:
     assert "k8s_resource" in pulados[SEM_SCANNER]
 
 
-def test_scanner_pedido_desconhecido_ou_incompativel_tem_motivo() -> None:
+def test_scanner_pedido_desconhecido_tem_motivo_e_o_que_nao_se_aplica_so_sai() -> None:
     nomes, pulados = resolve_scanners_com_motivo(["bogus", "trivy", "nmap"], AssetType.HOST)
     assert nomes == ["nmap"]
     assert "desconhecido" in pulados["bogus"]
-    assert "não aceita asset_type host" in pulados["trivy"]
+    # trivy não se aplica a host: fica de fora sem virar lacuna de cobertura.
+    assert "trivy" not in pulados
 
 
 def test_build_adapters_registra_o_desconhecido() -> None:
@@ -285,8 +286,9 @@ def test_perfil_exposure_resolve_para_o_pipeline_osint() -> None:
     assert nomes == SCANNERS_EXPOSURE and not pulados
     _, pulados = resolve_scanners_com_motivo(None, AssetType.IMAGE, "exposure")
     assert SEM_SCANNER in pulados
-    _, pulados = resolve_scanners_com_motivo(["zap"], AssetType.URL, "exposure")
-    assert "zap" in pulados
+    # `scanners` junto do exposure (o front manda sempre) é ignorado: roda o OSINT.
+    nomes, pulados = resolve_scanners_com_motivo(["zap"], AssetType.URL, "exposure")
+    assert nomes == SCANNERS_EXPOSURE and not pulados
 
 
 async def test_run_scan_exposure_roda_o_osint_no_mesmo_scan(
@@ -603,3 +605,61 @@ def test_router_e_cli_usam_o_mesmo_gate() -> None:
     assert "gates_do_scan(" in fonte_router and "gates_do_scan(" in fonte_cli
     assert "validate_target_value(target.value" not in fonte_router
     assert gates_do_scan is scans_router.gates_do_scan
+
+
+# ---------------------------------------------- contrato com o roqueos-front
+
+
+@pytest.mark.parametrize(
+    ("tipo", "valor", "perfil", "esperado"),
+    [
+        ("image", "python:3.12-slim", "web", ["trivy"]),
+        ("repo", "https://github.com/exemplo/app", "web", None),
+        ("domain", "front.exemplo.test", "exposure", None),
+    ],
+)
+async def test_post_scans_aceita_o_corpo_que_o_roqueos_front_manda(
+    escopo_aberto: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tipo: str,
+    valor: str,
+    perfil: str,
+    esperado: list[str] | None,
+) -> None:
+    """O ROSPentest manda `scanners: ["nmap", "zap"]` para QUALQUER tipo de alvo.
+
+    Mutação: voltar a recusar com 422 o scanner que não se aplica ao tipo -> o scan
+    de imagem e de repo e o exposure da tela do RoqueOS quebram, e este teste reprova.
+    """
+    enfileirado: dict[str, Any] = {}
+
+    class _Pool:
+        async def enqueue_job(self, *a: Any, **k: Any) -> None:
+            enfileirado.update(k)
+
+    async def _pool(*a: Any, **k: Any) -> _Pool:
+        return _Pool()
+
+    monkeypatch.setattr(scans_router, "create_pool", _pool)
+    alvo = TargetRow(asset_type=tipo, value=valor)
+    async with session() as s:
+        s.add(alvo)
+        await s.commit()
+    corpo = {
+        "target_id": str(alvo.id),
+        "profile": perfil,
+        "scanners": ["nmap", "zap"],
+        "options": {},
+        "authorization_ref": "self-authorized",
+    }
+    async with _como(Role.OPERATOR) as c:
+        r = await c.post("/scans", json=corpo)
+    assert r.status_code == 202, r.text
+    assert "nmap" not in (enfileirado["scanners"] or [])
+    assert "zap" not in (enfileirado["scanners"] or [])
+    if perfil == "exposure":
+        assert not enfileirado["scanners"]
+    elif esperado is not None:
+        assert enfileirado["scanners"] == esperado
+    else:
+        assert enfileirado["scanners"]
