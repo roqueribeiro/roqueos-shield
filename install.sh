@@ -27,7 +27,7 @@ set -eu
 
 # Pinned, and checked against pyproject.toml by scripts/check_docs_fresh.py: the script
 # of a version installs the image of that version.
-VERSAO_PADRAO="v0.5.1"
+VERSAO_PADRAO="v0.5.2"
 SCRIPT_URL="https://raw.githubusercontent.com/roqueribeiro/roqueos-shield/main/install.sh"
 MEMORIA_MIN_MIB=5632 # 5.5 GiB: Docker Desktop reports a bit less than the 6 GB set
 

@@ -1,6 +1,6 @@
 {
   "name": "roqueshield-web",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "description": "Tela do RoqueShield standalone: a versão da tela do RoqueOS que roda servida pelo próprio shield.",
   "license": "Apache-2.0",

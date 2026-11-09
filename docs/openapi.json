@@ -1828,7 +1828,7 @@
   "info": {
     "description": "\nAPI do **RoqueShield**: teste contínuo de segurança com triagem de IA.\n\n**Como autenticar.** Clique em *Authorize* e cole um token no `ApiToken`. Um admin cria\ntokens por usuário em `POST /users` (ou na tela, em Usuários); o token aparece uma vez\nsó. A tela web usa um cookie de sessão próprio e não precisa disto.\n\n**O contrato do silêncio.** Zero achado só quer dizer \"limpo\" quando\n`coverage_complete` é `true`. Scanner que não rodou aparece em `scanners_skipped` com o\nmotivo, nunca como lista vazia.\n\nTambém: CLI `roqueshield`, servidor MCP em `/mcp` e o AI Fix Bundle em\n`GET /reports/{scan_id}/ai-bundle`.\n",
     "title": "RoqueShield API",
-    "version": "0.5.1"
+    "version": "0.5.2"
   },
   "openapi": "3.1.0",
   "paths": {

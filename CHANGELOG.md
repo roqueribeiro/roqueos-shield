@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-08
+
 ### Changed (breaking)
 
 - **`ALLOW_CLOUD_FALLBACK` is now `false` by default.** When the local model fails, the findings no longer go to a cloud model without notice. Set `true` to get the old behavior.
