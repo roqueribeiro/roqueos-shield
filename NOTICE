@@ -8,6 +8,17 @@ License, Version 2.0 (the "License"). You may obtain a copy of the License at
     http://www.apache.org/licenses/LICENSE-2.0
 
 ----------------------------------------------------------------------
+Origin and attribution
+----------------------------------------------------------------------
+
+RoqueShield's autonomous-engine design reimplements IDEAS observed in ARTEX
+(https://github.com/Autumn-27/ARTEX, AGPL-3.0) — among them the dual
+asset/exploration graph, traffic-bound finding evidence, verdict-based retest,
+and per-command human approval — as original Apache-2.0 code. No ARTEX source,
+snippet, or prompt is copied or derived. `scripts/check_no_artex_copy.py` is a
+tripwire against accidental literal copy; the real control is human review.
+
+----------------------------------------------------------------------
 Python dependencies
 ----------------------------------------------------------------------
 

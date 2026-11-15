@@ -62,6 +62,8 @@ jobs:
           python-version: "3.13"
       - name: check docs fresh
         run: python scripts/check_docs_fresh.py
+      - name: origem do código (sem cópia literal do ARTEX)
+        run: python scripts/check_no_artex_copy.py
 
   diagramas:
     name: Diagramas em dia
