@@ -345,7 +345,6 @@ Before testing a real asset: written authorization and an agreed window. Metaspl
 - **No scheduling and no diff between runs.** Each scan is one-shot; comparison between runs is left to the caller (the `deduped_key` makes it possible).
 - **DNS rebinding.** The scope gate resolves names at validation time; it does not resolve again at scan time.
 - **Authenticated scanning** covers headers and an OpenAPI URL for `zap` and `nuclei`. There is no login flow recording, and no multi-tenancy (isolation per organization or project).
-- **No API reads the audit log.** The `audit:read` permission exists; reading the trail is done in the database.
 - **Live logs.** The SSE ring buffer belongs to the orchestrator process. Worker logs (where the scanners run) do not reach it in the compose stack; the standalone carries every process's output through Redis to the execution tab.
 - **The Kali sidecar** uses `|| true` and fallbacks on several installs, and some downloads are pinned to amd64 file names, so a tool can be missing from a build without failing it. The agent's depth with a strong model in production (how many findings it confirms by proof of concept) is not measured.
 - **`_cai_framework_available()`** only returns `AGENT_ENABLED`; the name is historical.

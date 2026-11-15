@@ -27,6 +27,11 @@ O que ele checa, e por que cada um existe:
    código. Doc em dois idiomas sem isso diverge calado: o par fica velho, o link
    quebra numa renomeação e ninguém percebe até o leitor cair nele.
 
+6. **Limites que venceram.** A seção "Known limits" não pode listar como ausente o
+   que o código já tem. Começou com "nenhuma rota lê o audit log", falso desde que
+   `GET /audit` entrou. Registro no formato do `_VENCIDAS`: cada afirmação de
+   ausência carrega a prova, em código, de que ainda é verdade.
+
 Rodar: `python scripts/check_docs_fresh.py` (exit != 0 reprova).
 """
 
@@ -34,6 +39,7 @@ from __future__ import annotations
 
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -154,6 +160,59 @@ def check_afirmacoes_vencidas() -> None:
                 if "cai_expert" in baixa or "agentic" in baixa or "agente" in baixa:
                     if any(t in baixa for t in termos):
                         falha("doc-vencida", f"{doc}:{linha_n} — {motivo}")
+
+
+# ------------------------------------------- 3b. limites conhecidos vencidos
+# Mesma forma do _VENCIDAS, para a seção "Known limits" / "Limites conhecidos":
+# a doc afirma uma AUSÊNCIA ("nenhuma rota lê o audit log"); se o código mostra
+# que a coisa existe, a frase venceu. Começou falso — GET /audit existe
+# (orchestrator/api/routers/audit.py), ligado no main.py, documentado no
+# REFERENCE.md — e o gate não pegava porque só conhecia o caso do stub acima.
+# Cada item: (prova_de_que_venceu, docs, termos_minúsculos, motivo).
+_LIMITES_VENCIDOS: list[tuple[Callable[[], bool], list[str], list[str], str]] = [
+    (
+        lambda: _rota_de_auditoria_existe(),
+        ["docs/ARCHITECTURE.md", "docs/pt-BR/ARQUITETURA.md"],
+        [
+            "no api reads the audit log",
+            "nenhuma rota da api lê o audit log",
+            "nenhuma rota da api le o audit log",
+        ],
+        "a doc lista 'nenhuma rota lê o audit log' como limite conhecido, mas "
+        "GET /audit existe em orchestrator/api/routers/audit.py e está ligado no "
+        "main.py — o limite venceu quando a rota entrou",
+    ),
+    # Frente B (diff/agendamento) registra os seus aqui quando entrarem: hoje
+    # ainda são limites de verdade, então a prova devolveria False e seria pulada.
+]
+
+
+def _rota_de_auditoria_existe() -> bool:
+    """Prova de que 'nenhuma rota lê o audit log' é falso: há GET lendo a trilha."""
+    router = _ler("orchestrator/api/routers/audit.py")
+    main_py = _ler("orchestrator/main.py")
+    tem_get = bool(re.search(r"@router\.get", router))
+    ligado = "audit_router" in main_py or "routers.audit" in main_py
+    return tem_get and ligado
+
+
+def _frase_de_limite_vencida(texto: str, termos: list[str]) -> int | None:
+    """Linha (1-based) onde um termo de ausência aparece no doc, ou None."""
+    for linha_n, linha in enumerate(texto.splitlines(), 1):
+        baixa = linha.lower()
+        if any(t in baixa for t in termos):
+            return linha_n
+    return None
+
+
+def check_limites_vencidos() -> None:
+    for proof, docs_rel, termos, motivo in _LIMITES_VENCIDOS:
+        if not proof():
+            continue  # ainda é limite de verdade
+        for doc in docs_rel:
+            linha = _frase_de_limite_vencida(_ler(doc), termos)
+            if linha is not None:
+                falha("limite-vencido", f"{doc}:{linha} — {motivo}")
 
 
 def check_versao_do_instalador() -> None:
@@ -368,6 +427,7 @@ def main() -> int:
     check_contagem_de_adapters()
     check_env_documentado()
     check_afirmacoes_vencidas()
+    check_limites_vencidos()
     check_versao_do_instalador()
     check_forma_dos_docs()
     check_links_dos_docs()

@@ -77,3 +77,6 @@ cai-pre-publish-backup-*/
 .claude/scheduled_tasks.lock
 CLAUDE.local.md
 orchestrator/web_dist/
+
+# ledger dos ciclos de goals (roqueos-kit), não versionado
+.roqueos/

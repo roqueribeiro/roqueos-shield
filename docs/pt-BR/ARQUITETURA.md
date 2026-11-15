@@ -345,7 +345,6 @@ Antes de testar um ativo real: autorização por escrito e janela combinada. O M
 - **Sem agendamento e sem diff entre execuções.** Cada scan é avulso; a comparação entre rodadas fica com quem chama (o `deduped_key` é o que permite).
 - **DNS rebinding.** O portão de escopo resolve o nome na validação; não resolve de novo na hora do scan.
 - **O scan autenticado** cobre cabeçalhos e uma URL de OpenAPI para `zap` e `nuclei`. Não há gravação de fluxo de login, nem multi-tenancy (isolamento por organização ou projeto).
-- **Nenhuma rota da API lê o audit log.** A permissão `audit:read` existe; ler a trilha é feito no banco.
 - **Logs ao vivo.** O ring buffer do SSE é do processo do orchestrator. Na stack de compose, o log do worker (onde rodam os scanners) não chega até ele; o standalone leva a saída de cada processo pelo Redis até a aba de execução.
 - **O sidecar Kali** usa `|| true` e alternativas em várias instalações, e alguns downloads estão presos a nomes de arquivo amd64, então uma ferramenta pode faltar num build sem reprovar o build. A profundidade do agente com modelo forte em produção (quantos achados ele confirma por prova de conceito) não está medida.
 - **`_cai_framework_available()`** só devolve o `AGENT_ENABLED`; o nome é histórico.
