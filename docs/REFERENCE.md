@@ -174,7 +174,7 @@ Permission `public` means no credential; `any` means any valid credential.
 | scans | `POST /scans` | `scans:run` | Starts a scan (202). Body below |
 | scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | List (last 100) and detail |
 | scans | `DELETE /scans/{id}` | `scans:run` | Deletes the scan, its findings, AI runs and asset observations (the assets stay); audits first. A `pending` or `running` scan answers 409 |
-| findings | `GET /findings` | `scans:read` | Filters `scan_id`, `severity`, `source_tool`, `limit`, `offset` |
+| findings | `GET /findings` | `scans:read` | Filters `scan_id`, `severity`, `source_tool`, `limit`, `offset`. Each item carries `asset_id`, the inventory asset it belongs to (`null` for findings older than the inventory) |
 | findings | `GET /findings/{id}` | `scans:read` | One finding |
 | findings | `GET /findings/queue` | `scans:read` | Queue of unique problems by `deduped_key`, severity first (`status`, `min_severity`, `source_tool`) |
 | findings | `GET /findings/summary` | `scans:read` | Counts per severity and status |

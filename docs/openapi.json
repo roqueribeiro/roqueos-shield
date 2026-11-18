@@ -715,6 +715,18 @@
       },
       "FindingOut": {
         "properties": {
+          "asset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          },
           "confidence": {
             "title": "Confidence",
             "type": "string"

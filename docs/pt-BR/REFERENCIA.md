@@ -174,7 +174,7 @@ Permissão `pública` quer dizer sem credencial; `qualquer` quer dizer qualquer 
 | scans | `POST /scans` | `scans:run` | Dispara um scan (202). Corpo abaixo |
 | scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | Lista (últimos 100) e detalhe |
 | scans | `DELETE /scans/{id}` | `scans:run` | Apaga o scan, os achados, as chamadas de IA e as observações de ativo (os ativos ficam); audita antes. Scan `pending` ou `running` responde 409 |
-| findings | `GET /findings` | `scans:read` | Filtros `scan_id`, `severity`, `source_tool`, `limit`, `offset` |
+| findings | `GET /findings` | `scans:read` | Filtros `scan_id`, `severity`, `source_tool`, `limit`, `offset`. Cada item traz `asset_id`, o ativo do inventário a que pertence (`null` para achados anteriores ao inventário) |
 | findings | `GET /findings/{id}` | `scans:read` | Um achado |
 | findings | `GET /findings/queue` | `scans:read` | Fila de problemas únicos por `deduped_key`, severidade primeiro (`status`, `min_severity`, `source_tool`) |
 | findings | `GET /findings/summary` | `scans:read` | Contagem por severidade e status |

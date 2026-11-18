@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - O alvo do scan não conta mais como visto quando nenhum scanner que enxerga o tipo dele rodou; `coverage_complete` do inventário é por tipo de ativo; a busca `/inventory?q=` ignora maiúsculas nos dois bancos e escapa `%` e `_`.
 - Expurgo: poupa blob tocado na última hora (captura em curso), reconfere antes de apagar e audita mesmo se falhar no meio. Dois workers gravando o mesmo blob não se atropelam mais no arquivo temporário.
 - Bundle sem blob repetido e com teto (413 acima de 5.000 corpos ou 256 MB); `sha256` validado na rota.
+- **`GET /findings` devolve o `asset_id`.** Estava gravado (132 de 132 no teste real) mas só aparecia dentro do `payload`; a tela não tinha como ligar o achado ao ativo. Achado pelo ponta a ponta com scan real.
 - `DELETE /scans/{id}` de scan em andamento responde 409 (o worker recriava o scan apagado); `GET /approvals` paginado; `reason` da decisão limitado a 2.000 caracteres e redigido.
 
 ### Added

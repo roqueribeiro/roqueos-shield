@@ -447,3 +447,19 @@ def test_escape_do_token_nao_desliga_as_outras_checagens() -> None:
         )
     )
     assert any("REQUIRE_IMMUTABLE_AUDIT" in e for e in erros)
+
+
+async def test_findings_expoe_o_asset_id(_data_dir) -> None:
+    # Achado pelo ponta a ponta real: o asset_id estava no banco (132/132) mas a API de
+    # findings só o devolvia enterrado no payload.
+    await init_db()
+    alvo = Target(asset_type=AssetType.HOST, value=f"api-{uuid.uuid4().hex[:6]}.test")
+    scan_id = await _persistir(
+        alvo, [_finding(uuid.uuid4(), f"{alvo.value}:8080/tcp")], rodaram=["nmap"]
+    )
+    async with _cliente(Role.VIEWER) as c:
+        itens = (await c.get("/findings", params={"scan_id": str(scan_id)})).json()
+    assert itens and itens[0]["asset_id"] is not None
+    async with session() as s:
+        linha = (await s.exec(select(FindingRow).where(col(FindingRow.scan_id) == scan_id))).one()
+    assert itens[0]["asset_id"] == str(linha.asset_id)
