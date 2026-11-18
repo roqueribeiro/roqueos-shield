@@ -140,7 +140,12 @@ async def get_bundle(
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for snap in snaps:
             try:
-                data = store.ler_claro(snap.sha256, encrypted=snap.encrypted)
+                # O bundle é verificável por hash: empacota os BYTES ARMAZENADOS (store.get
+                # confere o sha256), para o arquivo bater com o `sha256` do manifesto. Não
+                # decifra aqui — o manifesto carrega `encrypted` e `original_sha256`, e o
+                # destinatário com a SECRETS_KEY decifra offline. (A rota /blob decifra para
+                # ver ao vivo; o bundle, não, senão o hash do arquivo divergiria do manifesto.)
+                data = store.get(snap.sha256)
             except store.EvidenceExpurgada as e:
                 raise HTTPException(
                     status_code=410, detail=f"corpo {snap.sha256} expurgado: {e}"
