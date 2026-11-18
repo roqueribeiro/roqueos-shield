@@ -114,6 +114,18 @@ class Settings(BaseSettings):
     MCP_ALLOW_ACTIONS: bool = False
     # Pasta de dados do standalone (segredos gerados, SQLite, cache do trivy).
     DATA_DIR: Path = Path("./data")
+    # Evidência (Frente C). Default: o corpo guardado é REDIGIDO pelo scrubber + o
+    # sha256 do original fica no registro. True guarda o original CIFRADO (Fernet/
+    # SECRETS_KEY) em vez do redigido — opção de engajamento, exige SECRETS_KEY.
+    EVIDENCE_ENCRYPT_ORIGINAL: bool = False
+    # Retenção de evidência em dias; 0 = guarda para sempre. O expurgo apaga o CORPO
+    # (o blob em disco), mantém o hash e o registro, e é auditado (`evidence.purge`).
+    EVIDENCE_RETENTION_DAYS: int = 0
+    # Aprovação humana por comando (Frente E, modo `ask`). Tempo até uma pendência
+    # expirar — e expirar NEGA (fecha fechado), nunca libera.
+    APPROVAL_TIMEOUT_SECONDS: int = 3600
+    # Quatro olhos: quem propôs o comando não aprova o próprio. Ligado por padrão.
+    APPROVAL_FOUR_EYES: bool = True
     # Placeholder de exemplo, não credencial: o boot recusa subir com ele (SEC-01 abaixo).
     APP_TOKEN: str = "dev-changeme"  # noqa: S105
     # SEC-01: o APP_TOKEN mapeia para um principal de serviço ADMIN e é a chave de

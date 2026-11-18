@@ -31,6 +31,7 @@ class Permission(StrEnum):
     SCANS_READ = "scans:read"  # ler scans, findings, relatórios, AI bundle
     AUDIT_READ = "audit:read"  # ler o audit log
     CONFIG_MANAGE = "config:manage"  # escopo, allowlist, config de IA
+    COMMANDS_APPROVE = "commands:approve"  # aprovar/negar comando pendente (modo ask)
 
 
 _ALL: frozenset[Permission] = frozenset(Permission)
