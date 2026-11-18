@@ -222,6 +222,54 @@ class AssetObservationRow(SQLModel, table=True):
     metadata_json: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
 
 
+class EvidenceSnapshotRow(SQLModel, table=True):
+    """Registro write-once de um corpo de evidência (Frente C).
+
+    Imutável como o `audit_log`: em Postgres o trigger `evidence_snapshots_no_update`
+    (migration 0011) rejeita UPDATE/DELETE; em SQLite o contrato vive no código (o
+    armazém `orchestrator.evidence.store` grava o blob uma vez e nunca reescreve).
+
+    `sha256` endereça o corpo GRAVADO (redigido por padrão, ou cifrado) no armazém.
+    `original_sha256` é o hash do corpo antes de redigir/cifrar — proveniência, sem
+    guardar o original. A retenção apaga o blob em disco e mantém esta linha: hash e
+    registro ficam, o corpo some.
+    """
+
+    __tablename__ = "evidence_snapshots"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    sha256: str = Field(index=True)  # endereço do corpo gravado no armazém
+    original_sha256: str = Field(index=True)  # hash do original (antes de redigir/cifrar)
+    content_type: str = "text/plain"
+    size_bytes: int = 0
+    encrypted: bool = False  # o blob é o original cifrado (opção de engajamento)?
+    scan_id: UUID | None = Field(default=None, foreign_key="scans.id", index=True)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime(), index=True)
+
+
+class EvidenceLinkRow(SQLModel, table=True):
+    """Vínculo achado↔evidência com papel (Frente C).
+
+    Keyed pelo `deduped_key` (a identidade do PROBLEMA, como o `FindingStatusRow`), para
+    a evidência de prova sobreviver ao re-scan: quem corrige e re-escaneia continua vendo
+    a prova (`proof`) e a linha de base (`baseline`). `evidence_version` sobe a cada
+    vínculo novo do mesmo problema; um relatório gravado sobre uma versão antiga é
+    rejeitado (a checagem em si é da Frente D).
+    """
+
+    __tablename__ = "evidence_links"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    deduped_key: str = Field(index=True)
+    snapshot_id: UUID = Field(foreign_key="evidence_snapshots.id", index=True)
+    # baseline (antes) | proof (o achado) | verification (reteste) | supporting (apoio)
+    papel: str = Field(default="supporting", index=True)
+    ordem: int = 0
+    nota: str | None = None
+    evidence_version: int = 1
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
+
+
 class UserRow(SQLModel, table=True):
     """Usuário nomeado + papel (RBAC).
 

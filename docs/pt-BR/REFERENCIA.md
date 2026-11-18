@@ -179,6 +179,10 @@ Permissão `pública` quer dizer sem credencial; `qualquer` quer dizer qualquer 
 | findings | `GET /findings/queue` | `scans:read` | Fila de problemas únicos por `deduped_key`, severidade primeiro (`status`, `min_severity`, `source_tool`) |
 | findings | `GET /findings/summary` | `scans:read` | Contagem por severidade e status |
 | findings | `POST /findings/resolve` | `scans:run` | Define o status de um problema: `open`, `in_progress`, `resolved`, `false_positive`, `wont_fix`, `risk_accepted` |
+| evidence | `GET /evidence/finding/{deduped_key}` | `scans:read` | Snapshots de evidência de um problema, por versão e ordem |
+| evidence | `GET /evidence/blob/{sha256}` | `scans:read` | O corpo da evidência, com o hash conferido: 410 se foi expurgado, 422 se não bate com o hash |
+| evidence | `GET /evidence/bundle/{scan_id}` | `scans:read` | Zip com manifesto de hashes; um corpo ausente ou corrompido derruba o download inteiro |
+| evidence | `POST /evidence/purge` | `config:manage` | Roda a retenção (`EVIDENCE_RETENTION_DAYS`): apaga o corpo, mantém hash e registro, audita `evidence.purge` |
 | reports | `GET /reports/{scan_id}` | `scans:read` | Relatório técnico HTML |
 | reports | `GET /reports/{scan_id}/ai-bundle` | `scans:read` | AI Fix Bundle, schema 1.0.0 |
 | reports | `GET /reports/{scan_id}/executive` | `scans:read` | HTML executivo: nota de risco de A a F e mapeamento de conformidade |

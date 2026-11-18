@@ -35,6 +35,9 @@ from orchestrator.api.routers import (
     conta as conta_router,
 )
 from orchestrator.api.routers import (
+    evidence as evidence_router,
+)
+from orchestrator.api.routers import (
     exposure as exposure_router,
 )
 from orchestrator.api.routers import (
@@ -197,6 +200,7 @@ app.include_router(targets_router.router)
 app.include_router(assets_router.router)  # /assets (inventário entre scans, scans:read)
 app.include_router(scans_router.router)
 app.include_router(findings_router.router)
+app.include_router(evidence_router.router)  # /evidence (write-once; scans:read, purge config)
 app.include_router(reports_router.router)
 app.include_router(exposure_router.router)
 app.include_router(investigate_router.router)

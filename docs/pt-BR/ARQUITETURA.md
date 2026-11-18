@@ -59,7 +59,7 @@ Fora da fronteira: os **alvos**, de sete tipos de ativo (`host`, `url`, `domain`
 | --- | --- | --- |
 | orchestrator | `docker/images/orchestrator/Dockerfile` | FastAPI em `:8080`. Valida escopo, grava o registro de auditoria, enfileira o job, transmite o progresso por SSE, serve a tela web |
 | worker | mesma imagem, `arq orchestrator.jobs.queue.WorkerSettings` | Roda `run_scan_job` e `run_exposure_job`: executa os adapters, chama o LLM, escreve o relatório |
-| postgres | `postgres:16-alpine` | `targets`, `scans`, `findings`, `finding_status`, `assets`, `asset_observations`, `users`, `ai_runs`, `audit_log`, `app_settings`. SQLite em desenvolvimento e no standalone padrão |
+| postgres | `postgres:16-alpine` | `targets`, `scans`, `findings`, `finding_status`, `assets`, `asset_observations`, `evidence_snapshots`, `evidence_links`, `users`, `ai_runs`, `audit_log`, `app_settings`. SQLite em desenvolvimento e no standalone padrão |
 | redis | `redis:7-alpine` | A fila do `arq` |
 | zap | `zaproxy/zap-stable` | DAST. Spider e varredura passiva; varredura ativa só com o profile `full` ou `active` |
 | trivy | `aquasec/trivy` em modo server | Imagem de container e dependência de repositório |
@@ -79,7 +79,7 @@ O `docker/compose.agent.yml` declara um container `cai-expert` da época em que 
 
 | Módulo | O que mora ali |
 | --- | --- |
-| `api/routers/` | 15 routers: `targets`, `assets`, `scans`, `findings`, `reports`, `exposure`, `investigate`, `health`, `ui`, `users`, `auth`, `conta`, `settings`, `system`, `mcp`. O contrato fica congelado em `docs/openapi.json` e é conferido por `scripts/openapi_snapshot.py --check` |
+| `api/routers/` | 16 routers: `targets`, `assets`, `scans`, `findings`, `evidence`, `reports`, `exposure`, `investigate`, `health`, `ui`, `users`, `auth`, `conta`, `settings`, `system`, `mcp`. O contrato fica congelado em `docs/openapi.json` e é conferido por `scripts/openapi_snapshot.py --check` |
 | `api/deps.py` | `get_principal`: resolve `X-API-Token` (token de serviço ou por usuário), `Authorization: Bearer` (sessão OIDC) ou o cookie `rs_session` da tela, e `require_permission` para o RBAC |
 | `domain/schemas.py` | `Target`, `Finding`, `AITriage`, `RawResults`, `AssetType`. O `Finding.deduped_key` é `sha256(alvo::regra[::discriminador])[:32]` |
 | `domain/target_validator.py` | O portão de escopo (seção 10) |
@@ -90,7 +90,7 @@ O `docker/compose.agent.yml` declara um container `cai-expert` da época em que 
 | `adapters/` | 15 adapters implementando o Protocol `ScannerAdapter` de `adapters/base.py` |
 | `ai/` | `gateway.py` (litellm), `analyzer.py` (triagem), `agentic/` (o laço de investigação e a coleira), `observability.py` (ring buffer de log e SSE) |
 | `reporting/` | `renderer.py` (HTML técnico e executivo), `compliance.py` (OWASP, PCI DSS, LGPD), `exporters/ai_bundle.py`, `exporters/defectdojo.py` |
-| `persistence/` | Modelos SQLModel e as migrations Alembic `0001` a `0010` |
+| `persistence/` | Modelos SQLModel e as migrations Alembic `0001` a `0011` |
 | `audit/logger.py` | `log_audit_event`, append-only |
 | `standalone/` | O supervisor e os segredos de primeiro boot da imagem de container único (seção 11) |
 
@@ -181,6 +181,8 @@ Depois a API responde `202`, o `arq` enfileira o `run_scan_job` (job id `scan-<u
 | `done` ou `failed` | `failed` quando houve scanner pulado e nenhum rodou |
 
 **O inventário de ativos** (`domain/assets.py`, `assets` e `asset_observations`, `GET /assets`) guarda o que o engagement vê **entre** scans. Cada finding carrega no próprio `target` o ativo de que trata (o nmap emite um ativo `port`, o ZAP um `url`), então o `_persist_findings` lê essa identidade estruturada, faz upsert de uma linha por ativo com `asset_key` determinística (mesmo host, porta ou URL em dois scans é a mesma linha, mesmo id estável), registra uma observação por scan e preenche `FindingRow.asset_id`. Vale o contrato do silêncio: um ativo ausente num scan posterior só é "sumiu" se um scanner que enxerga aquele tipo rodou; com esse scanner pulado é "não verificado", nunca "sumiu" (`classificar_presenca`). O veredito cross-scan em si é servido pelo diff (Frente B); o inventário é o dado em que ele se apoia.
+
+**Evidência que se sustenta** (`evidence/`, `evidence_snapshots` e `evidence_links`, `GET /evidence/*`) é endereçada por conteúdo e write-once. Ao persistir os achados, cada `Evidence` vira um blob nomeado pelo sha256 do que é gravado: o corpo passa pelo scrubber **antes** de ser hasheado e escrito, então o que fica em disco não tem CPF, número de cartão ou token (o `original_sha256` guarda a proveniência sem guardar o original; o modo com o original cifrado é opt-in, `EVIDENCE_ENCRYPT_ORIGINAL`, e exige `SECRETS_KEY`). Toda leitura confere o hash e recusa um corpo que não bate (`store.get`), e o bundle (`GET /evidence/bundle/{scan_id}`) é um zip com manifesto de hashes onde um corpo ausente ou corrompido derruba o download inteiro. A linha do snapshot é append-only (o trigger `evidence_snapshots_no_update` no Postgres, migration `0011`); a retenção (`EVIDENCE_RETENTION_DAYS`, `POST /evidence/purge`) apaga o corpo e mantém o hash e o registro, auditada como `evidence.purge`.
 
 **Saídas.** O HTML técnico (gravado em `REPORTS_DIR`, `GET /reports/{id}`), o HTML executivo (montado sob demanda, `GET /reports/{id}/executive`, com um bloco de cobertura antes da nota de postura), o JSON de compliance (`GET /reports/{id}/compliance`: OWASP Top 10 2021, PCI DSS 4.0, LGPD, CWE Top 25 e uma nota de postura de A a F que nunca é melhor que D com crítico aberto) e o AI Fix Bundle (`GET /reports/{id}/ai-bundle`, schema 1.0.0, veja [AI-FIX-BUNDLE](AI-FIX-BUNDLE.md)). PDF, Markdown e CSV são montados no navegador pela tela, a partir do bundle (`web/src/utils/pentest/`); o orchestrator tem um `render_pdf()` que ninguém chama.
 

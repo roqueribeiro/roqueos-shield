@@ -179,6 +179,10 @@ Permission `public` means no credential; `any` means any valid credential.
 | findings | `GET /findings/queue` | `scans:read` | Queue of unique problems by `deduped_key`, severity first (`status`, `min_severity`, `source_tool`) |
 | findings | `GET /findings/summary` | `scans:read` | Counts per severity and status |
 | findings | `POST /findings/resolve` | `scans:run` | Sets the status of a problem: `open`, `in_progress`, `resolved`, `false_positive`, `wont_fix`, `risk_accepted` |
+| evidence | `GET /evidence/finding/{deduped_key}` | `scans:read` | Evidence snapshots for a problem, by version and order |
+| evidence | `GET /evidence/blob/{sha256}` | `scans:read` | The evidence body, hash-verified: 410 if the body was purged, 422 if it does not match its hash |
+| evidence | `GET /evidence/bundle/{scan_id}` | `scans:read` | Zip with a manifest of hashes; a missing or corrupt body fails the whole download |
+| evidence | `POST /evidence/purge` | `config:manage` | Runs retention (`EVIDENCE_RETENTION_DAYS`): deletes the body, keeps hash and record, audits `evidence.purge` |
 | reports | `GET /reports/{scan_id}` | `scans:read` | Technical HTML report |
 | reports | `GET /reports/{scan_id}/ai-bundle` | `scans:read` | AI Fix Bundle, schema 1.0.0 |
 | reports | `GET /reports/{scan_id}/executive` | `scans:read` | Executive HTML: risk grade A to F and compliance mapping |

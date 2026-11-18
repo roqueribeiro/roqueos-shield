@@ -468,6 +468,78 @@
         "title": "EscopoOut",
         "type": "object"
       },
+      "EvidenceItemOut": {
+        "properties": {
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "encrypted": {
+            "title": "Encrypted",
+            "type": "boolean"
+          },
+          "evidence_version": {
+            "title": "Evidence Version",
+            "type": "integer"
+          },
+          "nota": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nota"
+          },
+          "ordem": {
+            "title": "Ordem",
+            "type": "integer"
+          },
+          "original_sha256": {
+            "title": "Original Sha256",
+            "type": "string"
+          },
+          "papel": {
+            "title": "Papel",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "snapshot_id": {
+            "format": "uuid",
+            "title": "Snapshot Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "sha256",
+          "original_sha256",
+          "papel",
+          "ordem",
+          "evidence_version",
+          "content_type",
+          "size_bytes",
+          "encrypted",
+          "nota",
+          "created_at"
+        ],
+        "title": "EvidenceItemOut",
+        "type": "object"
+      },
       "ExposureIn": {
         "properties": {
           "company_name": {
@@ -1099,6 +1171,24 @@
           "password"
         ],
         "title": "PasswordUpdate",
+        "type": "object"
+      },
+      "PurgeOut": {
+        "properties": {
+          "purged": {
+            "title": "Purged",
+            "type": "integer"
+          },
+          "retention_days": {
+            "title": "Retention Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "purged",
+          "retention_days"
+        ],
+        "title": "PurgeOut",
         "type": "object"
       },
       "QueueItem": {
@@ -2578,6 +2668,200 @@
         "summary": "Login",
         "tags": [
           "conta"
+        ]
+      }
+    },
+    "/evidence/blob/{sha256}": {
+      "get": {
+        "description": "O corpo da evidência, com o hash conferido. `scans:read`.\n\n410 se o corpo foi expurgado (o registro fica, o corpo não); 422 se o que está em\ndisco não bate com o hash (corrompido/adulterado); 404 se não há snapshot com esse sha.",
+        "operationId": "get_blob_evidence_blob__sha256__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sha256",
+            "required": true,
+            "schema": {
+              "title": "Sha256",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Get Blob",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/evidence/bundle/{scan_id}": {
+      "get": {
+        "description": "Zip com todas as evidências de um scan: `manifest.json` (com os hashes) e os corpos.\n\nUm corpo ausente ou corrompido derruba o download inteiro (422/410): um pacote de\nprova pela metade é pior que nenhum. `scans:read`.",
+        "operationId": "get_bundle_evidence_bundle__scan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scan Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Get Bundle",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/evidence/finding/{deduped_key}": {
+      "get": {
+        "description": "Evidências de um problema (pela `deduped_key`), por versão e ordem. `scans:read`.",
+        "operationId": "list_evidence_evidence_finding__deduped_key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "deduped_key",
+            "required": true,
+            "schema": {
+              "title": "Deduped Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EvidenceItemOut"
+                  },
+                  "title": "Response List Evidence Evidence Finding  Deduped Key  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "List Evidence",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/evidence/purge": {
+      "post": {
+        "description": "Roda a retenção (`EVIDENCE_RETENTION_DAYS`): apaga o corpo dos snapshots vencidos,\nmantém hash e registro, audita `evidence.purge`. `config:manage`.",
+        "operationId": "purge_evidence_evidence_purge_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurgeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Purge Evidence",
+        "tags": [
+          "evidence"
         ]
       }
     },

@@ -751,4 +751,15 @@ async def _persist_findings(
                     payload=f.model_dump(mode="json"),
                 )
             )
+
+        # Evidência que se sustenta (Frente C): snapshot redigido + vínculo `proof` por
+        # achado. Best-effort: uma falha aqui não derruba a persistência do scan.
+        from orchestrator.evidence.service import capturar_evidencias
+
+        for f in findings:
+            try:
+                await capturar_evidencias(s, scan_id, f)
+            except Exception as e:  # noqa: BLE001
+                log.warning("evidence.capture_failed", deduped_key=f.deduped_key, error=str(e))
+
         await s.commit()

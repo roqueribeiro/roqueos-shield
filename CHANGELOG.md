@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Inventário de ativos entre scans** (Frente A): tabelas `assets` e `asset_observations`, campo `asset_id` no `Finding` e no `FindingRow`, e as rotas `GET /assets` e `GET /assets/{id}` (`scans:read`). O ativo tem identidade determinística (`asset_key`), persiste entre scans e cada achado aponta para o seu. Vale o contrato do silêncio: ausência num scan posterior só é "sumiu" se um scanner que vê o tipo rodou, senão é "não verificado" (`orchestrator/domain/assets.py`). Migration `0010`. O veredito cross-scan (diff) vem na Frente B.
+- **Evidência que se sustenta** (Frente C): armazém endereçado por conteúdo (`orchestrator/evidence/`), tabelas write-once `evidence_snapshots` e `evidence_links`, e as rotas `GET /evidence/finding/{deduped_key}`, `GET /evidence/blob/{sha256}`, `GET /evidence/bundle/{scan_id}` (`scans:read`) e `POST /evidence/purge` (`config:manage`). O corpo é **redigido pelo scrubber antes de ser hasheado e gravado** (ao contrário do ARTEX, que grava tráfego em texto puro); toda leitura confere o hash; o bundle derruba o download inteiro se um corpo faltar ou estiver corrompido. Original cifrado é opt-in (`EVIDENCE_ENCRYPT_ORIGINAL`, exige `SECRETS_KEY`). Retenção auditada por `EVIDENCE_RETENTION_DAYS` (apaga o corpo, mantém hash e registro). Trigger append-only em `evidence_snapshots` no Postgres. Migration `0011`.
 
 ## [0.5.2] - 2026-11-08
 
