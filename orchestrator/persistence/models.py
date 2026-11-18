@@ -270,6 +270,38 @@ class EvidenceLinkRow(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
 
 
+class CommandApprovalStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    EXPIRED = "expired"  # tempo limite estourou com a pendência aberta — fecha fechado
+
+
+class CommandApprovalRow(SQLModel, table=True):
+    """Pendência de aprovação de um comando (Frente E, modo `ask`).
+
+    A coleira decide primeiro (continua igual); o que passou vira uma pendência aqui para
+    uma pessoa aprovar ou negar. Tempo limite nega (fecha fechado): uma pendência além de
+    `expires_at` conta como negada, nunca como liberada. `command` é guardado REDIGIDO
+    pelo scrubber. Quatro olhos (opcional): quem propôs não aprova o próprio comando.
+    Toda decisão também gera entrada no `audit_log`.
+    """
+
+    __tablename__ = "command_approvals"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    reference_type: str = Field(default="investigation", index=True)  # investigation|scan
+    reference_id: UUID | None = Field(default=None, index=True)
+    command: str  # texto do comando, redigido pelo scrubber
+    proposed_by: str | None = Field(default=None, index=True)
+    status: str = Field(default=CommandApprovalStatus.PENDING.value, index=True)
+    decided_by: str | None = None
+    decided_at: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    reason: str | None = None
+    expires_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime(), index=True)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
+
+
 class UserRow(SQLModel, table=True):
     """Usuário nomeado + papel (RBAC).
 

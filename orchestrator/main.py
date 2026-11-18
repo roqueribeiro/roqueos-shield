@@ -23,6 +23,9 @@ from fastapi.staticfiles import StaticFiles
 from orchestrator import __version__
 from orchestrator.ai.observability import log_processor
 from orchestrator.api.routers import (
+    approvals as approvals_router,
+)
+from orchestrator.api.routers import (
     assets as assets_router,
 )
 from orchestrator.api.routers import (
@@ -204,6 +207,7 @@ app.include_router(evidence_router.router)  # /evidence (write-once; scans:read,
 app.include_router(reports_router.router)
 app.include_router(exposure_router.router)
 app.include_router(investigate_router.router)
+app.include_router(approvals_router.router)  # /approvals (modo ask, commands:approve = admin)
 app.include_router(health_router.router)  # /health/full
 app.include_router(ui_router.router)  # /ui/api/*
 app.include_router(users_router.router)  # /users (admin-only, RBAC)

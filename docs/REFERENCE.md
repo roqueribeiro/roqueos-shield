@@ -191,6 +191,8 @@ Permission `public` means no credential; `any` means any valid credential.
 | exposure | `POST /exposure/scan` | `scans:run` | Queues the OSINT pipeline (`company_name`, `domains`, `github_orgs`, `dorks`). Writes `exposure.scan` to the audit trail before queueing |
 | audit | `GET /audit` | `audit:read` | The audit trail, newest first. Filters `action`, `actor`, `resource_id`, `authorization_ref`, `since`; `offset`, `limit` (1 to 500, default 100). Read only |
 | investigate | `POST /investigate/{finding_id}` | `scans:run`; `dry_run=false` also needs `config:manage` and `AGENT_LIVE_EXECUTION=true` | The investigation agent on one finding. Body: `instructions`, `dry_run` (default `true`), `max_steps` (default 10) |
+| approvals | `GET /approvals[?status=]` | `commands:approve` | Pending command approvals (mode `ask`), newest first; a pending request past its timeout is marked `expired` on read |
+| approvals | `POST /approvals/{id}/approve`, `POST /approvals/{id}/deny` | `commands:approve` | Decides a pending command. Four eyes (`APPROVAL_FOUR_EYES`) blocks the proposer approving their own (403); already decided or expired is 409. Audited |
 | settings | `GET`/`PUT /settings/ai` | `config:manage` | Models, API base and keys. Keys are stored encrypted and never returned (`hasApiKey`). Fields set by the environment come back in `locked` |
 | settings | `POST /settings/ai/models` | `config:manage` | The models each key reaches, fetched server side |
 | settings | `GET`/`PUT /settings/scope` | `config:manage` | `labOnly`, `allowlist`, `requireAuthRef`, `allowCloudFallback`, plus `locked` |
@@ -410,10 +412,11 @@ From `orchestrator/domain/roles.py`. Each role is a fixed set of permissions; th
 | `scans:read` | Read scans, findings, reports and the AI Fix Bundle |
 | `audit:read` | Read the audit log |
 | `config:manage` | AI configuration, scope and allowlist, system cards and logs, `dry_run=false` in the investigation |
+| `commands:approve` | Approve or deny a pending command (mode `ask`). `admin` only, by engagement decision |
 
 | Role | Permissions |
 | --- | --- |
-| `admin` | all five. The `APP_TOKEN` service principal is `admin` |
+| `admin` | all of them. The `APP_TOKEN` service principal is `admin` |
 | `operator` | `scans:run`, `scans:read` |
 | `auditor` | `scans:read`, `audit:read` |
 | `viewer` | `scans:read` |

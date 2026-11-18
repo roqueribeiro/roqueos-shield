@@ -59,7 +59,7 @@ Outside the boundary: the **targets**, of seven asset types (`host`, `url`, `dom
 | --- | --- | --- |
 | orchestrator | `docker/images/orchestrator/Dockerfile` | FastAPI on `:8080`. Validates scope, writes the audit record, enqueues the job, streams progress over SSE, serves the web UI |
 | worker | same image, `arq orchestrator.jobs.queue.WorkerSettings` | Runs `run_scan_job` and `run_exposure_job`: executes the adapters, calls the LLM, writes the report |
-| postgres | `postgres:16-alpine` | `targets`, `scans`, `findings`, `finding_status`, `assets`, `asset_observations`, `evidence_snapshots`, `evidence_links`, `users`, `ai_runs`, `audit_log`, `app_settings`. SQLite in dev and in the default standalone |
+| postgres | `postgres:16-alpine` | `targets`, `scans`, `findings`, `finding_status`, `assets`, `asset_observations`, `evidence_snapshots`, `evidence_links`, `command_approvals`, `users`, `ai_runs`, `audit_log`, `app_settings`. SQLite in dev and in the default standalone |
 | redis | `redis:7-alpine` | The `arq` queue |
 | zap | `zaproxy/zap-stable` | DAST. Spider and passive scan; active scan only with the `full` or `active` profile |
 | trivy | `aquasec/trivy` in server mode | Container images and repository dependencies |
@@ -79,7 +79,7 @@ The split that matters is **orchestrator versus worker**: the same image with a 
 
 | Module | What lives there |
 | --- | --- |
-| `api/routers/` | 16 routers: `targets`, `assets`, `scans`, `findings`, `evidence`, `reports`, `exposure`, `investigate`, `health`, `ui`, `users`, `auth`, `conta`, `settings`, `system`, `mcp`. The contract is frozen in `docs/openapi.json` and checked by `scripts/openapi_snapshot.py --check` |
+| `api/routers/` | 17 routers: `targets`, `assets`, `scans`, `findings`, `evidence`, `approvals`, `reports`, `exposure`, `investigate`, `health`, `ui`, `users`, `auth`, `conta`, `settings`, `system`, `mcp`. The contract is frozen in `docs/openapi.json` and checked by `scripts/openapi_snapshot.py --check` |
 | `api/deps.py` | `get_principal`: resolves `X-API-Token` (service or per-user token), `Authorization: Bearer` (OIDC session) or the `rs_session` cookie of the web UI, and `require_permission` for RBAC |
 | `domain/schemas.py` | `Target`, `Finding`, `AITriage`, `RawResults`, `AssetType`. `Finding.deduped_key` is `sha256(target::rule[::discriminator])[:32]` |
 | `domain/target_validator.py` | The scope gate (section 10) |
@@ -216,6 +216,8 @@ execução real do agente desligada (AGENT_LIVE_EXECUTION=false): use dry_run=tr
 ```
 
 (real agent execution is off; use `dry_run=true` to see the planned commands). `run_in_kali` applies the same lock again, for any other caller. The route requires `scans:run`, is rate limited, writes `investigate.run` to the audit trail before running, and writes `investigate.commands` with every decision afterwards.
+
+**Human approval, mode `ask`** (`approvals/`, `command_approvals`, `GET /approvals`, `POST /approvals/{id}/approve`|`/deny`) sits between the plan and execution without touching the leash: the leash decides first, and what it lets through becomes a pending record a person approves or denies. The timeout denies: a request past its `expires_at` is marked `expired` and `esta_aprovado` answers no, so the lock defaults to barring, not passing. Four eyes (`APPROVAL_FOUR_EYES`, on by default) stops the proposer from approving their own command. The request and every decision go to the audit trail (`command.request`, `command.approve`, `command.deny`); deciding needs `commands:approve` (ADMIN only). No LLM judge, by design: a model approving a model is not human approval. The executor (Frente M) consults `esta_aprovado` before it acts; the route only moves the pending state, it never runs the command.
 
 **The leash** is `ai/agentic/executor.py`, `check_command()`, a pure function. In order:
 

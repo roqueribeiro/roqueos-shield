@@ -59,7 +59,7 @@ Fora da fronteira: os **alvos**, de sete tipos de ativo (`host`, `url`, `domain`
 | --- | --- | --- |
 | orchestrator | `docker/images/orchestrator/Dockerfile` | FastAPI em `:8080`. Valida escopo, grava o registro de auditoria, enfileira o job, transmite o progresso por SSE, serve a tela web |
 | worker | mesma imagem, `arq orchestrator.jobs.queue.WorkerSettings` | Roda `run_scan_job` e `run_exposure_job`: executa os adapters, chama o LLM, escreve o relatório |
-| postgres | `postgres:16-alpine` | `targets`, `scans`, `findings`, `finding_status`, `assets`, `asset_observations`, `evidence_snapshots`, `evidence_links`, `users`, `ai_runs`, `audit_log`, `app_settings`. SQLite em desenvolvimento e no standalone padrão |
+| postgres | `postgres:16-alpine` | `targets`, `scans`, `findings`, `finding_status`, `assets`, `asset_observations`, `evidence_snapshots`, `evidence_links`, `command_approvals`, `users`, `ai_runs`, `audit_log`, `app_settings`. SQLite em desenvolvimento e no standalone padrão |
 | redis | `redis:7-alpine` | A fila do `arq` |
 | zap | `zaproxy/zap-stable` | DAST. Spider e varredura passiva; varredura ativa só com o profile `full` ou `active` |
 | trivy | `aquasec/trivy` em modo server | Imagem de container e dependência de repositório |
@@ -79,7 +79,7 @@ O `docker/compose.agent.yml` declara um container `cai-expert` da época em que 
 
 | Módulo | O que mora ali |
 | --- | --- |
-| `api/routers/` | 16 routers: `targets`, `assets`, `scans`, `findings`, `evidence`, `reports`, `exposure`, `investigate`, `health`, `ui`, `users`, `auth`, `conta`, `settings`, `system`, `mcp`. O contrato fica congelado em `docs/openapi.json` e é conferido por `scripts/openapi_snapshot.py --check` |
+| `api/routers/` | 17 routers: `targets`, `assets`, `scans`, `findings`, `evidence`, `approvals`, `reports`, `exposure`, `investigate`, `health`, `ui`, `users`, `auth`, `conta`, `settings`, `system`, `mcp`. O contrato fica congelado em `docs/openapi.json` e é conferido por `scripts/openapi_snapshot.py --check` |
 | `api/deps.py` | `get_principal`: resolve `X-API-Token` (token de serviço ou por usuário), `Authorization: Bearer` (sessão OIDC) ou o cookie `rs_session` da tela, e `require_permission` para o RBAC |
 | `domain/schemas.py` | `Target`, `Finding`, `AITriage`, `RawResults`, `AssetType`. O `Finding.deduped_key` é `sha256(alvo::regra[::discriminador])[:32]` |
 | `domain/target_validator.py` | O portão de escopo (seção 10) |
@@ -90,7 +90,7 @@ O `docker/compose.agent.yml` declara um container `cai-expert` da época em que 
 | `adapters/` | 15 adapters implementando o Protocol `ScannerAdapter` de `adapters/base.py` |
 | `ai/` | `gateway.py` (litellm), `analyzer.py` (triagem), `agentic/` (o laço de investigação e a coleira), `observability.py` (ring buffer de log e SSE) |
 | `reporting/` | `renderer.py` (HTML técnico e executivo), `compliance.py` (OWASP, PCI DSS, LGPD), `exporters/ai_bundle.py`, `exporters/defectdojo.py` |
-| `persistence/` | Modelos SQLModel e as migrations Alembic `0001` a `0011` |
+| `persistence/` | Modelos SQLModel e as migrations Alembic `0001` a `0012` |
 | `audit/logger.py` | `log_audit_event`, append-only |
 | `standalone/` | O supervisor e os segredos de primeiro boot da imagem de container único (seção 11) |
 
@@ -216,6 +216,8 @@ execução real do agente desligada (AGENT_LIVE_EXECUTION=false): use dry_run=tr
 ```
 
 O `run_in_kali` aplica a mesma trava de novo, para qualquer outro chamador. A rota exige `scans:run`, tem limite de taxa, grava `investigate.run` na trilha antes de rodar e grava `investigate.commands` com cada decisão depois.
+
+**Aprovação humana, modo `ask`** (`approvals/`, `command_approvals`, `GET /approvals`, `POST /approvals/{id}/approve`|`/deny`) fica entre o plano e a execução sem tocar na coleira: a coleira decide primeiro, e o que ela libera vira uma pendência que uma pessoa aprova ou nega. O tempo limite nega: uma pendência além do `expires_at` é marcada `expired` e o `esta_aprovado` responde não, então a trava fecha fechado, não passa. Quatro olhos (`APPROVAL_FOUR_EYES`, ligado por padrão) impede quem propôs de aprovar o próprio comando. A pendência e cada decisão vão para a trilha (`command.request`, `command.approve`, `command.deny`); decidir exige `commands:approve` (só ADMIN). Nada de juiz LLM, de propósito: modelo aprovando modelo não é aprovação humana. O executor (Frente M) pergunta `esta_aprovado` antes de agir; a rota só move o estado da pendência, nunca roda o comando.
 
 **A coleira** é o `ai/agentic/executor.py`, `check_command()`, uma função pura. Na ordem:
 
