@@ -135,6 +135,7 @@ Some files have extra review requirements because they affect the compliance and
 - **`orchestrator/domain/scrubber.py`**: regex changes need a justification in the PR description. Do not relax patterns without explaining the false positive that motivated the change.
 - **`orchestrator/audit/logger.py`**: the audit log is append-only. Never introduce code paths that `UPDATE` or `DELETE` from `audit_log`. The Postgres trigger is a safety net, not a license to relax the application layer.
 - **`orchestrator/api/deps.py`**: authentication code. Never remove `require_token` from an endpoint that already has it. Discuss the design in an issue first.
+- **Code derived from ARTEX**: RoqueShield reimplements ideas, architecture, and data shapes from [ARTEX](https://github.com/Autumn-27/ARTEX) (AGPL-3.0) as original Apache-2.0 code, never a literal copy of its files, snippets, or prompts. The `scripts/check_no_artex_copy.py` gate is a tripwire, not a license to paste: it catches characteristic identifiers, not reworded copies, so the real control is review. See [`NOTICE`](NOTICE) for the attribution, and note that any non-trivial derivation beyond ideas is a question for legal counsel.
 
 ## PR workflow
 
