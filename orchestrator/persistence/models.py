@@ -131,6 +131,9 @@ class FindingRow(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     scan_id: UUID = Field(foreign_key="scans.id", index=True)
     target_id: UUID = Field(foreign_key="targets.id", index=True)
+    # Ativo do inventário (Frente A). Opcional: findings antigos e scans sem
+    # agregação de ativo ficam com None. Preenchido no pipeline após o dedup.
+    asset_id: UUID | None = Field(default=None, foreign_key="assets.id", index=True)
     deduped_key: str = Field(index=True)
     source_tool: str = Field(index=True)
     source_rule_id: str | None = None
@@ -171,6 +174,135 @@ class FindingStatusRow(SQLModel, table=True):
     last_severity: str | None = Field(default=None, index=True)
     last_title: str | None = None
     target_value: str | None = Field(default=None, index=True)
+
+
+class AssetRow(SQLModel, table=True):
+    """Ativo do inventário, persistente ENTRE scans (Frente A).
+
+    A identidade é `asset_key` — determinística (`orchestrator.domain.assets.asset_key`),
+    no mesmo molde da `Finding.deduped_key`: o mesmo host/porta/URL em dois scans tem a
+    MESMA `asset_key`, então a linha é reusada (upsert) e o `id` UUID permanece estável.
+    Por isso o finding aponta para `assets.id` e o id sobrevive entre scans — o que muda é
+    só `last_seen`/`last_scan_id`. `first_seen` nunca é reescrito.
+    """
+
+    __tablename__ = "assets"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    # Identidade determinística (sha256[:32]). Única: é por ela que o upsert acha a linha.
+    asset_key: str = Field(index=True, unique=True)
+    asset_type: str = Field(index=True)  # host|url|port|image|repo|domain|k8s_resource
+    value: str = Field(index=True)  # valor normalizado do alvo (host:porta/proto, URL, ...)
+    label: str | None = None
+    first_seen: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
+    last_seen: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
+    # Scan em que foi visto por último — âncora para "sumiu" vs "não verificado".
+    last_scan_id: UUID | None = Field(default=None, foreign_key="scans.id", index=True)
+    technologies: list[str] = Field(default_factory=list, sa_type=JSON)
+    # Texto livre (banner, título) passa pelo scrubber ANTES de entrar aqui.
+    metadata_json: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
+
+
+class AssetObservationRow(SQLModel, table=True):
+    """Uma observação de um ativo num scan específico (Frente A).
+
+    Uma linha por (ativo, scan): é o registro de que aquele scan VIU aquele ativo.
+    A ausência de linha para um scan, combinada com a cobertura do scan
+    (`ScanRow.scanners_ran`/`scanners_skipped`), é o que distingue "sumiu" de
+    "não verificado" — ver `orchestrator.domain.assets.classificar_presenca`.
+    """
+
+    __tablename__ = "asset_observations"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    asset_id: UUID = Field(foreign_key="assets.id", index=True)
+    scan_id: UUID = Field(foreign_key="scans.id", index=True)
+    observed_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
+    source_tool: str | None = Field(default=None, index=True)  # quem viu (nmap, zap, ...)
+    metadata_json: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
+
+
+class EvidenceSnapshotRow(SQLModel, table=True):
+    """Registro write-once de um corpo de evidência (Frente C).
+
+    Imutável como o `audit_log`: em Postgres o trigger `evidence_snapshots_no_update`
+    (migration 0011) rejeita UPDATE/DELETE; em SQLite o contrato vive no código (o
+    armazém `orchestrator.evidence.store` grava o blob uma vez e nunca reescreve).
+
+    `sha256` endereça o corpo GRAVADO (redigido por padrão, ou cifrado) no armazém.
+    `original_sha256` é o hash do corpo antes de redigir/cifrar — proveniência, sem
+    guardar o original. A retenção apaga o blob em disco e mantém esta linha: hash e
+    registro ficam, o corpo some.
+    """
+
+    __tablename__ = "evidence_snapshots"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    sha256: str = Field(index=True)  # endereço do corpo gravado no armazém
+    original_sha256: str = Field(index=True)  # hash do original (antes de redigir/cifrar)
+    content_type: str = "text/plain"
+    size_bytes: int = 0
+    encrypted: bool = False  # o blob é o original cifrado (opção de engajamento)?
+    # scan_id é informativo (SEM FK de propósito): a evidência é imutável e sobrevive à
+    # remoção do scan. Uma FK aqui, combinada com o trigger append-only, impediria apagar
+    # um scan que gravou evidência (nem DELETE nem o SET NULL do ON DELETE passariam).
+    scan_id: UUID | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime(), index=True)
+
+
+class EvidenceLinkRow(SQLModel, table=True):
+    """Vínculo achado↔evidência com papel (Frente C).
+
+    Keyed pelo `deduped_key` (a identidade do PROBLEMA, como o `FindingStatusRow`), para
+    a evidência de prova sobreviver ao re-scan: quem corrige e re-escaneia continua vendo
+    a prova (`proof`) e a linha de base (`baseline`). `evidence_version` sobe a cada
+    vínculo novo do mesmo problema; um relatório gravado sobre uma versão antiga é
+    rejeitado (a checagem em si é da Frente D).
+    """
+
+    __tablename__ = "evidence_links"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    deduped_key: str = Field(index=True)
+    snapshot_id: UUID = Field(foreign_key="evidence_snapshots.id", index=True)
+    # baseline (antes) | proof (o achado) | verification (reteste) | supporting (apoio)
+    papel: str = Field(default="supporting", index=True)
+    ordem: int = 0
+    nota: str | None = None
+    evidence_version: int = 1
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
+
+
+class CommandApprovalStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    EXPIRED = "expired"  # tempo limite estourou com a pendência aberta — fecha fechado
+
+
+class CommandApprovalRow(SQLModel, table=True):
+    """Pendência de aprovação de um comando (Frente E, modo `ask`).
+
+    A coleira decide primeiro (continua igual); o que passou vira uma pendência aqui para
+    uma pessoa aprovar ou negar. Tempo limite nega (fecha fechado): uma pendência além de
+    `expires_at` conta como negada, nunca como liberada. `command` é guardado REDIGIDO
+    pelo scrubber. Quatro olhos (opcional): quem propôs não aprova o próprio comando.
+    Toda decisão também gera entrada no `audit_log`.
+    """
+
+    __tablename__ = "command_approvals"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    reference_type: str = Field(default="investigation", index=True)  # investigation|scan
+    reference_id: UUID | None = Field(default=None, index=True)
+    command: str  # texto do comando, redigido pelo scrubber
+    proposed_by: str | None = Field(default=None, index=True)
+    status: str = Field(default=CommandApprovalStatus.PENDING.value, index=True)
+    decided_by: str | None = None
+    decided_at: datetime | None = Field(default=None, sa_type=UTCDateTime())
+    reason: str | None = None
+    expires_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime(), index=True)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
 
 
 class UserRow(SQLModel, table=True):

@@ -184,6 +184,9 @@ RequireScansRead = Depends(require_permission(Permission.SCANS_READ))
 RequireUsersManage = Depends(require_permission(Permission.USERS_MANAGE))
 RequireAuditRead = Depends(require_permission(Permission.AUDIT_READ))
 RequireConfigManage = Depends(require_permission(Permission.CONFIG_MANAGE))
+# commands:approve só no ADMIN (via _ALL em roles.py); decisão do engajamento. Gate novo
+# e aditivo — nenhum endpoint existente perde o seu.
+RequireCommandsApprove = Depends(require_permission(Permission.COMMANDS_APPROVE))
 
 
 # --- backward-compat -------------------------------------------------------
