@@ -73,3 +73,15 @@ def test_modo_cifrado_guarda_ciphertext_sem_plaintext(_data_dir, monkeypatch) ->
     # O ciphertext decifra de volta ao ORIGINAL (o modo cifrado preserva, não redige).
     assert Fernet(chave.encode()).decrypt(gravado).decode() == corpo
     assert ref.original_sha256 == hashlib.sha256(corpo.encode()).hexdigest()
+
+
+def test_ler_claro_decifra_o_original(_data_dir, monkeypatch) -> None:
+    from cryptography.fernet import Fernet
+
+    chave = Fernet.generate_key().decode()
+    monkeypatch.setattr(settings, "SECRETS_KEY", chave)
+    corpo = "corpo original com alvo@banco.com.br"
+    ref = store.put(corpo, encrypt=True)
+    # get() devolve o ciphertext (verificado); ler_claro devolve o original legível.
+    assert store.get(ref.sha256) != corpo.encode()
+    assert store.ler_claro(ref.sha256, encrypted=True).decode() == corpo

@@ -88,6 +88,28 @@ async def test_comando_redigido_na_pendencia() -> None:
         assert "hunter2" not in row.command
 
 
+async def test_expiracao_vai_para_a_trilha(monkeypatch) -> None:
+    await init_db()
+    # Expirar é decisão terminal (nega): tem de deixar rastro, como aprovar/negar.
+    monkeypatch.setattr(settings, "APPROVAL_TIMEOUT_SECONDS", -1)
+    aid = await _criar()
+    async with session() as s:
+        await service.esta_aprovado(s, aid)  # dispara a auto-expiração
+    async with session() as s:
+        from sqlmodel import col, select
+
+        from orchestrator.persistence.models import AuditLogRow
+
+        linhas = (
+            await s.exec(
+                select(AuditLogRow)
+                .where(col(AuditLogRow.action) == "command.expire")
+                .where(col(AuditLogRow.resource_id) == aid)
+            )
+        ).all()
+        assert len(linhas) == 1
+
+
 def test_commands_approve_so_admin() -> None:
     assert has_permission(Role.ADMIN, Permission.COMMANDS_APPROVE) is True
     for papel in (Role.OPERATOR, Role.AUDITOR, Role.VIEWER):

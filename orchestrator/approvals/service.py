@@ -88,6 +88,17 @@ async def _marcar_expirada(session: AsyncSession, row: CommandApprovalRow) -> Co
     row.decided_at = datetime.now(UTC)
     row.reason = "tempo limite estourou com a pendência aberta"
     session.add(row)
+    # Expirar é uma decisão terminal (nega); como criar/aprovar/negar, vai para a trilha.
+    # Sem ator humano: foi o relógio que fechou. Senão o audit_log não registra quem (ou
+    # o quê) fechou o comando.
+    await log_audit_event(
+        session,
+        action="command.expire",
+        actor=None,
+        resource_type="command_approval",
+        resource_id=row.id,
+        metadata={"proposed_by": row.proposed_by or ""},
+    )
     await session.commit()
     return row
 

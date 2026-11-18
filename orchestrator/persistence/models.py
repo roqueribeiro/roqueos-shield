@@ -243,7 +243,10 @@ class EvidenceSnapshotRow(SQLModel, table=True):
     content_type: str = "text/plain"
     size_bytes: int = 0
     encrypted: bool = False  # o blob é o original cifrado (opção de engajamento)?
-    scan_id: UUID | None = Field(default=None, foreign_key="scans.id", index=True)
+    # scan_id é informativo (SEM FK de propósito): a evidência é imutável e sobrevive à
+    # remoção do scan. Uma FK aqui, combinada com o trigger append-only, impediria apagar
+    # um scan que gravou evidência (nem DELETE nem o SET NULL do ON DELETE passariam).
+    scan_id: UUID | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime(), index=True)
 
 

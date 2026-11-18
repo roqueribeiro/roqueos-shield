@@ -20,6 +20,12 @@ def test_asset_key_ignora_variacao_trivial() -> None:
     assert asset_key("host", "Example.COM") == asset_key("host", "example.com")
 
 
+def test_asset_key_dobra_caixa_do_host_na_url() -> None:
+    # Caixa do host não distingue ativo (DNS é case-insensitive); o path, sim.
+    assert asset_key("url", "https://A.Test/x") == asset_key("url", "https://a.test/x")
+    assert asset_key("url", "https://a.test/X") != asset_key("url", "https://a.test/x")
+
+
 def test_asset_key_distingue_tipo_e_valor() -> None:
     assert asset_key("host", "a.test") != asset_key("domain", "a.test")
     assert asset_key("port", "a.test:80/tcp") != asset_key("port", "a.test:443/tcp")

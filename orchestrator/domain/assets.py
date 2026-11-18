@@ -19,9 +19,12 @@ fechou", é "ninguém olhou".
 from __future__ import annotations
 
 import hashlib
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
 from orchestrator.domain.scrubber import scrub
@@ -55,6 +58,14 @@ def _normalizar(asset_type: str, value: str) -> str:
         # "host:porta/proto" — só o host é case-insensitive.
         return v.lower()
     if asset_type == "url":
+        # Caixa do esquema e do host não distingue ativo (DNS é case-insensitive); o
+        # path, sim. Dobra netloc/scheme, preserva o resto. `https://A.test/x` e
+        # `https://a.test/x` viram a mesma chave, mas `/X` e `/x` seguem distintos.
+        partes = urlsplit(v.rstrip("/"))
+        if partes.netloc:
+            return urlunsplit(
+                (partes.scheme.lower(), partes.netloc.lower(), partes.path, partes.query, "")
+            )
         return v.rstrip("/")
     return v
 
@@ -130,27 +141,43 @@ async def registrar_ativos(
     obs = _coletar_observacoes(target, findings)
     key_to_id: dict[str, UUID] = {}
 
+    def _reaparecer(row: AssetRow) -> AssetRow:
+        # Reaparecimento: só move last_seen/last_scan; first_seen nunca é reescrito.
+        row.last_seen = datetime.now(UTC)
+        row.last_scan_id = scan_id
+        if label and not row.label:
+            row.label = label
+        session.add(row)
+        return row
+
     for chave, (atype, value, label, tool) in obs.items():
         row = (await session.exec(select(AssetRow).where(AssetRow.asset_key == chave))).first()
         if row is None:
-            row = AssetRow(
+            novo = AssetRow(
                 asset_key=chave,
                 asset_type=atype,
                 value=value,
                 label=label,
                 last_scan_id=scan_id,
             )
-            session.add(row)
-            await session.flush()  # materializa o id para a observação e o finding
+            session.add(novo)
+            try:
+                # Savepoint: se dois workers escaneiam o mesmo host novo, o segundo bate
+                # na unique de asset_key. Sem isto o IntegrityError no flush derrubaria o
+                # persist inteiro e os findings do scan se perderiam. O savepoint isola a
+                # falha; recarrego a linha que o outro worker gravou e sigo.
+                async with session.begin_nested():
+                    await session.flush()
+                row = novo
+            except IntegrityError:
+                existente = (
+                    await session.exec(select(AssetRow).where(AssetRow.asset_key == chave))
+                ).first()
+                if existente is None:
+                    raise
+                row = _reaparecer(existente)
         else:
-            # Reaparecimento: só move last_seen/last_scan; first_seen nunca é reescrito.
-            from datetime import UTC, datetime
-
-            row.last_seen = datetime.now(UTC)
-            row.last_scan_id = scan_id
-            if label and not row.label:
-                row.label = label
-            session.add(row)
+            row = _reaparecer(row)
         key_to_id[chave] = row.id
 
         # Observação idempotente: uma por (ativo, scan).

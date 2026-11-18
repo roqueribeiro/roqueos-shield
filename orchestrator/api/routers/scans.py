@@ -19,6 +19,7 @@ from uuid import UUID
 from arq import create_pool
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import update
 from sqlmodel import col, delete, select
 
 from orchestrator.api.deps import Principal, SessionDep, require_permission
@@ -40,7 +41,15 @@ from orchestrator.jobs.pipelines import (
     validar_perfil,
 )
 from orchestrator.jobs.queue import _redis_settings
-from orchestrator.persistence.models import AIRun, FindingRow, ScanRow, ScanState, TargetRow
+from orchestrator.persistence.models import (
+    AIRun,
+    AssetObservationRow,
+    AssetRow,
+    FindingRow,
+    ScanRow,
+    ScanState,
+    TargetRow,
+)
 
 # Gates de RBAC deste router.
 _RUN = Depends(require_permission(Permission.SCANS_RUN))
@@ -359,6 +368,16 @@ async def delete_scan(scan_id: UUID, session: SessionDep, principal: Principal =
     # Remove dependentes primeiro (FK scan_id) e depois o scan.
     await session.exec(delete(FindingRow).where(col(FindingRow.scan_id) == scan_id))
     await session.exec(delete(AIRun).where(col(AIRun.scan_id) == scan_id))
+    # Ativos persistem ENTRE scans: não apago o ativo, só o vínculo com ESTE scan —
+    # senão a FK de asset_observations/assets.last_scan_id aborta o delete no Postgres.
+    await session.exec(
+        delete(AssetObservationRow).where(col(AssetObservationRow.scan_id) == scan_id)
+    )
+    await session.exec(
+        update(AssetRow).where(col(AssetRow.last_scan_id) == scan_id).values(last_scan_id=None)
+    )
+    # evidence_snapshots não tem FK para scans (é imutável e sobrevive ao scan), então
+    # não entra aqui: o ponteiro scan_id fica como registro histórico.
     await session.delete(scan)
     await session.commit()
 

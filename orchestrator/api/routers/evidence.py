@@ -105,7 +105,8 @@ async def get_blob(
     if snap is None:
         raise HTTPException(status_code=404, detail="evidência não encontrada")
     try:
-        data = store.get(sha256)
+        # ler_claro confere o hash e, se o blob for o original cifrado, decifra.
+        data = store.ler_claro(sha256, encrypted=snap.encrypted)
     except store.EvidenceExpurgada as e:
         raise HTTPException(status_code=410, detail=f"corpo expurgado pela retenção: {e}") from e
     except store.EvidenceIntegrityError as e:
@@ -139,7 +140,7 @@ async def get_bundle(
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for snap in snaps:
             try:
-                data = store.get(snap.sha256)
+                data = store.ler_claro(snap.sha256, encrypted=snap.encrypted)
             except store.EvidenceExpurgada as e:
                 raise HTTPException(
                     status_code=410, detail=f"corpo {snap.sha256} expurgado: {e}"

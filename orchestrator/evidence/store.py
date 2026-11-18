@@ -114,6 +114,30 @@ def get(sha256: str) -> bytes:
     return data
 
 
+def _decifrar(data: bytes) -> bytes:
+    chave = settings.SECRETS_KEY.strip()
+    if not chave:
+        raise EvidenceIntegrityError(
+            "evidência cifrada, mas SECRETS_KEY ausente: não dá para recuperar o original."
+        )
+    from cryptography.fernet import Fernet, InvalidToken
+
+    try:
+        return Fernet(chave.encode()).decrypt(data)
+    except InvalidToken as e:
+        raise EvidenceIntegrityError(
+            "não foi possível decifrar a evidência (SECRETS_KEY trocada?)."
+        ) from e
+
+
+def ler_claro(sha256: str, *, encrypted: bool) -> bytes:
+    """Corpo em claro para o cliente autorizado: `get` (sempre confere o hash) e, se o
+    blob for o original cifrado, decifra com a SECRETS_KEY. Sem isto, o modo cifrado
+    devolveria ciphertext ilegível."""
+    data = get(sha256)
+    return _decifrar(data) if encrypted else data
+
+
 def purge(sha256: str) -> bool:
     """Apaga o CORPO (o arquivo). Devolve True se havia o que apagar. O registro e o
     hash no banco não são tocados — a retenção é append-only como a auditoria."""

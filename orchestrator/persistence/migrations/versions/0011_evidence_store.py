@@ -39,7 +39,10 @@ def upgrade() -> None:
             sa.Column("content_type", sa.String(), nullable=False, server_default="text/plain"),
             sa.Column("size_bytes", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("encrypted", sa.Boolean(), nullable=False, server_default=sa.false()),
-            sa.Column("scan_id", sa.Uuid(), sa.ForeignKey("scans.id"), nullable=True, index=True),
+            # scan_id SEM ForeignKey de propósito: a evidência é imutável (trigger
+            # append-only) e sobrevive à remoção do scan; uma FK impediria apagar um scan
+            # que gravou evidência. É só um ponteiro informativo.
+            sa.Column("scan_id", sa.Uuid(), nullable=True, index=True),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, index=True),
         )
 
