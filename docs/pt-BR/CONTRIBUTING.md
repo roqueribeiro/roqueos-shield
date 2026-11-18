@@ -135,6 +135,7 @@ Alguns arquivos têm exigência extra de revisão porque afetam a postura de com
 - **`orchestrator/domain/scrubber.py`**: mudança de regex precisa de justificativa na descrição do PR. Não afrouxe padrão sem explicar o falso positivo que motivou a mudança.
 - **`orchestrator/audit/logger.py`**: o log de auditoria é append-only. Nunca introduza caminho de código que faça `UPDATE` ou `DELETE` em `audit_log`. O trigger do Postgres é rede de proteção, não licença para afrouxar a camada da aplicação.
 - **`orchestrator/api/deps.py`**: código de autenticação. Nunca remova `require_token` de um endpoint que já o tem. Discuta o desenho numa issue antes.
+- **Código derivado do ARTEX**: o RoqueShield reimplementa ideias, arquitetura e formatos de dado do [ARTEX](https://github.com/Autumn-27/ARTEX) (AGPL-3.0) como código Apache-2.0 original, nunca cópia literal de arquivo, trecho ou prompt. O gate `scripts/check_no_artex_copy.py` é um tripwire, não licença para colar: ele pega identificadores característicos, não cópia reescrita, então o controle de verdade é a revisão. Veja o [`NOTICE`](../../NOTICE) para a atribuição, e lembre que qualquer derivação não trivial além de ideia é pergunta para o jurídico.
 
 ## Fluxo de PR
 
