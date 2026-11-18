@@ -171,3 +171,34 @@ async def test_quatro_olhos_ignora_caixa_do_email() -> None:
     async with session() as s:
         with pytest.raises(service.QuatroOlhos):
             await service.decidir(s, aid, aprovar=True, decided_by="mesma@x")
+
+
+async def test_listar_aprovacoes_com_expiracao_e_outras_linhas_nao_quebra(monkeypatch) -> None:
+    # GET /approvals com uma pendência vencida (expira na leitura) e outra já decidida na
+    # mesma página. Antes, a expiração chamava expire_all() e o acesso à linha seguinte
+    # virava lazy refresh em AsyncSession: MissingGreenlet, resposta 500.
+    from httpx import ASGITransport, AsyncClient
+
+    from orchestrator.api import deps
+    from orchestrator.main import app
+
+    await init_db()
+    decidida = await _criar(proposed_by="op@x")
+    async with session() as s:
+        await service.decidir(s, decidida, aprovar=False, decided_by="adm@x")
+    monkeypatch.setattr(settings, "APPROVAL_TIMEOUT_SECONDS", -1)
+    vencida = await _criar(proposed_by="op@x")
+
+    app.dependency_overrides[deps.get_principal] = lambda: deps.Principal(
+        id="u1", email="adm@x", role=Role.ADMIN, is_service=False
+    )
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+            resp = await c.get("/approvals")
+    finally:
+        app.dependency_overrides.pop(deps.get_principal, None)
+
+    assert resp.status_code == 200, resp.text
+    estados = {item["id"]: item["status"] for item in resp.json()}
+    assert estados[str(vencida)] == CommandApprovalStatus.EXPIRED.value
+    assert estados[str(decidida)] == CommandApprovalStatus.DENIED.value

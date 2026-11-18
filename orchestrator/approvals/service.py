@@ -121,9 +121,14 @@ async def _transicionar(
 
 
 async def _reler(session: AsyncSession, approval_id: UUID) -> CommandApprovalRow | None:
-    # Depois de um UPDATE direto no banco, o objeto em memória está velho: relê.
-    session.expire_all()
-    return await session.get(CommandApprovalRow, approval_id)
+    # Depois de um UPDATE direto no banco, o objeto em memória está velho: relê SÓ ele.
+    # `session.expire_all()` invalidava todas as linhas da sessão, e em AsyncSession o
+    # próximo acesso a atributo de qualquer outra linha (o laço do GET /approvals) vira
+    # um lazy refresh implícito, que estoura MissingGreenlet e devolve 500.
+    row = await session.get(CommandApprovalRow, approval_id)
+    if row is not None:
+        await session.refresh(row)
+    return row
 
 
 async def _expirar(session: AsyncSession, approval_id: UUID, proposed_by: str | None) -> bool:
