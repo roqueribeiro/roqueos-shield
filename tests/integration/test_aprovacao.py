@@ -114,3 +114,60 @@ def test_commands_approve_so_admin() -> None:
     assert has_permission(Role.ADMIN, Permission.COMMANDS_APPROVE) is True
     for papel in (Role.OPERATOR, Role.AUDITOR, Role.VIEWER):
         assert has_permission(papel, Permission.COMMANDS_APPROVE) is False
+
+
+async def test_corrida_negar_e_aprovar_nao_sobrescreve() -> None:
+    # A sessão A lê a pendência (`pending` fica na memória dela); a B nega e comita; a A
+    # tenta aprovar com o estado velho. Antes, a A sobrescrevia para `approved`. Agora o
+    # UPDATE condicional muda zero linhas e a A perde a corrida.
+    await init_db()
+    aid = await _criar(proposed_by="op@x")
+    async with session() as a:
+        # Guardar a referência importa: o mapa de identidade do SQLAlchemy é fraco, e sem ela
+        # o objeto é coletado e a A relê o banco (aí não há estado velho e o teste não prova nada).
+        visto = await a.get(CommandApprovalRow, aid)
+        assert visto is not None and visto.status == CommandApprovalStatus.PENDING.value
+        await a.commit()  # solta o lock de leitura; o objeto velho segue no mapa da A
+        async with session() as b:
+            await service.decidir(b, aid, aprovar=False, decided_by="adm2@x")
+        with pytest.raises(service.JaDecidida):
+            await service.decidir(a, aid, aprovar=True, decided_by="adm@x")
+    async with session() as s:
+        row = await s.get(CommandApprovalRow, aid)
+        assert row is not None
+        assert row.status == CommandApprovalStatus.DENIED.value
+        assert await service.esta_aprovado(s, aid) is False
+
+
+async def test_quatro_olhos_barra_token_de_servico() -> None:
+    await init_db()
+    aid = await _criar(proposed_by="op@x")
+    async with session() as s:
+        with pytest.raises(service.QuatroOlhos):
+            await service.decidir(
+                s, aid, aprovar=True, decided_by="service@local", decided_by_is_service=True
+            )
+    # Negar continua permitido ao serviço: barrar é o lado seguro.
+    async with session() as s:
+        row = await service.decidir(
+            s, aid, aprovar=False, decided_by="service@local", decided_by_is_service=True
+        )
+        assert row.status == CommandApprovalStatus.DENIED.value
+
+
+async def test_quatro_olhos_barra_pendencia_sem_propositor() -> None:
+    await init_db()
+    async with session() as s:
+        row = await service.criar_pendencia(s, command="nmap -sV alvo.test", proposed_by=None)
+        aid = row.id
+    async with session() as s:
+        with pytest.raises(service.QuatroOlhos):
+            await service.decidir(s, aid, aprovar=True, decided_by="adm@x")
+
+
+async def test_quatro_olhos_ignora_caixa_do_email() -> None:
+    await init_db()
+    aid = await _criar(proposed_by="Mesma@X")
+    async with session() as s:
+        with pytest.raises(service.QuatroOlhos):
+            await service.decidir(s, aid, aprovar=True, decided_by="mesma@x")

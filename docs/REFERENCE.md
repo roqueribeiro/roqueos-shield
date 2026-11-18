@@ -182,7 +182,7 @@ Permission `public` means no credential; `any` means any valid credential.
 | evidence | `GET /evidence/finding/{deduped_key}` | `scans:read` | Evidence snapshots for a problem, by version and order |
 | evidence | `GET /evidence/blob/{sha256}` | `scans:read` | The evidence body, hash-verified: 410 if the body was purged, 422 if it does not match its hash |
 | evidence | `GET /evidence/bundle/{scan_id}` | `scans:read` | Zip with a manifest of hashes; a missing or corrupt body fails the whole download |
-| evidence | `POST /evidence/purge` | `config:manage` | Runs retention (`EVIDENCE_RETENTION_DAYS`): deletes the body, keeps hash and record, audits `evidence.purge` |
+| evidence | `POST /evidence/purge` | `config:manage` | Runs retention (`EVIDENCE_RETENTION_DAYS`): deletes the body, keeps hash and record, audits `evidence.purge`. A body shared with a snapshot still inside retention is kept |
 | reports | `GET /reports/{scan_id}` | `scans:read` | Technical HTML report |
 | reports | `GET /reports/{scan_id}/ai-bundle` | `scans:read` | AI Fix Bundle, schema 1.0.0 |
 | reports | `GET /reports/{scan_id}/executive` | `scans:read` | Executive HTML: risk grade A to F and compliance mapping |
@@ -192,7 +192,7 @@ Permission `public` means no credential; `any` means any valid credential.
 | audit | `GET /audit` | `audit:read` | The audit trail, newest first. Filters `action`, `actor`, `resource_id`, `authorization_ref`, `since`; `offset`, `limit` (1 to 500, default 100). Read only |
 | investigate | `POST /investigate/{finding_id}` | `scans:run`; `dry_run=false` also needs `config:manage` and `AGENT_LIVE_EXECUTION=true` | The investigation agent on one finding. Body: `instructions`, `dry_run` (default `true`), `max_steps` (default 10) |
 | approvals | `GET /approvals[?status=]` | `commands:approve` | Pending command approvals (mode `ask`), newest first; a pending request past its timeout is marked `expired` on read |
-| approvals | `POST /approvals/{id}/approve`, `POST /approvals/{id}/deny` | `commands:approve` | Decides a pending command. Four eyes (`APPROVAL_FOUR_EYES`) blocks the proposer approving their own (403); already decided or expired is 409. Audited |
+| approvals | `POST /approvals/{id}/approve`, `POST /approvals/{id}/deny` | `commands:approve` | Decides a pending command. Four eyes (`APPROVAL_FOUR_EYES`) blocks the proposer approving their own, the `APP_TOKEN` service principal, and a request with no proposer (403); already decided or expired is 409. Audited |
 | settings | `GET`/`PUT /settings/ai` | `config:manage` | Models, API base and keys. Keys are stored encrypted and never returned (`hasApiKey`). Fields set by the environment come back in `locked` |
 | settings | `POST /settings/ai/models` | `config:manage` | The models each key reaches, fetched server side |
 | settings | `GET`/`PUT /settings/scope` | `config:manage` | `labOnly`, `allowlist`, `requireAuthRef`, `allowCloudFallback`, plus `locked` |

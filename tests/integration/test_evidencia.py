@@ -77,3 +77,34 @@ def test_migration_0011_instala_trigger_append_only() -> None:
     assert "evidence_snapshots_no_update" in fonte
     assert "RAISE EXCEPTION" in fonte
     assert "BEFORE UPDATE OR DELETE ON evidence_snapshots" in fonte
+
+
+async def test_expurgo_preserva_blob_compartilhado_dentro_da_retencao(_data_dir) -> None:
+    # Dois snapshots com o MESMO corpo apontam para o mesmo blob. O velho venceu, o novo
+    # não: o arquivo tem de ficar. Um blob só do snapshot velho, sim, sai.
+    from datetime import UTC, datetime, timedelta
+
+    from orchestrator.evidence.service import expurgar_antigas
+
+    await init_db()
+    compartilhado = store.put(f"corpo compartilhado {uuid.uuid4()}")
+    so_velho = store.put(f"corpo só do velho {uuid.uuid4()}")
+    velho = datetime.now(UTC) - timedelta(days=30)
+    async with session() as s:
+        for ref, quando in (
+            (compartilhado, velho),
+            (compartilhado, datetime.now(UTC)),
+            (so_velho, velho),
+        ):
+            s.add(
+                EvidenceSnapshotRow(
+                    sha256=ref.sha256, original_sha256=ref.original_sha256, created_at=quando
+                )
+            )
+        await s.commit()
+        apagados = await expurgar_antigas(s, 7, actor="adm@x")
+
+    assert apagados >= 1
+    assert store.get(compartilhado.sha256)  # in-retention: corpo preservado
+    with pytest.raises(store.EvidenceExpurgada):
+        store.get(so_velho.sha256)

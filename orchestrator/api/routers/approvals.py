@@ -94,7 +94,12 @@ async def approve(
     """Aprova a pendência. 403 se ferir quatro olhos; 409 se já decidida ou expirada."""
     try:
         row = await service.decidir(
-            session, approval_id, aprovar=True, decided_by=principal.email, reason=body.reason
+            session,
+            approval_id,
+            aprovar=True,
+            decided_by=principal.email,
+            reason=body.reason,
+            decided_by_is_service=principal.is_service,
         )
     except service.QuatroOlhos as e:
         raise HTTPException(403, str(e)) from e

@@ -182,7 +182,7 @@ Permissão `pública` quer dizer sem credencial; `qualquer` quer dizer qualquer 
 | evidence | `GET /evidence/finding/{deduped_key}` | `scans:read` | Snapshots de evidência de um problema, por versão e ordem |
 | evidence | `GET /evidence/blob/{sha256}` | `scans:read` | O corpo da evidência, com o hash conferido: 410 se foi expurgado, 422 se não bate com o hash |
 | evidence | `GET /evidence/bundle/{scan_id}` | `scans:read` | Zip com manifesto de hashes; um corpo ausente ou corrompido derruba o download inteiro |
-| evidence | `POST /evidence/purge` | `config:manage` | Roda a retenção (`EVIDENCE_RETENTION_DAYS`): apaga o corpo, mantém hash e registro, audita `evidence.purge` |
+| evidence | `POST /evidence/purge` | `config:manage` | Roda a retenção (`EVIDENCE_RETENTION_DAYS`): apaga o corpo, mantém hash e registro, audita `evidence.purge`. Corpo compartilhado com snapshot ainda dentro da retenção fica |
 | reports | `GET /reports/{scan_id}` | `scans:read` | Relatório técnico HTML |
 | reports | `GET /reports/{scan_id}/ai-bundle` | `scans:read` | AI Fix Bundle, schema 1.0.0 |
 | reports | `GET /reports/{scan_id}/executive` | `scans:read` | HTML executivo: nota de risco de A a F e mapeamento de conformidade |
@@ -192,7 +192,7 @@ Permissão `pública` quer dizer sem credencial; `qualquer` quer dizer qualquer 
 | audit | `GET /audit` | `audit:read` | A trilha de auditoria, mais recente primeiro. Filtros `action`, `actor`, `resource_id`, `authorization_ref`, `since`; `offset`, `limit` (1 a 500, default 100). Só leitura |
 | investigate | `POST /investigate/{finding_id}` | `scans:run`; `dry_run=false` exige também `config:manage` e `AGENT_LIVE_EXECUTION=true` | O agente de investigação sobre um achado. Corpo: `instructions`, `dry_run` (default `true`), `max_steps` (default 10) |
 | approvals | `GET /approvals[?status=]` | `commands:approve` | Pendências de aprovação de comando (modo `ask`), mais recentes primeiro; pendência além do tempo limite é marcada `expired` na leitura |
-| approvals | `POST /approvals/{id}/approve`, `POST /approvals/{id}/deny` | `commands:approve` | Decide uma pendência. Quatro olhos (`APPROVAL_FOUR_EYES`) impede quem propôs de aprovar o próprio (403); já decidida ou expirada dá 409. Auditado |
+| approvals | `POST /approvals/{id}/approve`, `POST /approvals/{id}/deny` | `commands:approve` | Decide uma pendência. Quatro olhos (`APPROVAL_FOUR_EYES`) barra quem propôs, o principal de serviço do `APP_TOKEN` e pendência sem propositor (403); já decidida ou expirada dá 409. Auditado |
 | settings | `GET`/`PUT /settings/ai` | `config:manage` | Modelos, API base e chaves. Chave é gravada cifrada e nunca volta (`hasApiKey`). Campo definido pelo ambiente volta em `locked` |
 | settings | `POST /settings/ai/models` | `config:manage` | Os modelos que cada chave alcança, buscados do lado do servidor |
 | settings | `GET`/`PUT /settings/scope` | `config:manage` | `labOnly`, `allowlist`, `requireAuthRef`, `allowCloudFallback`, mais `locked` |

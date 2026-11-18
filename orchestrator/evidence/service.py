@@ -100,22 +100,44 @@ async def expurgar_antigas(session: AsyncSession, dias: int, *, actor: str | Non
     from orchestrator.audit.logger import log_audit_event
 
     limite = datetime.now(UTC) - timedelta(days=dias)
-    antigos = (
-        await session.exec(
-            select(EvidenceSnapshotRow).where(col(EvidenceSnapshotRow.created_at) < limite)
-        )
-    ).all()
+    # O blob é endereçado por conteúdo e COMPARTILHADO: dois snapshots com o mesmo corpo
+    # apontam para o mesmo arquivo. Apagar pelo snapshot velho destruía a prova de um
+    # snapshot novo, ainda dentro da retenção, com o mesmo sha256. Só sai o hash que
+    # nenhum snapshot dentro da retenção usa.
+    vencidos = set(
+        (
+            await session.exec(
+                select(EvidenceSnapshotRow.sha256).where(
+                    col(EvidenceSnapshotRow.created_at) < limite
+                )
+            )
+        ).all()
+    )
+    vivos = set(
+        (
+            await session.exec(
+                select(EvidenceSnapshotRow.sha256).where(
+                    col(EvidenceSnapshotRow.created_at) >= limite
+                )
+            )
+        ).all()
+    )
+    preservados = vencidos & vivos
     apagados = 0
-    for snap in antigos:
-        if store.purge(snap.sha256):
+    for sha in sorted(vencidos - vivos):
+        if store.purge(sha):
             apagados += 1
-    if apagados:
+    if apagados or preservados:
         await log_audit_event(
             session,
             action="evidence.purge",
             actor=actor,
             resource_type="evidence",
-            metadata={"dias": dias, "apagados": apagados},
+            metadata={
+                "dias": dias,
+                "apagados": apagados,
+                "preservados_por_referencia": len(preservados),
+            },
         )
         await session.commit()
     return apagados
