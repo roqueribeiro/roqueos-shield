@@ -170,6 +170,7 @@ Permission `public` means no credential; `any` means any valid credential.
 | targets | `POST /targets` | `scans:run` | Registers a target (`asset_type`, `value`, `criticality`, `contains_pii`, `label`, `metadata`); validated against the scope |
 | targets | `POST /targets/check` | `scans:run` | Says whether a target passes the scope, without creating it |
 | targets | `GET /targets`, `GET /targets/{id}` | `scans:read` | List and detail |
+| assets | `GET /assets[?asset_type=&q=]`, `GET /assets/{id}` | `scans:read` | Cross-scan asset inventory: list, and detail with observations (one per scan, carrying that scan's coverage) and linked findings. Written by the pipeline; read only here |
 | scans | `POST /scans` | `scans:run` | Starts a scan (202). Body below |
 | scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | List (last 100) and detail |
 | scans | `DELETE /scans/{id}` | `scans:run` | Deletes the scan, its findings and AI runs; audits first |

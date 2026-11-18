@@ -99,6 +99,10 @@ class Finding(BaseModel):
 
     id: UUID = Field(default_factory=uuid4)
     scan_id: UUID
+    # Ativo (inventário entre scans) a que este achado pertence. Preenchido pelo
+    # pipeline DEPOIS do dedup, a partir de `target` (ver orchestrator/domain/assets.py).
+    # Não entra na `deduped_key` — a identidade do problema não muda por causa do ativo.
+    asset_id: UUID | None = None
 
     target: Target
     source_tool: str = Field(description="nmap | zap | nuclei | trivy | greenbone | ...")

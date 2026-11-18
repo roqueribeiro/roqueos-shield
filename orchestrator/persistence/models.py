@@ -131,6 +131,9 @@ class FindingRow(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     scan_id: UUID = Field(foreign_key="scans.id", index=True)
     target_id: UUID = Field(foreign_key="targets.id", index=True)
+    # Ativo do inventário (Frente A). Opcional: findings antigos e scans sem
+    # agregação de ativo ficam com None. Preenchido no pipeline após o dedup.
+    asset_id: UUID | None = Field(default=None, foreign_key="assets.id", index=True)
     deduped_key: str = Field(index=True)
     source_tool: str = Field(index=True)
     source_rule_id: str | None = None
@@ -171,6 +174,52 @@ class FindingStatusRow(SQLModel, table=True):
     last_severity: str | None = Field(default=None, index=True)
     last_title: str | None = None
     target_value: str | None = Field(default=None, index=True)
+
+
+class AssetRow(SQLModel, table=True):
+    """Ativo do inventário, persistente ENTRE scans (Frente A).
+
+    A identidade é `asset_key` — determinística (`orchestrator.domain.assets.asset_key`),
+    no mesmo molde da `Finding.deduped_key`: o mesmo host/porta/URL em dois scans tem a
+    MESMA `asset_key`, então a linha é reusada (upsert) e o `id` UUID permanece estável.
+    Por isso o finding aponta para `assets.id` e o id sobrevive entre scans — o que muda é
+    só `last_seen`/`last_scan_id`. `first_seen` nunca é reescrito.
+    """
+
+    __tablename__ = "assets"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    # Identidade determinística (sha256[:32]). Única: é por ela que o upsert acha a linha.
+    asset_key: str = Field(index=True, unique=True)
+    asset_type: str = Field(index=True)  # host|url|port|image|repo|domain|k8s_resource
+    value: str = Field(index=True)  # valor normalizado do alvo (host:porta/proto, URL, ...)
+    label: str | None = None
+    first_seen: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
+    last_seen: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
+    # Scan em que foi visto por último — âncora para "sumiu" vs "não verificado".
+    last_scan_id: UUID | None = Field(default=None, foreign_key="scans.id", index=True)
+    technologies: list[str] = Field(default_factory=list, sa_type=JSON)
+    # Texto livre (banner, título) passa pelo scrubber ANTES de entrar aqui.
+    metadata_json: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
+
+
+class AssetObservationRow(SQLModel, table=True):
+    """Uma observação de um ativo num scan específico (Frente A).
+
+    Uma linha por (ativo, scan): é o registro de que aquele scan VIU aquele ativo.
+    A ausência de linha para um scan, combinada com a cobertura do scan
+    (`ScanRow.scanners_ran`/`scanners_skipped`), é o que distingue "sumiu" de
+    "não verificado" — ver `orchestrator.domain.assets.classificar_presenca`.
+    """
+
+    __tablename__ = "asset_observations"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    asset_id: UUID = Field(foreign_key="assets.id", index=True)
+    scan_id: UUID = Field(foreign_key="scans.id", index=True)
+    observed_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
+    source_tool: str | None = Field(default=None, index=True)  # quem viu (nmap, zap, ...)
+    metadata_json: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
 
 
 class UserRow(SQLModel, table=True):

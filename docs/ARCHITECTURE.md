@@ -59,7 +59,7 @@ Outside the boundary: the **targets**, of seven asset types (`host`, `url`, `dom
 | --- | --- | --- |
 | orchestrator | `docker/images/orchestrator/Dockerfile` | FastAPI on `:8080`. Validates scope, writes the audit record, enqueues the job, streams progress over SSE, serves the web UI |
 | worker | same image, `arq orchestrator.jobs.queue.WorkerSettings` | Runs `run_scan_job` and `run_exposure_job`: executes the adapters, calls the LLM, writes the report |
-| postgres | `postgres:16-alpine` | `targets`, `scans`, `findings`, `finding_status`, `users`, `ai_runs`, `audit_log`, `app_settings`. SQLite in dev and in the default standalone |
+| postgres | `postgres:16-alpine` | `targets`, `scans`, `findings`, `finding_status`, `assets`, `asset_observations`, `users`, `ai_runs`, `audit_log`, `app_settings`. SQLite in dev and in the default standalone |
 | redis | `redis:7-alpine` | The `arq` queue |
 | zap | `zaproxy/zap-stable` | DAST. Spider and passive scan; active scan only with the `full` or `active` profile |
 | trivy | `aquasec/trivy` in server mode | Container images and repository dependencies |
@@ -79,7 +79,7 @@ The split that matters is **orchestrator versus worker**: the same image with a 
 
 | Module | What lives there |
 | --- | --- |
-| `api/routers/` | 14 routers: `targets`, `scans`, `findings`, `reports`, `exposure`, `investigate`, `health`, `ui`, `users`, `auth`, `conta`, `settings`, `system`, `mcp`. The contract is frozen in `docs/openapi.json` and checked by `scripts/openapi_snapshot.py --check` |
+| `api/routers/` | 15 routers: `targets`, `assets`, `scans`, `findings`, `reports`, `exposure`, `investigate`, `health`, `ui`, `users`, `auth`, `conta`, `settings`, `system`, `mcp`. The contract is frozen in `docs/openapi.json` and checked by `scripts/openapi_snapshot.py --check` |
 | `api/deps.py` | `get_principal`: resolves `X-API-Token` (service or per-user token), `Authorization: Bearer` (OIDC session) or the `rs_session` cookie of the web UI, and `require_permission` for RBAC |
 | `domain/schemas.py` | `Target`, `Finding`, `AITriage`, `RawResults`, `AssetType`. `Finding.deduped_key` is `sha256(target::rule[::discriminator])[:32]` |
 | `domain/target_validator.py` | The scope gate (section 10) |
@@ -90,7 +90,7 @@ The split that matters is **orchestrator versus worker**: the same image with a 
 | `adapters/` | 15 adapters implementing the `ScannerAdapter` Protocol of `adapters/base.py` |
 | `ai/` | `gateway.py` (litellm), `analyzer.py` (triage), `agentic/` (the investigation loop and its leash), `observability.py` (log ring buffer and SSE) |
 | `reporting/` | `renderer.py` (technical and executive HTML), `compliance.py` (OWASP, PCI DSS, LGPD), `exporters/ai_bundle.py`, `exporters/defectdojo.py` |
-| `persistence/` | SQLModel models and the Alembic migrations `0001` to `0009` |
+| `persistence/` | SQLModel models and the Alembic migrations `0001` to `0010` |
 | `audit/logger.py` | `log_audit_event`, append-only |
 | `standalone/` | The supervisor and first-boot secrets of the single-container image (section 11) |
 
@@ -177,8 +177,10 @@ Then the API answers `202`, `arq` enqueues `run_scan_job` (job id `scan-<uuid>`)
 | `dedup` | `heuristic_dedup` |
 | `ai_triage` | `triage_batch` on every finding, low and info included (section 7) |
 | `reporting` | The technical HTML is rendered **before** persistence, on purpose: its path has to exist to be written on the scan row, or `GET /reports/{id}` returns 404 |
-| `persisting` | `_persist_findings`: findings, coverage, errors, final state |
+| `persisting` | `_persist_findings`: findings, coverage, errors, final state, and the asset inventory |
 | `done` or `failed` | `failed` when scanners were skipped and none ran |
+
+**The asset inventory** (`domain/assets.py`, `assets` and `asset_observations`, `GET /assets`) persists what the engagement sees **across** scans. Each finding carries the asset it is about in its own `target` (nmap emits a `port` asset, ZAP a `url`), so `_persist_findings` reads that structured identity, upserts one row per asset keyed by a deterministic `asset_key` (same host, port or URL in two scans is the same row, same stable id), records one observation per scan, and sets `FindingRow.asset_id`. The silence contract applies: an asset absent from a later scan is "disappeared" only if a scanner that sees that asset type ran; with that scanner skipped it is "not verified", never "gone" (`classificar_presenca`). The cross-scan verdict itself is served by the diff (Frente B); the inventory is the data it stands on.
 
 **Outputs.** The technical HTML (written to `REPORTS_DIR`, `GET /reports/{id}`), the executive HTML (built on request, `GET /reports/{id}/executive`, with a coverage block before the posture grade), the compliance JSON (`GET /reports/{id}/compliance`: OWASP Top 10 2021, PCI DSS 4.0, LGPD, CWE Top 25 and a posture grade A to F that is never better than D with an open critical) and the AI Fix Bundle (`GET /reports/{id}/ai-bundle`, schema 1.0.0, see [AI-FIX-BUNDLE](AI-FIX-BUNDLE.md)). PDF, Markdown and CSV are built in the browser by the web UI from the bundle (`web/src/utils/pentest/`); the orchestrator has a `render_pdf()` that nothing calls.
 

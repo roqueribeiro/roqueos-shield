@@ -23,6 +23,9 @@ from fastapi.staticfiles import StaticFiles
 from orchestrator import __version__
 from orchestrator.ai.observability import log_processor
 from orchestrator.api.routers import (
+    assets as assets_router,
+)
+from orchestrator.api.routers import (
     audit as audit_router,
 )
 from orchestrator.api.routers import (
@@ -191,6 +194,7 @@ app = FastAPI(
 )
 
 app.include_router(targets_router.router)
+app.include_router(assets_router.router)  # /assets (inventário entre scans, scans:read)
 app.include_router(scans_router.router)
 app.include_router(findings_router.router)
 app.include_router(reports_router.router)

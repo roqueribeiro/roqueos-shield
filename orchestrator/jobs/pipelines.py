@@ -727,11 +727,18 @@ async def _persist_findings(
         s.add(existing_scan)
         await s.flush()
 
+        # Inventário de ativos (Frente A): upsert dos ativos vistos e preenche
+        # f.asset_id a partir do target de cada finding, ANTES de gravar os FindingRow.
+        from orchestrator.domain.assets import registrar_ativos
+
+        await registrar_ativos(s, scan_id, target, findings)
+
         for f in findings:
             s.add(
                 FindingRow(
                     scan_id=scan_id,
                     target_id=target_row.id,
+                    asset_id=f.asset_id,
                     deduped_key=f.deduped_key,
                     source_tool=f.source_tool,
                     source_rule_id=f.source_rule_id,

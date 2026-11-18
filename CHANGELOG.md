@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Inventário de ativos entre scans** (Frente A): tabelas `assets` e `asset_observations`, campo `asset_id` no `Finding` e no `FindingRow`, e as rotas `GET /assets` e `GET /assets/{id}` (`scans:read`). O ativo tem identidade determinística (`asset_key`), persiste entre scans e cada achado aponta para o seu. Vale o contrato do silêncio: ausência num scan posterior só é "sumiu" se um scanner que vê o tipo rodou, senão é "não verificado" (`orchestrator/domain/assets.py`). Migration `0010`. O veredito cross-scan (diff) vem na Frente B.
+
 ## [0.5.2] - 2026-11-08
 
 ### Changed (breaking)
