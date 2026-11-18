@@ -170,7 +170,7 @@ Permissão `pública` quer dizer sem credencial; `qualquer` quer dizer qualquer 
 | targets | `POST /targets` | `scans:run` | Registra um alvo (`asset_type`, `value`, `criticality`, `contains_pii`, `label`, `metadata`); validado contra o escopo |
 | targets | `POST /targets/check` | `scans:run` | Diz se o alvo passa no escopo, sem criar nada |
 | targets | `GET /targets`, `GET /targets/{id}` | `scans:read` | Lista e detalhe |
-| assets | `GET /assets[?asset_type=&q=]`, `GET /assets/{id}` | `scans:read` | Inventário de ativos entre scans: lista, e detalhe com observações (uma por scan, carregando a cobertura daquele scan) e findings ligados. Escrito pelo pipeline; aqui só leitura |
+| inventory | `GET /inventory[?asset_type=&q=]`, `GET /inventory/{id}` | `scans:read` | Inventário de ativos entre scans: lista, e detalhe com observações (uma por scan, carregando a cobertura daquele scan) e findings ligados. Escrito pelo pipeline; aqui só leitura |
 | scans | `POST /scans` | `scans:run` | Dispara um scan (202). Corpo abaixo |
 | scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | Lista (últimos 100) e detalhe |
 | scans | `DELETE /scans/{id}` | `scans:run` | Apaga o scan, os achados e as chamadas de IA; audita antes |

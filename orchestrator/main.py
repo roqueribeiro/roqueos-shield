@@ -200,7 +200,7 @@ app = FastAPI(
 )
 
 app.include_router(targets_router.router)
-app.include_router(assets_router.router)  # /assets (inventário entre scans, scans:read)
+app.include_router(assets_router.router)  # /inventory (inventário entre scans, scans:read)
 app.include_router(scans_router.router)
 app.include_router(findings_router.router)
 app.include_router(evidence_router.router)  # /evidence (write-once; scans:read, purge config)

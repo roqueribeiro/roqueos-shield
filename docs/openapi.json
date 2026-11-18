@@ -2500,159 +2500,6 @@
         ]
       }
     },
-    "/assets": {
-      "get": {
-        "description": "Inventário, visto por último primeiro. Exige `scans:read`.",
-        "operationId": "list_assets_assets_get",
-        "parameters": [
-          {
-            "description": "host|url|port|image|repo|domain|k8s",
-            "in": "query",
-            "name": "asset_type",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "host|url|port|image|repo|domain|k8s",
-              "title": "Asset Type"
-            }
-          },
-          {
-            "description": "substring do valor do ativo",
-            "in": "query",
-            "name": "q",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "substring do valor do ativo",
-              "title": "Q"
-            }
-          },
-          {
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "minimum": 0,
-              "title": "Offset",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 100,
-              "maximum": 500,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AssetPage"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "ApiToken": []
-          },
-          {
-            "Sessao": []
-          }
-        ],
-        "summary": "List Assets",
-        "tags": [
-          "assets"
-        ]
-      }
-    },
-    "/assets/{asset_id}": {
-      "get": {
-        "description": "Um ativo, com observações (uma por scan, com a cobertura do scan) e findings ligados.",
-        "operationId": "get_asset_assets__asset_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "asset_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Asset Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AssetDetailOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "ApiToken": []
-          },
-          {
-            "Sessao": []
-          }
-        ],
-        "summary": "Get Asset",
-        "tags": [
-          "assets"
-        ]
-      }
-    },
     "/audit": {
       "get": {
         "description": "A trilha, mais recente primeiro. Exige `audit:read` (papéis `auditor` e `admin`).",
@@ -3648,6 +3495,159 @@
         "summary": "Health Full",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/inventory": {
+      "get": {
+        "description": "Inventário, visto por último primeiro. Exige `scans:read`.",
+        "operationId": "list_assets_inventory_get",
+        "parameters": [
+          {
+            "description": "host|url|port|image|repo|domain|k8s",
+            "in": "query",
+            "name": "asset_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "host|url|port|image|repo|domain|k8s",
+              "title": "Asset Type"
+            }
+          },
+          {
+            "description": "substring do valor do ativo",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "substring do valor do ativo",
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "List Assets",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/inventory/{asset_id}": {
+      "get": {
+        "description": "Um ativo, com observações (uma por scan, com a cobertura do scan) e findings ligados.",
+        "operationId": "get_asset_inventory__asset_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Get Asset",
+        "tags": [
+          "inventory"
         ]
       }
     },

@@ -1,7 +1,7 @@
 """Assets router: leitura do inventário de ativos (Frente A), só leitura.
 
 O inventário é escrito pelo pipeline (`_persist_findings` → `domain.assets.registrar_ativos`);
-aqui só se lê. `GET /assets` lista o que o engagement conhece entre scans; `GET /assets/{id}`
+aqui só se lê. `GET /inventory` lista o que o engagement conhece entre scans; `GET /inventory/{id}`
 abre um ativo com as observações (um scan cada, com a cobertura daquele scan) e os findings
 ligados a ele.
 
@@ -28,7 +28,11 @@ from orchestrator.persistence.models import (
     ScanRow,
 )
 
-router = APIRouter(prefix="/assets", tags=["assets"])
+# Prefixo `/inventory`, NÃO `/assets`: a tela standalone é montada em `/` e o build do
+# Vite serve o JS/CSS em `/assets/*`. Uma rota de API em `/assets/{id}` captura o pedido
+# do bundle antes do StaticFiles (401 JSON no lugar do JavaScript) e a tela não carrega.
+# O teste `test_rotas_nao_colidem_com_estaticos_da_tela` trava isso.
+router = APIRouter(prefix="/inventory", tags=["inventory"])
 
 
 class AssetOut(BaseModel):
