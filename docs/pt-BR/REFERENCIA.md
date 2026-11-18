@@ -170,18 +170,18 @@ Permissão `pública` quer dizer sem credencial; `qualquer` quer dizer qualquer 
 | targets | `POST /targets` | `scans:run` | Registra um alvo (`asset_type`, `value`, `criticality`, `contains_pii`, `label`, `metadata`); validado contra o escopo |
 | targets | `POST /targets/check` | `scans:run` | Diz se o alvo passa no escopo, sem criar nada |
 | targets | `GET /targets`, `GET /targets/{id}` | `scans:read` | Lista e detalhe |
-| inventory | `GET /inventory[?asset_type=&q=]`, `GET /inventory/{id}` | `scans:read` | Inventário de ativos entre scans: lista, e detalhe com observações (uma por scan, carregando a cobertura daquele scan) e findings ligados. Escrito pelo pipeline; aqui só leitura |
+| inventory | `GET /inventory[?asset_type=&q=]`, `GET /inventory/{id}` | `scans:read` | Inventário de ativos entre scans: lista (`q` é trecho, sem diferenciar maiúsculas), e detalhe com observações (uma por scan, com a cobertura daquele scan para o tipo do ativo) e findings ligados. Escrito pelo pipeline; aqui só leitura |
 | scans | `POST /scans` | `scans:run` | Dispara um scan (202). Corpo abaixo |
 | scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | Lista (últimos 100) e detalhe |
-| scans | `DELETE /scans/{id}` | `scans:run` | Apaga o scan, os achados e as chamadas de IA; audita antes |
+| scans | `DELETE /scans/{id}` | `scans:run` | Apaga o scan, os achados, as chamadas de IA e as observações de ativo (os ativos ficam); audita antes. Scan `pending` ou `running` responde 409 |
 | findings | `GET /findings` | `scans:read` | Filtros `scan_id`, `severity`, `source_tool`, `limit`, `offset` |
 | findings | `GET /findings/{id}` | `scans:read` | Um achado |
 | findings | `GET /findings/queue` | `scans:read` | Fila de problemas únicos por `deduped_key`, severidade primeiro (`status`, `min_severity`, `source_tool`) |
 | findings | `GET /findings/summary` | `scans:read` | Contagem por severidade e status |
 | findings | `POST /findings/resolve` | `scans:run` | Define o status de um problema: `open`, `in_progress`, `resolved`, `false_positive`, `wont_fix`, `risk_accepted` |
 | evidence | `GET /evidence/finding/{deduped_key}` | `scans:read` | Snapshots de evidência de um problema, por versão e ordem |
-| evidence | `GET /evidence/blob/{sha256}` | `scans:read` | O corpo da evidência, com o hash conferido: 410 se foi expurgado, 422 se não bate com o hash |
-| evidence | `GET /evidence/bundle/{scan_id}` | `scans:read` | Zip com manifesto de hashes; um corpo ausente ou corrompido derruba o download inteiro |
+| evidence | `GET /evidence/blob/{sha256}` | `scans:read`; original cifrado exige também `config:manage` | O corpo da evidência, com o hash conferido: 410 se foi expurgado, 422 se não bate com o hash ou se o sha é mal formado. Ler um original cifrado fica na trilha (`evidence.read_original`) |
+| evidence | `GET /evidence/bundle/{scan_id}` | `scans:read` | Zip com manifesto de hashes; um corpo ausente ou corrompido derruba o download inteiro. Uma entrada por corpo distinto; acima de 5.000 corpos ou 256 MB responde 413 |
 | evidence | `POST /evidence/purge` | `config:manage` | Roda a retenção (`EVIDENCE_RETENTION_DAYS`): apaga o corpo, mantém hash e registro, audita `evidence.purge`. Corpo compartilhado com snapshot ainda dentro da retenção fica |
 | reports | `GET /reports/{scan_id}` | `scans:read` | Relatório técnico HTML |
 | reports | `GET /reports/{scan_id}/ai-bundle` | `scans:read` | AI Fix Bundle, schema 1.0.0 |
@@ -191,7 +191,7 @@ Permissão `pública` quer dizer sem credencial; `qualquer` quer dizer qualquer 
 | exposure | `POST /exposure/scan` | `scans:run` | Enfileira o pipeline OSINT (`company_name`, `domains`, `github_orgs`, `dorks`). Grava `exposure.scan` na trilha de auditoria antes de enfileirar |
 | audit | `GET /audit` | `audit:read` | A trilha de auditoria, mais recente primeiro. Filtros `action`, `actor`, `resource_id`, `authorization_ref`, `since`; `offset`, `limit` (1 a 500, default 100). Só leitura |
 | investigate | `POST /investigate/{finding_id}` | `scans:run`; `dry_run=false` exige também `config:manage` e `AGENT_LIVE_EXECUTION=true` | O agente de investigação sobre um achado. Corpo: `instructions`, `dry_run` (default `true`), `max_steps` (default 10) |
-| approvals | `GET /approvals[?status=]` | `commands:approve` | Pendências de aprovação de comando (modo `ask`), mais recentes primeiro; pendência além do tempo limite é marcada `expired` na leitura |
+| approvals | `GET /approvals[?status=&offset=&limit=]` | `commands:approve` | Aprovações de comando (modo `ask`), mais recentes primeiro, paginadas (`limit` de 1 a 500, padrão 100); pendência além do tempo limite é marcada `expired` na leitura. Ainda não ligado à execução: veja a seção 8 da ARQUITETURA |
 | approvals | `POST /approvals/{id}/approve`, `POST /approvals/{id}/deny` | `commands:approve` | Decide uma pendência. Quatro olhos (`APPROVAL_FOUR_EYES`) barra quem propôs, o principal de serviço do `APP_TOKEN` e pendência sem propositor (403); já decidida ou expirada dá 409. Auditado |
 | settings | `GET`/`PUT /settings/ai` | `config:manage` | Modelos, API base e chaves. Chave é gravada cifrada e nunca volta (`hasApiKey`). Campo definido pelo ambiente volta em `locked` |
 | settings | `POST /settings/ai/models` | `config:manage` | Os modelos que cada chave alcança, buscados do lado do servidor |

@@ -213,7 +213,7 @@ async def decidir(
         approval_id,
         para=CommandApprovalStatus.APPROVED if aprovar else CommandApprovalStatus.DENIED,
         decided_by=decided_by,
-        reason=reason,
+        reason=scrub(reason) if reason else None,
         no_prazo=True,
     )
     if not mudou:

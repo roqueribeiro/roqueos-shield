@@ -21,6 +21,7 @@ from sqlalchemy import func
 from sqlmodel import col, select
 
 from orchestrator.api.deps import Principal, RequireScansRead, SessionDep
+from orchestrator.domain.assets import cobertura_do_tipo
 from orchestrator.persistence.models import (
     AssetObservationRow,
     AssetRow,
@@ -105,7 +106,11 @@ async def list_assets(
     if asset_type:
         stmt = stmt.where(AssetRow.asset_type == asset_type)
     if q:
-        stmt = stmt.where(col(AssetRow.value).contains(q))
+        # ILIKE com escape: `contains` vira LIKE, que ignora maiúsculas no SQLite e
+        # diferencia no Postgres (a mesma busca dava resultados diferentes em dev e em
+        # produção), e `%`/`_` na busca viravam curinga.
+        padrao = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        stmt = stmt.where(col(AssetRow.value).ilike(f"%{padrao}%", escape="\\"))
 
     total = (await session.exec(select(func.count()).select_from(stmt.subquery()))).one()
     page = (
@@ -145,8 +150,12 @@ async def get_asset(
     observations: list[ObservationOut] = []
     for o in obs_rows:
         scan = await session.get(ScanRow, o.scan_id)
-        # Cobertura completa quando o scan não pulou scanner nenhum.
-        coverage_complete = bool(scan is not None and not (scan.scanners_skipped or {}))
+        # Cobertura PARA O TIPO deste ativo: rodou quem o enxerga e nenhum dos que o
+        # enxergam foi pulado. "O scan não pulou nada" dizia `true` também para um scan
+        # sem scanner aplicável ao tipo, que não viu coisa alguma.
+        coverage_complete = scan is not None and cobertura_do_tipo(
+            row.asset_type, list(scan.scanners_ran or []), dict(scan.scanners_skipped or {})
+        )
         observations.append(
             ObservationOut(
                 scan_id=o.scan_id,

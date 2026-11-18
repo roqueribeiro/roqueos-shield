@@ -211,6 +211,39 @@ jobs:
       - name: pytest
         run: pytest --cov=orchestrator --cov-report=term-missing --cov-fail-under=64
 
+  postgres-real:
+    name: Postgres real (migrations, travas, concorrência)
+    runs-on: ubuntu-latest
+    # A suíte padrão roda em SQLite: schema saído dos modelos, sem FK forçada, sem os
+    # triggers append-only (Postgres-only) e com escritas serializadas. Este job prova o
+    # que só o Postgres prova: migrations == modelos (alembic check), audit_log e
+    # evidence_snapshots recusando UPDATE/DELETE, DELETE de scan com as FKs, decisões
+    # simultâneas numa aprovação e scans simultâneos no mesmo ativo novo. Foi por ele que
+    # apareceram o drift de índices (0013) e o savepoint que não isolava o insert.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cai
+          POSTGRES_PASSWORD: cai
+          POSTGRES_DB: cai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cai -d cai"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ROQUESHIELD_PG_TEST_URL: postgresql+asyncpg://cai:cai@127.0.0.1:5432/cai
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+      - name: Testes contra Postgres
+        run: uv run --frozen --extra dev pytest tests/postgres -q -p no:cacheprovider
+
   build-image:
     name: Build orchestrator image
     runs-on: ubuntu-latest

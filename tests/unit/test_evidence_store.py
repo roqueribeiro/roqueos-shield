@@ -72,7 +72,10 @@ def test_modo_cifrado_guarda_ciphertext_sem_plaintext(_data_dir, monkeypatch) ->
     assert b"banco.com.br" not in gravado
     # O ciphertext decifra de volta ao ORIGINAL (o modo cifrado preserva, não redige).
     assert Fernet(chave.encode()).decrypt(gravado).decode() == corpo
-    assert ref.original_sha256 == hashlib.sha256(corpo.encode()).hexdigest()
+    # Proveniência é HMAC com chave do servidor, nunca o SHA-256 puro do original (que
+    # deixaria descobrir o PII redigido por força bruta).
+    assert ref.original_sha256.startswith("hmac-sha256:v1:")
+    assert hashlib.sha256(corpo.encode()).hexdigest() not in ref.original_sha256
 
 
 def test_ler_claro_decifra_o_original(_data_dir, monkeypatch) -> None:

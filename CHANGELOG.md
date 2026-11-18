@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Proveniência da evidência é HMAC, não SHA-256 puro.** O `original_sha256` era o hash sem chave do corpo original, que só difere do redigido nos campos de baixa entropia (CPF, PAN, CVV): dava para descobrir o dado redigido por força bruta. Agora é `hmac-sha256:v1:` com chave derivada da `SECRETS_KEY` (vazio sem ela).
+- **O scrubber roda antes do corte em 16 KB.** Cortar antes deixava o começo de um token ou de um PAN, curto demais para as regex, em claro no disco.
+- **Ler o original cifrado exige `config:manage`** e fica na trilha (`evidence.read_original`); antes qualquer `scans:read` recebia o original com PII sem registro.
+- **O valor do ativo passa pelo scrubber** antes de virar chave e de ir ao banco (uma URL com `?cpf=` ou `?access_token=` chegava ao inventário em claro e sobrevivia ao delete do scan).
+- **`ALLOW_INSECURE_APP_TOKEN` só libera o token de exemplo.** Antes ele desligava todas as checagens de boot, inclusive o `REQUIRE_IMMUTABLE_AUDIT`. O boot também recusa `EVIDENCE_ENCRYPT_ORIGINAL=true` sem `SECRETS_KEY`.
+
+### Fixed
+
+- **Uma falha no inventário ou na captura de evidência não apaga mais os findings do scan.** Sem savepoint, um erro de banco invalidava a sessão, o commit final falhava e o scan terminava com 0 findings preso em `running`. A falha agora vai para os `errors` do scan.
+- **Corrida no insert de ativo** (savepoint que não isolava): o `add` ficava fora do `begin_nested()`, que faz flush antes de abrir o savepoint, e dois scans no mesmo ativo novo derrubavam um deles. Achado pelo teste contra Postgres real.
+- **Migration `0013`: índices que os modelos declaravam e as migrations nunca criaram** (`findings.scan_id`, `findings.target_id`, `scans.target_id`, `scans.current_phase`, e dois das frentes novas). O schema de produção divergia do standalone.
+- O alvo do scan não conta mais como visto quando nenhum scanner que enxerga o tipo dele rodou; `coverage_complete` do inventário é por tipo de ativo; a busca `/inventory?q=` ignora maiúsculas nos dois bancos e escapa `%` e `_`.
+- Expurgo: poupa blob tocado na última hora (captura em curso), reconfere antes de apagar e audita mesmo se falhar no meio. Dois workers gravando o mesmo blob não se atropelam mais no arquivo temporário.
+- Bundle sem blob repetido e com teto (413 acima de 5.000 corpos ou 256 MB); `sha256` validado na rota.
+- `DELETE /scans/{id}` de scan em andamento responde 409 (o worker recriava o scan apagado); `GET /approvals` paginado; `reason` da decisão limitado a 2.000 caracteres e redigido.
+
 ### Added
+
+- **Testes contra Postgres real** (`tests/postgres/`) e o job de CI "Postgres real (migrations, travas, concorrência)".
 
 - **Inventário de ativos entre scans** (Frente A): tabelas `assets` e `asset_observations`, campo `asset_id` no `Finding` e no `FindingRow`, e as rotas `GET /inventory` e `GET /inventory/{id}` (`scans:read`). O ativo tem identidade determinística (`asset_key`), persiste entre scans e cada achado aponta para o seu. Vale o contrato do silêncio: ausência num scan posterior só é "sumiu" se um scanner que vê o tipo rodou, senão é "não verificado" (`orchestrator/domain/assets.py`). Migration `0010`. O veredito cross-scan (diff) vem na Frente B.
 - **Aprovação humana por comando** (Frente E, modo `ask`): tabela `command_approvals`, permissão nova `commands:approve` (só ADMIN) e as rotas `GET /approvals`, `POST /approvals/{id}/approve` e `/deny`. A coleira decide primeiro; o que passa vira pendência que uma pessoa aprova ou nega. Tempo limite **nega** (`APPROVAL_TIMEOUT_SECONDS`, fecha fechado); quatro olhos impede quem propôs de aprovar o próprio (`APPROVAL_FOUR_EYES`, ligado). Cada decisão na trilha de auditoria. Sem juiz LLM. Migration `0012`. Mudança aditiva em `roles.py`/`deps.py`, sem remover nenhum gate existente.

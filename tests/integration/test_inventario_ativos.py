@@ -45,7 +45,7 @@ async def test_inventario_liga_finding_ao_ativo_e_cria_host_e_porta() -> None:
     f1 = _finding_porta(scan1)
 
     async with session() as s:
-        await registrar_ativos(s, scan1, alvo, [f1])
+        await registrar_ativos(s, scan1, alvo, [f1], scanners_ran=["nmap"])
         await s.commit()
 
     # O finding sai com asset_id setado (o ativo do seu próprio target: a porta).
@@ -66,7 +66,13 @@ async def test_asset_key_estavel_entre_dois_scans_do_mesmo_alvo() -> None:
     # Scan 1
     scan1 = uuid.uuid4()
     async with session() as s:
-        await registrar_ativos(s, scan1, alvo, [_finding_porta(scan1, host="10.0.0.2", porta=22)])
+        await registrar_ativos(
+            s,
+            scan1,
+            alvo,
+            [_finding_porta(scan1, host="10.0.0.2", porta=22)],
+            scanners_ran=["nmap"],
+        )
         await s.commit()
     async with session() as s:
         ativo1 = (await s.exec(select(AssetRow).where(AssetRow.asset_key == chave_porta))).one()
@@ -75,7 +81,13 @@ async def test_asset_key_estavel_entre_dois_scans_do_mesmo_alvo() -> None:
     # Scan 2, mesmo alvo e mesma porta
     scan2 = uuid.uuid4()
     async with session() as s:
-        await registrar_ativos(s, scan2, alvo, [_finding_porta(scan2, host="10.0.0.2", porta=22)])
+        await registrar_ativos(
+            s,
+            scan2,
+            alvo,
+            [_finding_porta(scan2, host="10.0.0.2", porta=22)],
+            scanners_ran=["nmap"],
+        )
         await s.commit()
 
     async with session() as s:
