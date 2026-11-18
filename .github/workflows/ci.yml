@@ -267,7 +267,11 @@ jobs:
   # e2e reprova no "desativar" (medido em 2026-11-06).
   web:
     name: Tela standalone (build + e2e)
-    runs-on: ubuntu-latest
+    # Fixado no 24.04, não `ubuntu-latest`: o runner latest virou Ubuntu 26.04 e o
+    # Playwright 1.60 não instala o Chromium nele ("Playwright does not support chromium
+    # on ubuntu26.04-x64"), então o job quebrava antes de rodar um teste, em qualquer PR.
+    # Volta para latest quando o Playwright do web/ suportar o 26.04.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
