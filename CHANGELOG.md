@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **O ruleset offline do semgrep na imagem é só de segurança.** Os diretórios por linguagem traziam boa prática, desempenho, manutenção, correção e compatibilidade, e a produção marcava como MEDIUM código correto (`use-raise-for-status` num controle limpo). A régua noturna do shield central pegou a divergência com o CI, que mede pelos pacotes de segurança do registry: falso positivo de SAST 1 contra 0 na linha de base.
 - **`llm_local` no `/health/full` manda a chave.** O gateway OpenAI-compatível pode exigir a `LLM_API_KEY` até para listar modelos (o proxy LiteLLM exige), e o painel mostrava a IA `down` com a triagem funcionando. Um 401/403 agora diz que foi a credencial.
 
 ## [0.7.0] - 2026-11-19
