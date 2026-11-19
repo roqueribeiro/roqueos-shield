@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`ai` no `POST /scans`** (`roqueshield scan code --no-ai`, `scan_code` com `ai: false`): pula a triagem de IA, com a determinística mantida. O gate decide por severidade e linha de base; esperar o LLM triar 346 achados passou de 30 min no shield central.
 - **Cliente atrás do Cloudflare Access.** `roqueshield` (CLI e MCP stdio) manda `CF-Access-Client-Id` e `CF-Access-Client-Secret` quando `CF_ACCESS_CLIENT_ID` e `CF_ACCESS_CLIENT_SECRET` estão no ambiente: é como um CI de fora da rede alcança um shield publicado por hostname protegido.
 
 ### Fixed

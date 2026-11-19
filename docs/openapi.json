@@ -1809,6 +1809,12 @@
             ],
             "title": "Actor"
           },
+          "ai": {
+            "default": true,
+            "description": "Triagem de IA dos achados. `false` pula a IA (a triagem determinística continua): para gate de CI ou de agente, que decide por severidade e linha de base, e não pode esperar o LLM triar centenas de achados.",
+            "title": "Ai",
+            "type": "boolean"
+          },
           "auth": {
             "anyOf": [
               {

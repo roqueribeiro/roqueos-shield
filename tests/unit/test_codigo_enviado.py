@@ -661,3 +661,26 @@ def test_reescrever_alvo_tira_o_commit_da_fotografia_da_chave(tmp_path: Path) ->
         f = Finding.model_validate(f.model_dump())
         chaves.append(codigo.reescrever_alvo([f], raiz, alvo)[0].deduped_key)
     assert chaves[0] == chaves[1]
+
+
+async def test_scan_com_ai_false_pula_a_ia_no_worker(fila: dict[str, Any]) -> None:
+    # Mutação: não repassar `skip_ai` ao job -> o gate de CI espera o LLM triar centenas
+    # de achados (medido no shield central: 346 achados, mais de 30 min) e estoura.
+    envio = await _envio("loja-ia")
+    async with _como(Role.OPERATOR) as c:
+        r = await c.post(
+            "/scans",
+            json={
+                "target_id": envio["target_id"],
+                "code_upload_id": envio["upload_id"],
+                "ai": False,
+            },
+        )
+    assert r.status_code == 202, r.text
+    assert fila["skip_ai"] is True
+    envio2 = await _envio("loja-ia")
+    async with _como(Role.OPERATOR) as c:
+        await c.post(
+            "/scans", json={"target_id": envio2["target_id"], "code_upload_id": envio2["upload_id"]}
+        )
+    assert fila["skip_ai"] is False  # o padrão continua com IA

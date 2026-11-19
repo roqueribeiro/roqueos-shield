@@ -77,7 +77,7 @@ Sem nenhum deles, sai com 2 e `sem servidor ou token: rode roqueshield login --s
 | `login --server/-s URL [--token T]` | Confere o token contra `GET /auth/session` e grava servidor e token. Sem `--token`, pergunta sem eco | qualquer token válido |
 | `status` | Versão, quem está logado, e o `GET /health/full` por componente | qualquer token válido |
 | `scan start ALVO [opções]` | Registra o alvo (`POST /targets`) e dispara o scan (`POST /scans`) | `scans:run` |
-| `scan code [PASTA] [--project/-p NOME] [--auth-ref R] [--fail-on high] [--all-findings] [--wait/--no-wait]` | Empacota a pasta (padrão: a atual) do jeito que o git a commitaria agora: arquivos rastreados mais os não rastreados que o `.gitignore` não ignora, nunca `.git/`, sem symlinks. Envia (`POST /code/{projeto}/uploads`), dispara o scan e, com `--wait` (padrão), sai pelo veredito do gate: 0 aprovado, 1 um achado **novo** no `--fail-on` ou acima (`--all-findings` conta os conhecidos também), 3 não medido. O projeto tem como padrão o nome da pasta; mantenha o mesmo em todo upload para o gate saber o que é novo | `scans:run` |
+| `scan code [PASTA] [--project/-p NOME] [--auth-ref R] [--fail-on high] [--all-findings] [--ai/--no-ai] [--wait/--no-wait]` | Empacota a pasta (padrão: a atual) do jeito que o git a commitaria agora: arquivos rastreados mais os não rastreados que o `.gitignore` não ignora, nunca `.git/`, sem symlinks. Envia (`POST /code/{projeto}/uploads`), dispara o scan e, com `--wait` (padrão), sai pelo veredito do gate: 0 aprovado, 1 um achado **novo** no `--fail-on` ou acima (`--all-findings` conta os conhecidos também), 3 não medido. O projeto tem como padrão o nome da pasta; mantenha o mesmo em todo upload para o gate saber o que é novo | `scans:run` |
 | `gate SCAN_ID [--fail-on high] [--all-findings]` | O veredito do gate de um scan terminado (`GET /scans/{id}/gate`), com os mesmos códigos de saída do `scan code` | `scans:read` |
 | `scan watch SCAN_ID [--fail-on S] [--intervalo 5.0] [--prazo 7200.0]` | Acompanha um scan até o fim e sai pelo contrato de códigos | `scans:read` |
 | `scan list [--limit 20]` | Os scans mais recentes | `scans:read` |
@@ -220,6 +220,7 @@ Corpo do `POST /scans` (`ScanIn`):
 | `auth` | `null` | `{headers: {...}, openapi_url}` para scan autenticado. O valor dos headers nunca chega à tabela `scans`; vai só no job e sai redigido na auditoria |
 | `authorization_ref` | `null` | Obrigatório (403) com `REQUIRE_AUTH_REF=true` |
 | `actor` | `null` | Aceito e não usado: o ator na auditoria é a identidade autenticada |
+| `ai` | `true` | `false` pula a triagem de IA (a determinística continua). Para gate de CI ou de agente, que decide por severidade e linha de base e não pode esperar o LLM triar centenas de achados |
 | `code_upload_id` | `null` | O `upload_id` do `POST /code/{projeto}/uploads`. Obrigatório quando o alvo é `code://<projeto>` (422 sem ele, 422 para upload de outro projeto, 404 para um já usado ou expirado) e recusado para qualquer outro alvo. Alvo sem código fecharia o scan com zero achados |
 
 Alvo e `openapi_url` fora do escopo: 403 `target rejeitado pela policy: <motivo>`.
@@ -243,7 +244,7 @@ Um núcleo de protocolo (`orchestrator/cliente/mcp_nucleo.py`, escrito à mão: 
 | `get_ai_bundle` | `scan_id` | A mesma regra do `get_findings`, com o bundle parcial |
 | `list_targets` | nenhum | Alvos registrados |
 | `gate_verdict` | `scan_id`, `fail_on` (padrão `high`), `all_findings` | O veredito do gate (`GET /scans/{id}/gate`). `nao_medido` e `em_andamento` voltam com `isError: true`, para que o agente nunca os leia como "nada bloqueando" |
-| `scan_code` | `path` (absoluto), `project`, `authorization_ref`, `fail_on`, `wait_seconds` (0 a 1800) | **Só no stdio**: ele lê o disco de quem chama, que o servidor HTTP não enxerga. Empacota e envia a pasta como o `roqueshield scan code` e dispara o scan; com `wait_seconds`, espera e devolve o veredito do gate. Aparece com as ações ligadas ou não, porque escanear o próprio código não toca alvo de terceiro; o servidor continua exigindo `scans:run` e, com `REQUIRE_AUTH_REF`, a referência |
+| `scan_code` | `path` (absoluto), `project`, `authorization_ref`, `fail_on`, `wait_seconds` (0 a 1800), `ai` (padrão `true`) | **Só no stdio**: ele lê o disco de quem chama, que o servidor HTTP não enxerga. Empacota e envia a pasta como o `roqueshield scan code` e dispara o scan; com `wait_seconds`, espera e devolve o veredito do gate. Aparece com as ações ligadas ou não, porque escanear o próprio código não toca alvo de terceiro; o servidor continua exigindo `scans:run` e, com `REQUIRE_AUTH_REF`, a referência |
 | `start_scan` | `target`, `authorization_ref` (3+ caracteres, obrigatório), `asset_type` (`url`, `domain`, `host`, `port`, `image`, `repo`), `profile` (`web`, `network`, `full`, `active`, `exposure`) | Só aparece com as ações ligadas. Registra o alvo e dispara o scan sob o RBAC do token |
 
 As `instructions` do servidor dizem ao agente: `Zero achado só é limpo com coverage_complete=true`.
