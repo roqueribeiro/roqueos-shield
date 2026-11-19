@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FileSystemLoader
 
+from orchestrator.domain.redacao import finding_redigido
 from orchestrator.domain.schemas import Finding, Severity
 
 if TYPE_CHECKING:
@@ -68,8 +69,10 @@ _env.filters["selectattr_severity"] = _selectattr_severity
 def render_html(result: ScanResult, out_path: Path) -> Path:
     """Relatório técnico HTML (template default)."""
 
+    # O HTML fica gravado em disco e é servido por GET /reports/{id}: evidência redigida.
     sorted_findings = sorted(
-        result.findings, key=lambda f: _SEVERITY_ORDER.get(Severity(_effective_severity(f)), 99)
+        (finding_redigido(f) for f in result.findings),
+        key=lambda f: _SEVERITY_ORDER.get(Severity(_effective_severity(f)), 99),
     )
 
     counts = {sev.value: 0 for sev in Severity}

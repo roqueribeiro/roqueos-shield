@@ -116,3 +116,24 @@ async def run_exposure_job(
         "errors": result.errors,
         "report_path": str(result.report_path) if result.report_path else None,
     }
+
+
+async def evidence_retention_job(ctx: dict[str, Any]) -> int:
+    """Retenção de evidência agendada (cron diário do worker).
+
+    Antes a retenção só rodava se alguém chamasse `POST /evidence/purge`: quem configurava
+    `EVIDENCE_RETENTION_DAYS=90` achava que ela estava em vigor sem estar. Com 0 (o
+    padrão) não faz nada. O expurgo em si é o mesmo da rota: apaga o corpo, mantém hash e
+    registro, audita `evidence.purge` com o ator `retention-job`.
+    """
+    from orchestrator.config import settings
+    from orchestrator.evidence.service import expurgar_antigas
+    from orchestrator.persistence.db import session
+
+    dias = settings.EVIDENCE_RETENTION_DAYS
+    if dias <= 0:
+        return 0
+    async with session() as s:
+        apagados = await expurgar_antigas(s, dias, actor="retention-job")
+    log.info("evidence.retention_done", dias=dias, apagados=apagados)
+    return apagados

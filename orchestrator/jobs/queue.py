@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import structlog
+from arq import cron
 from arq.connections import RedisSettings
 
 from orchestrator.config import settings
@@ -51,9 +52,22 @@ class WorkerSettings:
     # `workers` (evita o ciclo queue<->workers) sem quebrar arq >=0.26 (0.28
     # falhava: `'classmethod' object is not iterable`).
     functions: list[Callable[..., Awaitable[Any]]] = []
+    # Retenção de evidência: uma vez por dia, de madrugada (03:17 UTC, fora da hora
+    # cheia para não coincidir com outros crons). Com EVIDENCE_RETENTION_DAYS=0 o job
+    # roda e não faz nada.
+    cron_jobs: list[Any] = []
 
 
 # Bind após a definição da classe + do módulo: o late import de `workers` roda
 # com `queue` já totalmente carregado, então qualquer import indireto de volta
 # pra `queue` encontra todos os nomes resolvidos.
 WorkerSettings.functions = _functions()
+
+
+def _crons() -> list[Any]:
+    from orchestrator.jobs import workers
+
+    return [cron(workers.evidence_retention_job, hour={3}, minute={17}, run_at_startup=False)]
+
+
+WorkerSettings.cron_jobs = _crons()

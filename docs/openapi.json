@@ -7,6 +7,11 @@
             "title": "Command",
             "type": "string"
           },
+          "command_redacted": {
+            "default": false,
+            "title": "Command Redacted",
+            "type": "boolean"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -470,6 +475,19 @@
           }
         },
         "title": "AuthContext",
+        "type": "object"
+      },
+      "CommandOut": {
+        "properties": {
+          "command": {
+            "title": "Command",
+            "type": "string"
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "title": "CommandOut",
         "type": "object"
       },
       "DecisionIn": {
@@ -1688,6 +1706,27 @@
             ],
             "title": "Authorization Ref"
           },
+          "coverage_complete": {
+            "default": false,
+            "title": "Coverage Complete",
+            "type": "boolean"
+          },
+          "coverage_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Note"
+          },
+          "coverage_state": {
+            "default": "desconhecida",
+            "title": "Coverage State",
+            "type": "string"
+          },
           "errors": {
             "items": {
               "type": "string"
@@ -1726,6 +1765,22 @@
               }
             ],
             "title": "Report Path"
+          },
+          "scanners_ran": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Scanners Ran",
+            "type": "array"
+          },
+          "scanners_skipped": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "title": "Scanners Skipped",
+            "type": "object"
           },
           "started_at": {
             "anyOf": [
@@ -2469,6 +2524,58 @@
           }
         ],
         "summary": "Approve",
+        "tags": [
+          "approvals"
+        ]
+      }
+    },
+    "/approvals/{approval_id}/command": {
+      "get": {
+        "description": "O comando EXATO que vai rodar, sem redação, para quem aprova. Exige\n`commands:approve`; a leitura do original fica na trilha (`command.read`). 409 se o\ncomando tem trechos redigidos e o original não foi guardado (sem SECRETS_KEY).",
+        "operationId": "read_command_approvals__approval_id__command_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Read Command",
         "tags": [
           "approvals"
         ]

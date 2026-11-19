@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Aprovação presa ao comando exato, com consumo único.** A aprovação valia para o `approval_id`, não para o comando: quem aprovava via o texto redigido pelo scrubber (que pode esconder trecho executável) e a execução podia rodar outro comando, ou o mesmo várias vezes. Agora a pendência guarda o HMAC do comando original, a execução chama `consumir(approval_id, comando)` (`approved -> consumed` atômico, só com o comando idêntico), quem aprova lê o original em `GET /approvals/{id}/command` (auditado como `command.read`), e aprovar um comando redigido cujo original não foi guardado é recusado. Migration `0014`.
+- **Evidência redigida também em `findings.payload` e no relatório técnico HTML.** O armazém de blobs já era redigido, mas a evidência crua do scanner ia para o banco e para o HTML gravado em disco.
+
 - **Proveniência da evidência é HMAC, não SHA-256 puro.** O `original_sha256` era o hash sem chave do corpo original, que só difere do redigido nos campos de baixa entropia (CPF, PAN, CVV): dava para descobrir o dado redigido por força bruta. Agora é `hmac-sha256:v1:` com chave derivada da `SECRETS_KEY` (vazio sem ela).
 - **O scrubber roda antes do corte em 16 KB.** Cortar antes deixava o começo de um token ou de um PAN, curto demais para as regex, em claro no disco.
 - **Ler o original cifrado exige `config:manage`** e fica na trilha (`evidence.read_original`); antes qualquer `scans:read` recebia o original com PII sem registro.
@@ -17,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`GET /scans` expõe a cobertura** (`scanners_ran`, `scanners_skipped`, `coverage_state`, `coverage_complete`, `coverage_note`). Quem integra pela API REST via `state=done` com zero achados e não tinha como distinguir alvo limpo de scanner que não rodou: a cobertura só chegava à tela e ao bundle.
+- **A retenção de evidência roda sozinha**, uma vez por dia no worker (`evidence_retention_job`). Antes só rodava se alguém chamasse `POST /evidence/purge`.
 - **Uma falha no inventário ou na captura de evidência não apaga mais os findings do scan.** Sem savepoint, um erro de banco invalidava a sessão, o commit final falhava e o scan terminava com 0 findings preso em `running`. A falha agora vai para os `errors` do scan.
 - **Corrida no insert de ativo** (savepoint que não isolava): o `add` ficava fora do `begin_nested()`, que faz flush antes de abrir o savepoint, e dois scans no mesmo ativo novo derrubavam um deles. Achado pelo teste contra Postgres real.
 - **Migration `0013`: índices que os modelos declaravam e as migrations nunca criaram** (`findings.scan_id`, `findings.target_id`, `scans.target_id`, `scans.current_phase`, e dois das frentes novas). O schema de produção divergia do standalone.

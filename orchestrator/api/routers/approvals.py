@@ -30,6 +30,9 @@ class ApprovalOut(BaseModel):
     reference_type: str
     reference_id: UUID | None
     command: str
+    # O texto acima foi redigido? Então quem aprova lê o original em
+    # GET /approvals/{id}/command antes de decidir.
+    command_redacted: bool = False
     proposed_by: str | None
     status: str
     decided_by: str | None
@@ -50,6 +53,7 @@ def _to_out(r: CommandApprovalRow) -> ApprovalOut:
         reference_type=r.reference_type,
         reference_id=r.reference_id,
         command=r.command,
+        command_redacted=r.command_redacted,
         proposed_by=r.proposed_by,
         status=r.status,
         decided_by=r.decided_by,
@@ -113,6 +117,8 @@ async def approve(
         )
     except service.QuatroOlhos as e:
         raise HTTPException(403, str(e)) from e
+    except service.ComandoIndisponivel as e:
+        raise HTTPException(409, str(e)) from e
     except service.Expirada as e:
         raise HTTPException(409, str(e)) from e
     except service.JaDecidida as e:
@@ -141,3 +147,25 @@ async def deny(
     except service.AprovacaoError as e:
         raise HTTPException(404, str(e)) from e
     return _to_out(row)
+
+
+class CommandOut(BaseModel):
+    command: str
+
+
+@router.get("/{approval_id}/command", response_model=CommandOut)
+async def read_command(
+    approval_id: UUID,
+    session: SessionDep,
+    principal: Principal = RequireCommandsApprove,
+) -> CommandOut:
+    """O comando EXATO que vai rodar, sem redação, para quem aprova. Exige
+    `commands:approve`; a leitura do original fica na trilha (`command.read`). 409 se o
+    comando tem trechos redigidos e o original não foi guardado (sem SECRETS_KEY)."""
+    try:
+        texto = await service.ler_comando_original(session, approval_id, actor=principal.email)
+    except service.ComandoIndisponivel as e:
+        raise HTTPException(409, str(e)) from e
+    except service.AprovacaoError as e:
+        raise HTTPException(404, str(e)) from e
+    return CommandOut(command=texto)
