@@ -268,6 +268,8 @@ O `scripts/release-docker.sh` não é gate para rodar antes de um pull request. 
 | `secrets` | gitleaks no histórico inteiro, com `.gitleaks.toml` | sempre |
 | `self-scan` | Semgrep (`p/security-audit`, `p/secrets`) sobre `orchestrator/` e `scripts/` | sempre |
 | `efetividade` | `tests/integration/test_efetividade_e2e.py` com semgrep e checkov instalados | sempre |
+| `regua-deteccao` | `scripts/regua.py deteccao --exigir-scanners` com semgrep, checkov e gitleaks (checksum conferido) instalados | sempre |
+| `regua-mutacao` | `scripts/regua.py mutacao --postgres` contra um serviço Postgres | sempre |
 | `typecheck` | `mypy orchestrator` em modo strict, mypy pinado no extra dev | sempre |
 | `test` | pytest com `--cov-fail-under=64` | sempre |
 | `web` | idade do lock, `yarn install --frozen-lockfile`, `yarn build`, Playwright, `scripts/web_e2e.sh` | sempre |

@@ -146,10 +146,27 @@ When the executor changes, the proof required at closing is a test showing the l
 | --- | --- | --- |
 | **silencio** (`scripts/check_no_silence.py`) | fails an empty `except` in the scan lifecycle, a `poll` that decides by `task.done()`, a fabricated success payload, and a persistence that does not record coverage | four plantings, all `exit 1`; the gate's own bypasses are tests in `test_gate_do_silencio.py` |
 | **efetividade** (`tests/integration/test_efetividade_e2e.py`) | builds a repository with known defects and requires a real finding from each layer | with `--config auto`, SAST does not run and the gate fails |
+| **regua-deteccao** (`scripts/regua.py deteccao --exigir-scanners`) | measures HOW MUCH the tool finds and where it is wrong: recall per layer, false positives on clean controls and CWE classification, against a ground truth, with a ratchet baseline | removing `eval` from the ground truth's SAST-07 drops recall to 90%; a planted alarm on a clean file gives 1 false positive; dropping the semgrep CWE fix drops classification to 90%; checkov missing makes the layer "not measured" |
+| **regua-mutacao** (`scripts/regua.py mutacao --postgres`) | undoes each critical control from `tests/regua/mutacoes.yaml` and requires the test that claims to protect it to fail | a mutation that escapes, or a catalog snippet that no longer exists in the code, fails |
 | **docs** (`scripts/check_docs_fresh.py`) | every buildable scanner appears in the docs, the adapter count is right, every `Settings` field is in `.env.example`, nothing is called "stub" that already runs, the doc pairs and links resolve | an undocumented scanner, a `Settings` field missing from `.env.example`, a doc calling the agent a stub |
 | **postgres-real** (`tests/postgres/`, job "Postgres real") | what SQLite cannot prove: migrations equal the models (`alembic check`), `audit_log` and `evidence_snapshots` refuse UPDATE and DELETE, scan DELETE with the foreign keys enforced, concurrent decisions on one approval, concurrent scans on the same new asset. Locally: `ROQUESHIELD_PG_TEST_URL=postgresql+asyncpg://... uv run pytest tests/postgres` | it found the index drift fixed by migration `0013` and a savepoint that did not isolate the asset insert; with the `add` moved back outside the savepoint, it fails 4 out of 4 runs |
 
 The gate is the floor, not the ceiling. A check that has never failed is not a check: before declaring a gate done, break it on purpose and confirm that it fails.
+
+### The effectiveness ruler
+
+Green tests prove each fix works; they do not say how good the result is. The ruler (`orchestrator/regua/`, `scripts/regua.py`, `tests/regua/`) measures two things:
+
+1. **Detection.** `tests/regua/gabaritos/repo_sintetico.yaml` lists 19 planted defects (10 SAST, 5 IaC, 4 secrets generated at run time and committed to a real git history, since gitleaks scans history) and 7 clean controls (parameterized SQL, `subprocess` with a list, `yaml.safe_load`). A defect only counts if a scanner of its layer fires on its file for the right reason (CWE or rule pattern). Any alarm on a clean file is a false positive. A correct detection with the wrong CWE counts as detected but not as classified, because the CWE is what feeds the OWASP/PCI/LGPD mapping. A layer whose scanner did not run is `not measured`, never zero and never a hundred.
+2. **The tests themselves.** `tests/regua/mutacoes.yaml` is a catalog of critical controls (savepoints, scrub before the cut, HMAC provenance, four eyes, atomic consumption, retention schedule, CWE fix). Each entry undoes one control and runs the test that claims to protect it, which must fail.
+
+```bash
+uv run --frozen --extra dev python scripts/regua.py deteccao                 # local: warns when a layer is not measured
+uv run --frozen --extra dev python scripts/regua.py deteccao --exigir-scanners  # CI: an unmeasured layer fails
+uv run --frozen --extra dev python scripts/regua.py mutacao                  # add --postgres with ROQUESHIELD_PG_TEST_URL
+```
+
+The baseline (`tests/regua/linha_de_base.json`) is a ratchet: `--atualizar` only records an improvement; recording a worse result means editing the file by hand, with the reason in the commit. Measured on 2026-11-18: SAST recall 100% (10/10) and classification 100%, IaC 100% (5/5), secrets 100% (4/4), 0 false positives. Locally without checkov the IaC layer prints `NÃO MEDIDA` instead of passing, the same rule the silence contract applies to scanners.
 
 ## 12. What to run, by target type
 

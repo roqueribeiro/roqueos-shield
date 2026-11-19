@@ -1,0 +1,253 @@
+# Régua dos testes: catálogo de mutações dos controles críticos.
+#
+# Cada entrada desfaz UM controle (troca `de` por `para` no arquivo) e roda o teste que
+# diz protegê-lo; o teste TEM de reprovar. `python scripts/regua.py mutacao` mede o
+# placar e reprova se alguma mutação escapar, ou se o trecho `de` não existir mais (o
+# código mudou e o catálogo não acompanhou: régua velha também é régua quebrada).
+#
+# Ao adicionar um controle crítico, entre aqui com ele. Ao refatorar um controle, o
+# catálogo reprova até o trecho ser atualizado: é de propósito.
+mutacoes:
+  # ======================================================== pipeline e persistência
+  - id: M-PIPE-01
+    controle: falha de banco na evidência não apaga os findings (savepoint)
+    arquivo: orchestrator/jobs/pipelines.py
+    de: "async with s.begin_nested():\n                    await capturar_evidencias("
+    para: "if True:\n                    await capturar_evidencias("
+    teste: tests/integration/test_revisao_frentes_ace.py -k falha_de_banco_na_evidencia
+  - id: M-PIPE-02
+    controle: falha de banco no inventário não apaga os findings (savepoint)
+    arquivo: orchestrator/jobs/pipelines.py
+    de: "async with s.begin_nested():\n                await registrar_ativos("
+    para: "if True:\n                await registrar_ativos("
+    teste: tests/integration/test_revisao_frentes_ace.py -k falha_de_banco_no_inventario
+  - id: M-PIPE-03
+    controle: evidência redigida no findings.payload
+    arquivo: orchestrator/jobs/pipelines.py
+    de: payload=finding_redigido(f).model_dump(mode="json")
+    para: payload=f.model_dump(mode="json")
+    teste: tests/integration/test_limites_resolvidos.py -k payload_do_finding
+  - id: M-REL-01
+    controle: evidência redigida no relatório técnico HTML
+    arquivo: orchestrator/reporting/renderer.py
+    de: (finding_redigido(f) for f in result.findings)
+    para: (f for f in result.findings)
+    teste: tests/integration/test_limites_resolvidos.py -k relatorio_html
+  - id: M-SCAN-01
+    controle: scan em andamento não pode ser apagado (409)
+    arquivo: orchestrator/api/routers/scans.py
+    de: "    if scan.state in (ScanState.PENDING.value, ScanState.RUNNING.value):"
+    para: "    if False:"
+    teste: tests/integration/test_revisao_frentes_ace.py -k em_andamento_nao_pode
+  - id: M-SCAN-02
+    controle: GET /scans expõe a cobertura
+    arquivo: orchestrator/api/routers/scans.py
+    de: |-
+                coverage_complete=cob["completa"],
+    para: ""
+    teste: tests/integration/test_limites_resolvidos.py -k expoe_a_cobertura
+  - id: M-FIND-01
+    controle: GET /findings devolve o asset_id
+    arquivo: orchestrator/api/routers/findings.py
+    de: |-
+                asset_id=r.asset_id,
+    para: ""
+    teste: tests/integration/test_revisao_frentes_ace.py -k findings_expoe_o_asset_id
+
+  # ======================================================== inventário de ativos
+  - id: M-ATIVO-01
+    controle: alvo não conta como visto se nenhum scanner que o enxerga rodou
+    arquivo: orchestrator/domain/assets.py
+    de: "    if scanner_viu_o_tipo(target.asset_type.value, scanners_ran):"
+    para: "    if True:"
+    teste: tests/integration/test_revisao_frentes_ace.py -k ninguem_que_o_enxerga
+  - id: M-ATIVO-02
+    controle: valor do ativo passa pelo scrubber
+    arquivo: orchestrator/domain/assets.py
+    de: "    limpo = scrub(value)\n"
+    para: "    limpo = value\n"
+    teste: tests/integration/test_revisao_frentes_ace.py -k valor_do_ativo_passa
+  - id: M-ATIVO-03
+    controle: cobertura do inventário é por tipo de ativo
+    arquivo: orchestrator/domain/assets.py
+    de: "    return bool(veem & set(scanners_ran)) and not (veem & set(scanners_skipped))"
+    para: "    return not scanners_skipped"
+    teste: tests/integration/test_revisao_frentes_ace.py -k cobertura_e_por_tipo
+  - id: M-ATIVO-04
+    controle: ausência é "não verificado" quando quem enxerga o tipo não rodou
+    arquivo: orchestrator/domain/assets.py
+    de: "    if veem & set(scanners_ran):\n        return \"disappeared\""
+    para: "    if True:\n        return \"disappeared\""
+    teste: tests/unit/test_assets.py -k not_verified
+  - id: M-ATIVO-05
+    controle: busca do inventário com ILIKE e escape
+    arquivo: orchestrator/api/routers/assets.py
+    de: 'stmt = stmt.where(col(AssetRow.value).ilike(f"%{padrao}%", escape="\\"))'
+    para: 'stmt = stmt.where(col(AssetRow.value).contains(q))'
+    teste: tests/integration/test_revisao_frentes_ace.py -k busca_no_inventario
+  - id: M-ATIVO-06
+    controle: insert de ativo dentro do savepoint (corrida entre scans)
+    requer: postgres
+    arquivo: orchestrator/domain/assets.py
+    de: "async with session.begin_nested():\n                    novo = AssetRow("
+    para: "if True:\n                    novo = AssetRow("
+    teste: tests/postgres -k simultaneos_nao_derruba
+
+  # ======================================================== evidência
+  - id: M-EV-01
+    controle: corpo redigido ANTES do corte
+    arquivo: orchestrator/evidence/store.py
+    de: '        gravado = _cortar(scrub(text), max_chars).encode("utf-8", "replace")'
+    para: '        gravado = scrub(_cortar(text, max_chars)).encode("utf-8", "replace")'
+    teste: tests/integration/test_revisao_frentes_ace.py -k corte_acontece_depois
+  - id: M-EV-02
+    controle: corpo passa pelo scrubber antes de gravar
+    arquivo: orchestrator/evidence/store.py
+    de: '        gravado = _cortar(scrub(text), max_chars).encode("utf-8", "replace")'
+    para: '        gravado = _cortar(text, max_chars).encode("utf-8", "replace")'
+    teste: tests/unit/test_evidence_store.py -k redige_corpo
+  - id: M-EV-03
+    controle: toda leitura confere o hash
+    arquivo: orchestrator/evidence/store.py
+    de: "    if real != sha256:"
+    para: "    if False:"
+    teste: tests/unit/test_evidence_store.py -k confere_hash
+  - id: M-EV-04
+    controle: proveniência é HMAC, nunca SHA-256 puro
+    arquivo: orchestrator/evidence/store.py
+    de: '    return "hmac-sha256:v1:" + hmac.new(k, original, hashlib.sha256).hexdigest()'
+    para: '    return hashlib.sha256(original).hexdigest()'
+    teste: tests/integration/test_revisao_frentes_ace.py -k proveniencia_e_hmac
+  - id: M-EV-05
+    controle: temporário único por escrita de blob
+    arquivo: orchestrator/evidence/store.py
+    de: '        tmp = destino.with_name(f".{destino.name}.{os.getpid()}.{uuid4().hex}.tmp")'
+    para: '        tmp = destino.with_suffix(".tmp")'
+    teste: tests/integration/test_revisao_frentes_ace.py -k escritas_simultaneas
+  - id: M-EV-06
+    controle: sha do caminho validado (defesa em profundidade)
+    arquivo: orchestrator/evidence/store.py
+    de: "    if not _SHA256.fullmatch(sha256):"
+    para: "    if False:"
+    teste: tests/integration/test_revisao_frentes_ace.py -k sha_invalido_nao_vira
+  - id: M-EV-07
+    controle: expurgo poupa blob tocado há pouco (captura em curso)
+    arquivo: orchestrator/evidence/service.py
+    de: "            if store.tocado_ha_menos_de(sha, _JANELA_DE_CAPTURA_S):"
+    para: "            if False:"
+    teste: tests/integration/test_revisao_frentes_ace.py -k poupa_blob_tocado
+  - id: M-EV-08
+    controle: expurgo audita mesmo quando falha no meio
+    arquivo: orchestrator/evidence/service.py
+    de: "    finally:\n        # Audita SEMPRE"
+    para: "    else:\n        # Audita SEMPRE"
+    teste: tests/integration/test_revisao_frentes_ace.py -k falha_no_meio_ainda_audita
+  - id: M-EV-09
+    controle: bundle sem corpo repetido
+    arquivo: orchestrator/api/routers/evidence.py
+    de: "    unicos = list({snap.sha256: snap for snap in snaps}.values())"
+    para: "    unicos = list(snaps)"
+    teste: tests/integration/test_revisao_frentes_ace.py -k nao_repete_blob
+  - id: M-EV-10
+    controle: original cifrado só com config:manage
+    arquivo: orchestrator/api/routers/evidence.py
+    de: "    if snap.encrypted and not has_permission(principal.role, Permission.CONFIG_MANAGE):"
+    para: "    if False:"
+    teste: tests/integration/test_revisao_frentes_ace.py -k original_cifrado_exige
+  - id: M-EV-11
+    controle: bundle empacota os bytes armazenados (hash bate com o manifesto)
+    arquivo: orchestrator/api/routers/evidence.py
+    de: "                data = store.get(snap.sha256)"
+    para: "                data = store.ler_claro(snap.sha256, encrypted=snap.encrypted)"
+    teste: tests/integration/test_evidence_bundle.py
+  - id: M-EV-12
+    controle: migration instala o trigger write-once de evidence_snapshots
+    arquivo: orchestrator/persistence/migrations/versions/0011_evidence_store.py
+    de: "            \"BEFORE UPDATE OR DELETE ON evidence_snapshots \""
+    para: "            \"BEFORE INSERT ON evidence_snapshots \""
+    teste: tests/integration/test_evidencia.py -k trigger_append_only
+
+  # ======================================================== aprovação humana
+  - id: M-AP-01
+    controle: transição de aprovação atômica (WHERE status = pending)
+    arquivo: orchestrator/approvals/service.py
+    de: |-
+                .where(col(CommandApprovalRow.status) == CommandApprovalStatus.PENDING.value)
+    para: ""
+    teste: tests/integration/test_aprovacao.py -k corrida_negar_e_aprovar
+  - id: M-AP-02
+    # Duas camadas: a checagem antecipada em `decidir` e o `expires_at >= agora` do
+    # UPDATE atômico. Tirar só uma é mutante equivalente (a régua mostrou: ESCAPOU),
+    # por isso as duas saem juntas.
+    controle: tempo limite nega (checagem antecipada e condição atômica)
+    arquivo: orchestrator/approvals/service.py
+    trocas:
+      - de: "    if _vencida(row):\n        await _expirar("
+        para: "    if False:\n        await _expirar("
+      - de: "col(CommandApprovalRow.expires_at) >= agora\n"
+        para: "col(CommandApprovalRow.expires_at).is_not(None)\n"
+    teste: tests/integration/test_aprovacao.py -k tempo_limite_nega
+  - id: M-AP-03
+    controle: quatro olhos barra o token de serviço
+    arquivo: orchestrator/approvals/service.py
+    de: "    if decided_by_is_service:"
+    para: "    if False:"
+    teste: tests/integration/test_aprovacao.py -k barra_token_de_servico
+  - id: M-AP-04
+    controle: quatro olhos barra o próprio propositor
+    arquivo: orchestrator/approvals/service.py
+    de: "    if not aprovador or aprovador == propositor:"
+    para: "    if False:"
+    teste: tests/integration/test_aprovacao.py -k barra_proponente
+  - id: M-AP-05
+    controle: consumo só com o comando exato (HMAC)
+    arquivo: orchestrator/approvals/service.py
+    de: |-
+                .where(col(CommandApprovalRow.command_hmac) == hmac_do_comando(command))
+    para: ""
+    teste: tests/integration/test_limites_resolvidos.py -k comando_exato
+  - id: M-AP-06
+    controle: não aprova comando redigido sem o original guardado
+    arquivo: orchestrator/approvals/service.py
+    de: "        if row.command_redacted and not row.command_enc:"
+    para: "        if False:"
+    teste: tests/integration/test_limites_resolvidos.py -k redigido_sem_o_original
+  - id: M-AP-07
+    controle: leitura do comando original fica na trilha
+    arquivo: orchestrator/approvals/service.py
+    de: '        action="command.read",'
+    para: '        action="command.lido_sem_trilha",'
+    teste: tests/integration/test_limites_resolvidos.py -k le_o_original
+  - id: M-AP-08
+    controle: reason da decisão é redigido
+    arquivo: orchestrator/approvals/service.py
+    de: "reason=scrub(reason) if reason else None,"
+    para: "reason=reason,"
+    teste: tests/integration/test_revisao_frentes_ace.py -k reason_da_aprovacao
+  - id: M-AP-09
+    controle: consumo simultâneo da mesma aprovação, só um ganha
+    requer: postgres
+    arquivo: orchestrator/approvals/service.py
+    de: "        .where(col(CommandApprovalRow.status) == CommandApprovalStatus.APPROVED.value)\n"
+    para: ""
+    teste: tests/postgres -k consumo_simultaneo
+
+  # ======================================================== boot, retenção, classificação
+  - id: M-BOOT-01
+    controle: escape do token não desliga as outras checagens de boot
+    arquivo: orchestrator/config.py
+    de: "    if not s.ALLOW_INSECURE_APP_TOKEN and s.APP_TOKEN.strip().lower() in _INSECURE_APP_TOKENS:"
+    para: "    if s.ALLOW_INSECURE_APP_TOKEN:\n        return errors\n    if s.APP_TOKEN.strip().lower() in _INSECURE_APP_TOKENS:"
+    teste: tests/integration/test_revisao_frentes_ace.py -k escape_do_token
+  - id: M-RET-01
+    controle: retenção agendada no worker
+    arquivo: orchestrator/jobs/queue.py
+    de: "    return [cron(workers.evidence_retention_job, hour={3}, minute={17}, run_at_startup=False)]"
+    para: "    return []"
+    teste: tests/integration/test_limites_resolvidos.py -k agendada_no_worker
+  - id: M-CWE-01
+    controle: injeção de SQL do semgrep sai com a CWE-89
+    arquivo: orchestrator/adapters/semgrep_adapter.py
+    de: 'cwe=_corrigir_cwes(check_id, _extract_cwes(meta.get("cwe"))),'
+    para: 'cwe=_extract_cwes(meta.get("cwe")),'
+    teste: tests/unit/test_semgrep_cwe.py

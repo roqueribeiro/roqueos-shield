@@ -146,6 +146,9 @@ packages = ["orchestrator"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+# Código vulnerável DE PROPÓSITO: é o gabarito da régua de detecção (como um DVWA). O
+# lint de segurança reprovaria exatamente o que ele existe para plantar.
+extend-exclude = ["tests/regua/repo_sintetico"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "S"]

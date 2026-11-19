@@ -63,6 +63,25 @@ _CONFIDENCE_MAP: dict[str, Confidence] = {
 }
 _CWE_RE = re.compile(r"CWE-\d+")
 
+# Regras de pacote cuja metadata traz a CWE errada para o defeito que elas pegam. A
+# CWE vira a categoria OWASP/PCI/LGPD do relatório de compliance: uma injeção de SQL
+# classificada como "conversão de tipo" (o que o pacote declara para tainted-sql-string)
+# some da linha A03 do relatório do banco. Achado pela régua de detecção
+# (tests/regua/), item SAST-02. Só entram correções confirmadas, pelo id da regra.
+_CWE_CORRETA_POR_REGRA: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"(tainted-sql-string|formatted-sql-query|sql-injection)"), "CWE-89"),
+)
+
+
+def _corrigir_cwes(check_id: str, cwes: list[str]) -> list[str]:
+    """Garante a CWE do defeito quando a metadata da regra vem errada. A CWE certa vai
+    na FRENTE (é a que o mapeamento de compliance lê primeiro); as do pacote ficam."""
+    for padrao, cwe in _CWE_CORRETA_POR_REGRA:
+        if padrao.search(check_id) and cwe not in cwes:
+            return [cwe, *cwes]
+    return cwes
+
+
 # Os mesmos packs do job `self-scan` do CI: o que a ferramenta roda contra o código
 # dos outros é o que ela roda contra si mesma. Usados quando NÃO há ruleset local —
 # exigem alcançar o registry da Semgrep.
@@ -352,7 +371,7 @@ class SemgrepAdapter:
                     target=Target(asset_type=AssetType.REPO, value=f"{path}:{line}"),
                     source_tool=self.name,
                     source_rule_id=check_id,
-                    cwe=_extract_cwes(meta.get("cwe")),
+                    cwe=_corrigir_cwes(check_id, _extract_cwes(meta.get("cwe"))),
                     title=_short_title(check_id, extra.get("message", "")),
                     description=(
                         f"{extra.get('message', '').strip()}\n"

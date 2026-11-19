@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Régua de efetividade** (`scripts/regua.py`, `orchestrator/regua/`, `tests/regua/`, jobs `regua-deteccao` e `regua-mutacao` no CI). Detecção: recall por camada, falsos positivos em controles limpos e classificação por CWE contra um gabarito de 19 defeitos plantados e 7 controles limpos, com linha de base em catraca e camada sem scanner marcada como "não medida". Testes: catálogo de mutações dos controles críticos, em que cada controle desfeito tem de derrubar o teste que diz protegê-lo.
+
 ### Security
 
 - **Aprovação presa ao comando exato, com consumo único.** A aprovação valia para o `approval_id`, não para o comando: quem aprovava via o texto redigido pelo scrubber (que pode esconder trecho executável) e a execução podia rodar outro comando, ou o mesmo várias vezes. Agora a pendência guarda o HMAC do comando original, a execução chama `consumir(approval_id, comando)` (`approved -> consumed` atômico, só com o comando idêntico), quem aprova lê o original em `GET /approvals/{id}/command` (auditado como `command.read`), e aprovar um comando redigido cujo original não foi guardado é recusado. Migration `0014`.
@@ -20,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Injeção de SQL do semgrep sai com a CWE-89.** A regra `tainted-sql-string` vem do pacote com uma CWE de conversão de tipo, e a injeção de SQL entrava no mapeamento OWASP/PCI/LGPD como outra coisa. Achado pela régua (classificação 90% antes, 100% depois).
 - **`GET /scans` expõe a cobertura** (`scanners_ran`, `scanners_skipped`, `coverage_state`, `coverage_complete`, `coverage_note`). Quem integra pela API REST via `state=done` com zero achados e não tinha como distinguir alvo limpo de scanner que não rodou: a cobertura só chegava à tela e ao bundle.
 - **A retenção de evidência roda sozinha**, uma vez por dia no worker (`evidence_retention_job`). Antes só rodava se alguém chamasse `POST /evidence/purge`.
 - **Uma falha no inventário ou na captura de evidência não apaga mais os findings do scan.** Sem savepoint, um erro de banco invalidava a sessão, o commit final falhava e o scan terminava com 0 findings preso em `running`. A falha agora vai para os `errors` do scan.

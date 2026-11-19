@@ -1,0 +1,17 @@
+{
+  "repo_sintetico": {
+    "sast": {
+      "recall_min": 1.0,
+      "fp_max": 0,
+      "classificacao_min": 1.0
+    },
+    "iac": {
+      "recall_min": 1.0,
+      "fp_max": 0
+    },
+    "segredo": {
+      "recall_min": 1.0,
+      "fp_max": 0
+    }
+  }
+}
