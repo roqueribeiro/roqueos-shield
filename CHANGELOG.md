@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-19
+
 ### Added
 
 - **`ai` no `POST /scans`** (`roqueshield scan code --no-ai`, `scan_code` com `ai: false`): pula a triagem de IA, com a determinística mantida. O gate decide por severidade e linha de base; esperar o LLM triar 346 achados passou de 30 min no shield central.
