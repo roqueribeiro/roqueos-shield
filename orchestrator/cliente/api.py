@@ -79,6 +79,19 @@ def salvar(cfg: Config) -> Path:
     return arq
 
 
+def cabecalhos_de_acesso(env: dict[str, str] | None = None) -> dict[str, str]:
+    """Headers do Cloudflare Access, quando o shield está atrás dele (o CI de fora da
+    rede chega por um hostname público protegido por service token). Lidos do ambiente
+    (`CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`), nunca do arquivo de config:
+    são do pipeline, não da pessoa. Os dois juntos ou nenhum."""
+    e = os.environ if env is None else env
+    cid = (e.get("CF_ACCESS_CLIENT_ID") or "").strip()
+    sec = (e.get("CF_ACCESS_CLIENT_SECRET") or "").strip()
+    if cid and sec:
+        return {"CF-Access-Client-Id": cid, "CF-Access-Client-Secret": sec}
+    return {}
+
+
 class Api:
     def __init__(self, cfg: Config, cliente: httpx.Client | None = None) -> None:
         self.cfg = cfg
@@ -86,6 +99,7 @@ class Api:
             cliente if cliente is not None else httpx.Client(base_url=cfg.servidor, timeout=30)
         )
         self.http.headers["X-API-Token"] = cfg.token
+        self.http.headers.update(cabecalhos_de_acesso())
 
     def _req(self, metodo: str, caminho: str, **kw: Any) -> Any:
         r = self.http.request(metodo, caminho, **kw)

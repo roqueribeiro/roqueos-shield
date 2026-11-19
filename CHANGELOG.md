@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Cliente atrás do Cloudflare Access.** `roqueshield` (CLI e MCP stdio) manda `CF-Access-Client-Id` e `CF-Access-Client-Secret` quando `CF_ACCESS_CLIENT_ID` e `CF_ACCESS_CLIENT_SECRET` estão no ambiente: é como um CI de fora da rede alcança um shield publicado por hostname protegido.
+
+### Fixed
+
+- **`llm_local` no `/health/full` manda a chave.** O gateway OpenAI-compatível pode exigir a `LLM_API_KEY` até para listar modelos (o proxy LiteLLM exige), e o painel mostrava a IA `down` com a triagem funcionando. Um 401/403 agora diz que foi a credencial.
+
 ## [0.7.0] - 2026-11-19
 
 ### Added

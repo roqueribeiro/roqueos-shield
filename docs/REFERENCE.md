@@ -335,6 +335,7 @@ The AI and scope fields can also be set in the screen (`app_settings` table). **
 | `NUCLEI_TEMPLATES_DIR` | nuclei adapter | Default `/opt/nuclei-templates`, baked in the image |
 | `ROQUESHIELD_URL`, `ROQUESHIELD_TOKEN` | `roqueshield` CLI | Server and token, ahead of the config file |
 | `ROQUESHIELD_MCP_ACTIONS` | `roqueshield mcp` | `1` lists `start_scan` over stdio |
+| `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | `roqueshield` (CLI and stdio MCP) | When the shield sits behind Cloudflare Access (a CI outside the network reaching a public hostname), the service token sent as `CF-Access-Client-Id` and `CF-Access-Client-Secret` on every request. Both or neither; read from the environment only, never from the saved config |
 | `XDG_CONFIG_HOME` | `roqueshield` CLI | Base of the config file |
 | `SHIELD_VERSION`, `POSTGRES_PASSWORD` | `docker/compose.prod.yml` | Image tag and Postgres password of the production compose |
 
