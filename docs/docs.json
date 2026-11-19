@@ -1,0 +1,85 @@
+{
+  "principal": "en",
+  "par": "pt-BR",
+  "documentos": [
+    {
+      "papel": "readme",
+      "principal": "README.md",
+      "par": "README.pt-BR.md"
+    },
+    {
+      "papel": "indice",
+      "principal": "docs/INDEX.md",
+      "par": "docs/pt-BR/INDEX.md"
+    },
+    {
+      "papel": "comecar",
+      "principal": "docs/GETTING-STARTED.md",
+      "par": "docs/pt-BR/COMECAR.md"
+    },
+    {
+      "papel": "arquitetura",
+      "principal": "docs/ARCHITECTURE.md",
+      "par": "docs/pt-BR/ARQUITETURA.md"
+    },
+    {
+      "papel": "referencia",
+      "principal": "docs/REFERENCE.md",
+      "par": "docs/pt-BR/REFERENCIA.md"
+    },
+    {
+      "papel": "operacao",
+      "principal": "docs/OPERATIONS.md",
+      "par": "docs/pt-BR/OPERACAO.md"
+    },
+    {
+      "papel": "quando-quebra",
+      "principal": "docs/WHEN-IT-BREAKS.md",
+      "par": "docs/pt-BR/QUANDO-QUEBRA.md"
+    },
+    {
+      "papel": "glossario",
+      "principal": "docs/GLOSSARY.md",
+      "par": "docs/pt-BR/GLOSSARIO.md"
+    },
+    {
+      "papel": "estender",
+      "principal": "docs/EXTENDING.md",
+      "par": "docs/pt-BR/ESTENDER.md"
+    },
+    {
+      "papel": "integracoes",
+      "principal": "docs/INTEGRATIONS.md",
+      "par": "docs/pt-BR/INTEGRACOES.md"
+    },
+    {
+      "papel": "modelo-de-ameacas",
+      "principal": "docs/THREAT-MODEL.md",
+      "par": "docs/pt-BR/MODELO-DE-AMEACAS.md"
+    },
+    {
+      "papel": "testes",
+      "principal": "docs/TESTING.md",
+      "par": "docs/pt-BR/CRITERIOS-DE-TESTE.md"
+    },
+    {
+      "papel": "contribuir",
+      "principal": "CONTRIBUTING.md",
+      "par": "docs/pt-BR/CONTRIBUTING.md"
+    },
+    {
+      "papel": "extra",
+      "principal": "docs/DEVELOPMENT.md",
+      "par": "docs/pt-BR/DESENVOLVIMENTO.md"
+    },
+    {
+      "papel": "extra",
+      "principal": "docs/AI-FIX-BUNDLE.md",
+      "par": "docs/pt-BR/AI-FIX-BUNDLE.md"
+    }
+  ],
+  "dispensas": {},
+  "fora": {
+    "docs/assets/marca/": "kit de marca (banner, logo, prévia social) com gerador próprio em gen.py e notas de uso só em pt-BR; o check_docs_fresh.py também pula docs/assets/"
+  }
+}
