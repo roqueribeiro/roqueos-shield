@@ -429,6 +429,29 @@ async def _run_adapter(
                 )
 
 
+def _achados_do_codigo_enviado(
+    findings: list[Finding],
+    raiz: Path,
+    target: Target,
+    rodaram: list[str],
+    scan_id: UUID,
+) -> list[Finding]:
+    """Alvo lógico de volta nos achados, e a lacuna do histórico que não veio."""
+    from orchestrator.domain.codigo import LACUNA_SEM_HISTORICO, reescrever_alvo
+
+    novos = reescrever_alvo(findings, raiz, target)
+    if any(s in rodaram for s in ("gitleaks", "trufflehog")):
+        novos.append(
+            coverage_gap_finding(
+                adapter="codigo-enviado",
+                gaps=[LACUNA_SEM_HISTORICO],
+                scan_id=scan_id,
+                target=target,
+            )
+        )
+    return novos
+
+
 async def run_scan(
     target: Target,
     *,
@@ -440,6 +463,8 @@ async def run_scan(
     auth_headers: dict[str, str] | None = None,
     openapi_url: str | None = None,
     profile: str | None = None,
+    code_root: Path | None = None,
+    code_error: str | None = None,
 ) -> ScanResult:
     """Pipeline completo da Fase 1.
 
@@ -450,6 +475,10 @@ async def run_scan(
         skip_ai: se True, pula AIAnalyzer (útil quando não há API key).
         options: dict por adapter — `{"nmap": {...}, "zap": {...}}`.
         scan_id: id do scan a ATUALIZAR (criado por POST /scans). None = cria novo.
+        code_root: alvo `code://<projeto>`: a pasta onde o worker extraiu o envio. Os
+            adapters recebem a pasta; os achados voltam com o alvo lógico.
+        code_error: o envio não pôde ser preparado. Nenhum scanner roda e cada um vai
+            para `scanners_skipped` com o motivo: zero achado aqui seria mentira.
     """
     scan_id = scan_id or uuid4()
     options = dict(options or {})
@@ -481,6 +510,15 @@ async def run_scan(
     for nome, motivo in pulados_na_resolucao.items():
         result.scanners_skipped[nome] = motivo
         result.errors.append(f"{nome}: {motivo}")
+    if code_error is not None:
+        for a in adapters:
+            motivo = f"o código enviado não pôde ser preparado: {code_error}"
+            result.scanners_skipped[a.name] = motivo
+            result.errors.append(f"{a.name}: {motivo}")
+        adapters = []
+    alvo_do_adapter = (
+        target.model_copy(update={"value": str(code_root)}) if code_root is not None else target
+    )
     sid = str(scan_id)
     # Cria ScanRow upfront pra que AIRun.scan_id (FK) seja válido durante triage
     await _ensure_scan_row(scan_id, target)
@@ -503,7 +541,7 @@ async def run_scan(
             if openapi_url:
                 adapter_opts["openapi_url"] = openapi_url
         try:
-            findings = await _run_adapter(adapter, target, adapter_opts, scan_id_str=sid)
+            findings = await _run_adapter(adapter, alvo_do_adapter, adapter_opts, scan_id_str=sid)
             for f in findings:
                 f.scan_id = scan_id  # sobrescreve placeholder dos adapters
             result.findings.extend(findings)
@@ -517,6 +555,11 @@ async def run_scan(
             log.exception("adapter.crashed", adapter=adapter.name, error=str(e))
             result.scanners_skipped[adapter.name] = f"falhou: {e}"
             result.errors.append(f"{adapter.name}: {e}")
+
+    if code_root is not None:
+        result.findings = _achados_do_codigo_enviado(
+            result.findings, code_root, target, result.scanners_ran, scan_id
+        )
 
     # Dedupe heurístico (rápido, determinístico)
     await _update_phase(scan_id, "dedup")

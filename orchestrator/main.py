@@ -35,6 +35,9 @@ from orchestrator.api.routers import (
     auth as auth_router,
 )
 from orchestrator.api.routers import (
+    code as code_router,
+)
+from orchestrator.api.routers import (
     conta as conta_router,
 )
 from orchestrator.api.routers import (
@@ -202,6 +205,7 @@ app = FastAPI(
 app.include_router(targets_router.router)
 app.include_router(assets_router.router)  # /inventory (inventário entre scans, scans:read)
 app.include_router(scans_router.router)
+app.include_router(code_router.router)  # /code (código enviado para scan, scans:run)
 app.include_router(findings_router.router)
 app.include_router(evidence_router.router)  # /evidence (write-once; scans:read, purge config)
 app.include_router(reports_router.router)

@@ -268,7 +268,18 @@ def validate_target_value(value: str, *, asset_type: str | None = None) -> str:
             # `git@host:owner/repo` — o host fica entre o "@" e o ":".
             _guarda_de_rede(v[4:].split(":", 1)[0].split("/", 1)[0], rotulo="repo")
             return v
-        raise TargetValidationError("repo deve usar http(s):// ou git@host:owner/repo (ssh)")
+        if v.startswith("code://"):
+            # Código enviado (`POST /code/{projeto}/uploads`): não há rede nenhuma, o
+            # worker lê o tarball do disco. O nome do projeto é a única entrada.
+            from orchestrator.domain.codigo import CodigoRecusado, alvo_do_projeto
+
+            try:
+                return alvo_do_projeto(v[len("code://") :])
+            except CodigoRecusado as e:
+                raise TargetValidationError(str(e)) from e
+        raise TargetValidationError(
+            "repo deve usar http(s)://, git@host:owner/repo (ssh) ou code://<projeto>"
+        )
     elif asset_type == "image":
         # Image: registry/name:tag. SEC-04: se o primeiro componente for um host de
         # registry (tem "." ou ":") e apontar para rede interna/IMDS, bloquear —

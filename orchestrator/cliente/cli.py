@@ -200,6 +200,111 @@ def scan_start(
     raise typer.Exit(codigo_de_saida(final, fail_on))
 
 
+VEREDITO_PARA_SAIDA = {
+    "aprovado": Saida.OK,
+    "reprovado": Saida.ACHADO,
+    "nao_medido": Saida.INCOMPLETO,
+    "em_andamento": Saida.INCOMPLETO,
+}
+
+
+def _mostrar_gate(g: dict[str, Any]) -> int:
+    cor = {"aprovado": "green", "reprovado": "red"}.get(g.get("verdict", ""), "yellow")
+    out.print(f"[bold {cor}]gate: {g.get('verdict')}[/bold {cor}]  {g.get('motivo')}")
+    out.print(
+        f"  achados={g.get('total')}  novos={g.get('novos')}  conhecidos={g.get('conhecidos')}"
+        f"  fora do gate={g.get('fora_do_gate')}"
+        + (
+            f"  linha de base={g['baseline_scan_id']}"
+            if g.get("baseline_scan_id")
+            else "  sem linha de base (primeiro scan completo deste alvo: tudo é novo)"
+        )
+    )
+    for b in g.get("bloqueantes") or []:
+        out.print(f"  [red]{b['severity']:>8}[/red]  {b['source_tool']}: {b['title']}")
+    return VEREDITO_PARA_SAIDA.get(str(g.get("verdict")), Saida.INCOMPLETO)
+
+
+def _gate(api: apimod.Api, scan_id: str, fail_on: str, todos: bool) -> int:
+    g = _chamar(
+        api.get,
+        f"/scans/{scan_id}/gate",
+        params={"fail_on": fail_on, "so_novos": str(not todos).lower()},
+    )
+    return _mostrar_gate(g)
+
+
+@scan_app.command("code")
+def scan_code(
+    pasta: Annotated[Path, typer.Argument(help="Raiz do código (padrão: a pasta atual)")] = Path(
+        "."
+    ),
+    projeto: Annotated[
+        str | None,
+        typer.Option("--project", "-p", help="Nome do projeto (padrão: o nome da pasta)"),
+    ] = None,
+    auth_ref: Annotated[
+        str | None, typer.Option("--auth-ref", help="Referência da autorização (ticket)")
+    ] = None,
+    fail_on: Annotated[str, typer.Option("--fail-on", help=f"{'|'.join(SEVERIDADES)}")] = "high",
+    todos: Annotated[
+        bool,
+        typer.Option(
+            "--all-findings",
+            help="Bloqueia também achado já conhecido (padrão: só os novos desde o último scan)",
+        ),
+    ] = False,
+    esperar: Annotated[bool, typer.Option("--wait/--no-wait")] = True,
+    intervalo: Annotated[float, typer.Option(help="Segundos entre leituras")] = 5.0,
+    prazo: Annotated[float, typer.Option(help="Segundos até desistir")] = 3600.0,
+) -> None:
+    """Empacota a árvore (respeitando o .gitignore), envia e escaneia. Sai pelo gate.
+
+    0 aprovado, 1 achado novo no limite do --fail-on, 2 erro de uso, 3 não medido.
+    """
+    from orchestrator.cliente.empacotar import EmpacotamentoFalhou, empacotar
+
+    if fail_on not in SEVERIDADES:
+        err.print(f"[red]--fail-on aceita: {', '.join(SEVERIDADES)}[/red]")
+        raise typer.Exit(Saida.USO)
+    raiz = pasta.resolve()
+    nome = (projeto or raiz.name).strip().lower()
+    try:
+        pacote = empacotar(raiz)
+    except EmpacotamentoFalhou as e:
+        err.print(f"[red]{e}[/red]")
+        raise typer.Exit(Saida.USO) from e
+    api = _api()
+    err.print(f"enviando {pacote.arquivos} arquivos ({len(pacote.dados) // 1024} KB) de {raiz}")
+    envio = _chamar(api.enviar_codigo, nome, pacote.dados)
+    corpo: dict[str, Any] = {
+        "target_id": envio["target_id"],
+        "code_upload_id": envio["upload_id"],
+    }
+    if auth_ref:
+        corpo["authorization_ref"] = auth_ref
+    scan = _chamar(api.post, "/scans", corpo)
+    out.print(f"scan {scan['id']} criado para {envio['target_value']}")
+    if not esperar:
+        return
+    final = _esperar(api, scan["id"], intervalo, prazo)
+    _resumo(final)
+    raise typer.Exit(_gate(api, scan["id"], fail_on, todos))
+
+
+@app.command("gate")
+def gate_cmd(
+    scan_id: str,
+    fail_on: Annotated[str, typer.Option("--fail-on")] = "high",
+    todos: Annotated[bool, typer.Option("--all-findings")] = False,
+) -> None:
+    """O veredito do gate para um scan que já terminou (0, 1 ou 3, como o scan code)."""
+    if fail_on not in SEVERIDADES:
+        err.print(f"[red]--fail-on aceita: {', '.join(SEVERIDADES)}[/red]")
+        raise typer.Exit(Saida.USO)
+    raise typer.Exit(_gate(_api(), scan_id, fail_on, todos))
+
+
 @scan_app.command("watch")
 def scan_watch(
     scan_id: str,

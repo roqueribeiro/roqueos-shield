@@ -12,7 +12,7 @@ gate em dois lugares é o que deixava a CLI rodar fora do escopo.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -46,6 +46,7 @@ from orchestrator.persistence.models import (
     AssetObservationRow,
     AssetRow,
     FindingRow,
+    FindingStatusRow,
     ScanRow,
     ScanState,
     TargetRow,
@@ -104,6 +105,13 @@ class ScanIn(BaseModel):
         description="Scanning autenticado — headers efêmeros + OpenAPI (ver AuthContext).",
     )
     actor: str | None = None
+    code_upload_id: UUID | None = Field(
+        default=None,
+        description=(
+            "Envio de `POST /code/{projeto}/uploads`. Obrigatório quando o alvo é "
+            "`code://<projeto>` (e só nesse caso); é de uso único."
+        ),
+    )
     authorization_ref: str | None = Field(
         default=None,
         description=(
@@ -204,6 +212,29 @@ def gates_do_scan(target_value: str, asset_type: str, authorization_ref: str | N
         )
 
 
+def _envio_do_scan(target_value: str, code_upload_id: UUID | None) -> str | None:
+    """Casa o alvo `code://` com o envio. Sem isso o worker não teria o que escanear e
+    o scan fecharia com zero achados, que é o silêncio que este projeto não aceita."""
+    from orchestrator import codigo_enviado
+    from orchestrator.domain.codigo import projeto_do_alvo
+
+    projeto = projeto_do_alvo(target_value)
+    if projeto is None:
+        if code_upload_id is not None:
+            raise HTTPException(422, "code_upload_id só vale para alvo code://<projeto>")
+        return None
+    if code_upload_id is None:
+        raise HTTPException(
+            422, "alvo code:// exige code_upload_id (envie antes em POST /code/{projeto}/uploads)"
+        )
+    envio = codigo_enviado.ler(code_upload_id)
+    if envio is None:
+        raise HTTPException(404, "envio não encontrado: já foi usado, expirou ou nunca existiu")
+    if envio.projeto != projeto:
+        raise HTTPException(422, f"o envio é do projeto {envio.projeto!r}, não de {projeto!r}")
+    return envio.upload_id
+
+
 def perfil_do_scan(profile: str | None) -> str:
     """O profile normalizado, ou `GateRecusado(422)` para o que o pipeline não executa.
 
@@ -267,6 +298,7 @@ async def create_scan(
         effective_scanners = scanners_do_scan(body.scanners, AssetType(target.asset_type), perfil)
     except GateRecusado as e:
         raise HTTPException(e.status, e.detalhe) from e
+    upload_id = _envio_do_scan(target.value, body.code_upload_id)
 
     # Scanning autenticado: o segredo (auth.headers) NUNCA entra na tabela
     # `scans`. Helpers PUROS (testáveis) separam o que persiste do segredo
@@ -342,6 +374,7 @@ async def create_scan(
         # Segredo efêmero: vai pro job (Redis, consumido) — NÃO pra `scans`.
         auth_headers=auth_headers or None,
         openapi_url=openapi_url,
+        code_upload_id=upload_id,
         _job_id=f"scan-{scan.id}",
     )
 
@@ -354,6 +387,175 @@ async def get_scan(scan_id: UUID, session: SessionDep, _principal: Principal = _
     if scan is None:
         raise HTTPException(404, "scan não encontrado")
     return _to_out(scan)
+
+
+_ORDEM = ["info", "low", "medium", "high", "critical"]
+# Status que tiram o achado do gate: alguém decidiu e assinou (FindingStatusRow).
+_FORA_DO_GATE = {"false_positive", "risk_accepted", "wont_fix", "resolved"}
+
+
+class GateAchado(BaseModel):
+    deduped_key: str
+    title: str
+    severity: str
+    source_tool: str
+    novo: bool
+
+
+class GateOut(BaseModel):
+    scan_id: UUID
+    verdict: str  # aprovado | reprovado | nao_medido | em_andamento
+    motivo: str
+    fail_on: str
+    so_novos: bool
+    coverage_complete: bool
+    coverage_note: str | None
+    baseline_scan_id: UUID | None
+    total: int
+    novos: int
+    conhecidos: int
+    fora_do_gate: int
+    por_severidade: dict[str, int]
+    bloqueantes: list[GateAchado]
+
+
+@router.get("/{scan_id}/gate", response_model=GateOut)
+async def gate_do_scan(
+    scan_id: UUID,
+    session: SessionDep,
+    fail_on: str = "high",
+    so_novos: bool = True,
+    _principal: Principal = _READ,
+) -> GateOut:
+    """O veredito de um scan para um gate de CI ou de agente.
+
+    - Cobertura incompleta ou desconhecida: `nao_medido`. Nunca `aprovado`: scanner que
+      não rodou não aprova nada.
+    - `so_novos=true` (padrão): só bloqueia achado que não estava no último scan
+      completo do mesmo alvo (a linha de base). A dívida antiga aparece em `conhecidos`
+      e não trava o gate, senão o gate nasce reprovado em todo repo e alguém o desliga.
+    - Achado marcado como falso positivo, risco aceito, não corrigir ou resolvido fica
+      fora (`fora_do_gate`): a decisão está assinada na trilha.
+    """
+    limite = fail_on.strip().lower()
+    if limite not in _ORDEM:
+        raise HTTPException(422, f"fail_on aceita: {', '.join(_ORDEM)}")
+    scan = await session.get(ScanRow, scan_id)
+    if scan is None:
+        raise HTTPException(404, "scan não encontrado")
+    cob = resumo(scan)
+
+    def _saida(verdict: str, motivo: str, **kw: Any) -> GateOut:
+        base: dict[str, Any] = {
+            "scan_id": scan_id,
+            "verdict": verdict,
+            "motivo": motivo,
+            "fail_on": limite,
+            "so_novos": so_novos,
+            "coverage_complete": bool(cob["completa"]),
+            "coverage_note": cob["nota"],
+            "baseline_scan_id": None,
+            "total": 0,
+            "novos": 0,
+            "conhecidos": 0,
+            "fora_do_gate": 0,
+            "por_severidade": {},
+            "bloqueantes": [],
+        }
+        base.update(kw)
+        return GateOut(**base)
+
+    if scan.state in (ScanState.PENDING.value, ScanState.RUNNING.value):
+        return _saida("em_andamento", f"o scan ainda está {scan.state}")
+
+    linhas = list(
+        (await session.exec(select(FindingRow).where(col(FindingRow.scan_id) == scan_id))).all()
+    )
+    chaves = {r.deduped_key for r in linhas}
+    status_por_chave = (
+        {
+            r.deduped_key: r.status
+            for r in (
+                await session.exec(
+                    select(FindingStatusRow).where(col(FindingStatusRow.deduped_key).in_(chaves))
+                )
+            ).all()
+        }
+        if chaves
+        else {}
+    )
+
+    anteriores = (
+        await session.exec(
+            select(ScanRow)
+            .where(
+                col(ScanRow.target_id) == scan.target_id,
+                col(ScanRow.id) != scan.id,
+                col(ScanRow.state) == ScanState.DONE.value,
+                col(ScanRow.finished_at) < (scan.finished_at or datetime.now(UTC)),
+            )
+            .order_by(col(ScanRow.finished_at).desc())
+        )
+    ).all()
+    baseline = next((a for a in anteriores if resumo(a)["completa"]), None)
+    conhecidas: set[str] = set()
+    if baseline is not None:
+        conhecidas = set(
+            (
+                await session.exec(
+                    select(FindingRow.deduped_key).where(col(FindingRow.scan_id) == baseline.id)
+                )
+            ).all()
+        )
+
+    piso = _ORDEM.index(limite)
+    por_sev: dict[str, int] = {}
+    bloqueantes: list[GateAchado] = []
+    fora = novos = 0
+    for r in linhas:
+        por_sev[r.severity] = por_sev.get(r.severity, 0) + 1
+        if status_por_chave.get(r.deduped_key) in _FORA_DO_GATE:
+            fora += 1
+            continue
+        novo = r.deduped_key not in conhecidas
+        novos += novo
+        sev = _ORDEM.index(r.severity) if r.severity in _ORDEM else 0
+        if sev >= piso and (novo or not so_novos):
+            bloqueantes.append(
+                GateAchado(
+                    deduped_key=r.deduped_key,
+                    title=r.title,
+                    severity=r.severity,
+                    source_tool=r.source_tool,
+                    novo=novo,
+                )
+            )
+    bloqueantes.sort(key=lambda b: _ORDEM.index(b.severity), reverse=True)
+    contagem = {
+        "baseline_scan_id": baseline.id if baseline else None,
+        "total": len(linhas),
+        "novos": novos,
+        "conhecidos": len(linhas) - novos - fora,
+        "fora_do_gate": fora,
+        "por_severidade": por_sev,
+        "bloqueantes": bloqueantes[:100],
+    }
+    if not cob["completa"]:
+        return _saida(
+            "nao_medido",
+            "cobertura incompleta: " + (cob["nota"] or "algum scanner não rodou"),
+            **contagem,
+        )
+    if bloqueantes:
+        tipo = "novo(s) " if so_novos else ""
+        return _saida(
+            "reprovado",
+            f"{len(bloqueantes)} achado(s) {tipo}com severidade {limite} ou acima",
+            **contagem,
+        )
+    return _saida(
+        "aprovado", f"nenhum achado {'novo ' if so_novos else ''}de {limite} ou acima", **contagem
+    )
 
 
 @router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)

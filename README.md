@@ -125,9 +125,9 @@ Three surfaces exist today, and they are enough to close the loop scan, fix, re-
 
 | Surface | Entry point | Good for |
 | --- | --- | --- |
-| **CLI** | `roqueshield scan start … --wait --fail-on high` | a CI step, or an agent that already has a shell |
+| **CLI** | `roqueshield scan start … --wait --fail-on high`, and `roqueshield scan code .` for a local tree (exits by a gate that fails only on **new** findings) | a CI step, or an agent that already has a shell |
 | **REST** | OpenAPI at `/docs` (snapshot in [`docs/openapi.json`](docs/openapi.json)), SSE at `/ui/api/events` | a service integrating over the network |
-| **MCP** | `roqueshield mcp` (stdio) and `POST /mcp` (HTTP) | Claude Code, Claude Desktop, Cursor |
+| **MCP** | `roqueshield mcp` (stdio, with `scan_code` for a local folder) and `POST /mcp` (HTTP) | Claude Code, Claude Desktop, Cursor |
 | **AI Fix Bundle** | `GET /reports/{scan_id}/ai-bundle`, schema `1.0.0` | the agent that writes the patch |
 
 <picture>

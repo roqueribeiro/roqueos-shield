@@ -77,6 +77,8 @@ Without any of them it exits 2 with `sem servidor ou token: rode roqueshield log
 | `login --server/-s URL [--token T]` | Checks the token against `GET /auth/session` and saves server and token. Without `--token` it asks without echo | any valid token |
 | `status` | Version, who is logged in, and `GET /health/full` per component | any valid token |
 | `scan start ALVO [options]` | Registers the target (`POST /targets`) and starts the scan (`POST /scans`) | `scans:run` |
+| `scan code [PASTA] [--project/-p NOME] [--auth-ref R] [--fail-on high] [--all-findings] [--wait/--no-wait]` | Packs the folder (default: the current one) the way git would commit it now: tracked files plus untracked ones the `.gitignore` does not ignore, never `.git/`, no symlinks. Uploads it (`POST /code/{projeto}/uploads`), starts the scan and, with `--wait` (default), exits by the gate verdict: 0 approved, 1 a **new** finding at or above `--fail-on` (`--all-findings` counts known ones too), 3 not measured. The project defaults to the folder name; keep it the same on every upload so the gate knows what is new | `scans:run` |
+| `gate SCAN_ID [--fail-on high] [--all-findings]` | The gate verdict of a finished scan (`GET /scans/{id}/gate`), with the same exit codes as `scan code` | `scans:read` |
 | `scan watch SCAN_ID [--fail-on S] [--intervalo 5.0] [--prazo 7200.0]` | Follows a scan to the end and exits by the exit-code contract | `scans:read` |
 | `scan list [--limit 20]` | The most recent scans | `scans:read` |
 | `scan show SCAN_ID [--json]` | State, counts per severity, which scanners ran and which did not, and why | `scans:read` |
@@ -172,6 +174,8 @@ Permission `public` means no credential; `any` means any valid credential.
 | targets | `GET /targets`, `GET /targets/{id}` | `scans:read` | List and detail |
 | inventory | `GET /inventory[?asset_type=&q=]`, `GET /inventory/{id}` | `scans:read` | Cross-scan asset inventory: list (`q` is a case-insensitive substring), and detail with observations (one per scan, with that scan's coverage for the asset's type) and linked findings. Written by the pipeline; read only here |
 | scans | `POST /scans` | `scans:run` | Starts a scan (202). Body below |
+| code | `POST /code/{projeto}/uploads` | `scans:run` | Receives a code tree as the raw `.tar.gz` body (`Content-Type: application/gzip`; multipart is not accepted). Refused with 422 before anything is extracted: a path outside the root (absolute, `..`), a link pointing outside, a member that is not a file, folder or link, more than `CODE_UPLOAD_MAX_FILES` files or `CODE_UPLOAD_MAX_EXTRACTED_MB` uncompressed (compression bomb), an archive with no file at all, or one that is not a readable gzip. Over `CODE_UPLOAD_MAX_MB` compressed is 413; another content type is 415. Creates the target `code://<projeto>` (type `repo`) when missing and answers 201 with `upload_id`, `target_id`, `sha256`, sizes and `expira_em`. Audited (`code.upload`). The upload is single use: the worker deletes it when the scan ends; one never scanned is deleted after `CODE_UPLOAD_TTL_HOURS` |
+| scans | `GET /scans/{id}/gate[?fail_on=high&so_novos=true]` | `scans:read` | The verdict for a CI or agent gate: `aprovado` (approved), `reprovado` (failed), `nao_medido` (not measured: coverage incomplete or unknown, never approved) or `em_andamento` (still running). With `so_novos=true` (default) only a finding absent from the baseline fails the gate. The baseline is the latest earlier `done` scan of the same target with complete coverage. Findings marked `false_positive`, `risk_accepted`, `wont_fix` or `resolved` are left out (`fora_do_gate`). Also returns `baseline_scan_id`, `total`, `novos`, `conhecidos`, `por_severidade` and up to 100 `bloqueantes` |
 | scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | List (last 100) and detail. Each scan carries its coverage: `scanners_ran`, `scanners_skipped` (with the reason), `coverage_state` (`completa`, `incompleta`, `desconhecida`), `coverage_complete` and `coverage_note`. Zero findings means a clean target only when `coverage_complete` is `true` |
 | scans | `DELETE /scans/{id}` | `scans:run` | Deletes the scan, its findings, AI runs and asset observations (the assets stay); audits first. A `pending` or `running` scan answers 409 |
 | findings | `GET /findings` | `scans:read` | Filters `scan_id`, `severity`, `source_tool`, `limit`, `offset`. Each item carries `asset_id`, the inventory asset it belongs to (`null` for findings older than the inventory) |
@@ -216,6 +220,7 @@ Permission `public` means no credential; `any` means any valid credential.
 | `auth` | `null` | `{headers: {...}, openapi_url}` for authenticated scanning. Header values never reach the `scans` table; they ride only in the job and are redacted in the audit |
 | `authorization_ref` | `null` | Required (403) when `REQUIRE_AUTH_REF=true` |
 | `actor` | `null` | Accepted and not used: the actor in the audit is the authenticated identity |
+| `code_upload_id` | `null` | The `upload_id` from `POST /code/{projeto}/uploads`. Required when the target is `code://<projeto>` (422 without it, 422 for another project's upload, 404 for one already used or expired) and refused for any other target. A target with no code would close the scan with zero findings |
 
 Target and `openapi_url` outside the scope: 403 `target rejeitado pela policy: <reason>` (target rejected by the policy).
 
@@ -237,6 +242,8 @@ One protocol core (`orchestrator/cliente/mcp_nucleo.py`, written by hand: `initi
 | `get_findings` | `scan_id`, `severity`, `limit` (1 to 500) | Comes back with `isError: true` and the partial findings when the scan failed, has not finished or has incomplete coverage |
 | `get_ai_bundle` | `scan_id` | Same rule as `get_findings`, with the partial bundle |
 | `list_targets` | none | Registered targets |
+| `gate_verdict` | `scan_id`, `fail_on` (default `high`), `all_findings` | The gate verdict (`GET /scans/{id}/gate`). `nao_medido` and `em_andamento` come back with `isError: true`, so an agent never reads them as "no blockers" |
+| `scan_code` | `path` (absolute), `project`, `authorization_ref`, `fail_on`, `wait_seconds` (0 to 1800) | **stdio only**: it reads the caller's disk, which the HTTP server cannot see. Packs and uploads the folder like `roqueshield scan code` and starts the scan; with `wait_seconds` it waits and returns the gate verdict. Listed whether actions are on or not, because scanning your own code touches no third-party target; the server still requires `scans:run` and, with `REQUIRE_AUTH_REF`, the reference |
 | `start_scan` | `target`, `authorization_ref` (3+ characters, required), `asset_type` (`url`, `domain`, `host`, `port`, `image`, `repo`), `profile` (`web`, `network`, `full`, `active`, `exposure`) | Only listed when actions are on. Registers the target and starts the scan under the token's RBAC |
 
 The server's `instructions` tell the agent: `Zero achado só é limpo com coverage_complete=true` (zero findings is only clean with `coverage_complete=true`).
@@ -301,7 +308,11 @@ The AI and scope fields can also be set in the screen (`app_settings` table). **
 | --- | --- | --- |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./data/cai.db` | Standalone: `sqlite+aiosqlite:////data/shield.db`. Postgres: `postgresql+asyncpg://...` |
 | `REDIS_URL` | `redis://redis:6379/0` | arq queue, logs and rate limit. Standalone: the built-in Redis on `127.0.0.1` with password; pointing elsewhere turns the built-in one off |
-| `DATA_DIR` | `./data` | Standalone: `/data` |
+| `DATA_DIR` | `./data` | Standalone: `/data`. Uploaded code waits in `DATA_DIR/code/`: API and worker must share it |
+| `CODE_UPLOAD_MAX_MB` | `100` | Ceiling of an uploaded `.tar.gz`, compressed (413 above it) |
+| `CODE_UPLOAD_MAX_EXTRACTED_MB` | `1024` | Ceiling uncompressed, from the archive index, checked before extracting (compression bomb). The worker extracts in `/tmp`: it has to fit there |
+| `CODE_UPLOAD_MAX_FILES` | `50000` | Ceiling of files in one upload |
+| `CODE_UPLOAD_TTL_HOURS` | `24` | An upload never scanned is deleted after this; the worker's hourly cron (`code_upload_purge_job`) does it |
 | `REPORTS_DIR` | `./reports` | Standalone: `/data/reports` |
 | `ZAP_BASE_URL` | `http://zap:8090` | Standalone: the built-in ZAP on `127.0.0.1:8090`; pointing elsewhere turns the built-in one off |
 | `ZAP_API_KEY` | empty | ZAP API key. Standalone: generated |
