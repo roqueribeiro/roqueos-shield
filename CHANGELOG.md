@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docs/docs.json`, o manifesto do padrão de documentação da família.** Declara inglês como principal e pt-BR como par, os quinze documentos com o papel de cada um e `docs/assets/marca/` como `fora`; `roqueos-docs` sai `ok` e os hashes dos principais ficam em `docs/.docs-hash.json`.
 - **Testes contra Postgres real** (`tests/postgres/`) e o job de CI "Postgres real (migrations, travas, concorrência)".
 
 - **Inventário de ativos entre scans** (Frente A): tabelas `assets` e `asset_observations`, campo `asset_id` no `Finding` e no `FindingRow`, e as rotas `GET /inventory` e `GET /inventory/{id}` (`scans:read`). O ativo tem identidade determinística (`asset_key`), persiste entre scans e cada achado aponta para o seu. Vale o contrato do silêncio: ausência num scan posterior só é "sumiu" se um scanner que vê o tipo rodou, senão é "não verificado" (`orchestrator/domain/assets.py`). Migration `0010`. O veredito cross-scan (diff) vem na Frente B.
