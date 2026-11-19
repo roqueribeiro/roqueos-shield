@@ -36,8 +36,8 @@ mutacoes:
   - id: M-SCAN-01
     controle: scan em andamento não pode ser apagado (409)
     arquivo: orchestrator/api/routers/scans.py
-    de: "    if scan.state in (ScanState.PENDING.value, ScanState.RUNNING.value):"
-    para: "    if False:"
+    de: "    if scan.state in (ScanState.PENDING.value, ScanState.RUNNING.value):\n        raise HTTPException(409"
+    para: "    if False:\n        raise HTTPException(409"
     teste: tests/integration/test_revisao_frentes_ace.py -k em_andamento_nao_pode
   - id: M-SCAN-02
     controle: GET /scans expõe a cobertura
