@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 
-from orchestrator.cliente.api import Config, ErroDaApi
+from orchestrator.cliente.api import Config, ErroDaApi, cabecalhos_de_acesso
 from orchestrator.cliente.mcp_nucleo import Servidor
 
 
@@ -31,6 +31,7 @@ class ApiHttp:
             cliente if cliente is not None else httpx.AsyncClient(base_url=cfg.servidor, timeout=30)
         )
         self.http.headers["X-API-Token"] = cfg.token
+        self.http.headers.update(cabecalhos_de_acesso())
 
     async def _req(self, metodo: str, caminho: str, corpo: Any = None) -> Any:
         r = await self.http.request(metodo, caminho, json=corpo)

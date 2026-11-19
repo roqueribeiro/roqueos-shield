@@ -105,6 +105,14 @@ class ScanIn(BaseModel):
         description="Scanning autenticado — headers efêmeros + OpenAPI (ver AuthContext).",
     )
     actor: str | None = None
+    ai: bool = Field(
+        default=True,
+        description=(
+            "Triagem de IA dos achados. `false` pula a IA (a triagem determinística "
+            "continua): para gate de CI ou de agente, que decide por severidade e linha "
+            "de base, e não pode esperar o LLM triar centenas de achados."
+        ),
+    )
     code_upload_id: UUID | None = Field(
         default=None,
         description=(
@@ -375,6 +383,7 @@ async def create_scan(
         auth_headers=auth_headers or None,
         openapi_url=openapi_url,
         code_upload_id=upload_id,
+        skip_ai=not body.ai,
         _job_id=f"scan-{scan.id}",
     )
 

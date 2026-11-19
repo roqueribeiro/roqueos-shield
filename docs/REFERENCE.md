@@ -77,7 +77,7 @@ Without any of them it exits 2 with `sem servidor ou token: rode roqueshield log
 | `login --server/-s URL [--token T]` | Checks the token against `GET /auth/session` and saves server and token. Without `--token` it asks without echo | any valid token |
 | `status` | Version, who is logged in, and `GET /health/full` per component | any valid token |
 | `scan start ALVO [options]` | Registers the target (`POST /targets`) and starts the scan (`POST /scans`) | `scans:run` |
-| `scan code [PASTA] [--project/-p NOME] [--auth-ref R] [--fail-on high] [--all-findings] [--wait/--no-wait]` | Packs the folder (default: the current one) the way git would commit it now: tracked files plus untracked ones the `.gitignore` does not ignore, never `.git/`, no symlinks. Uploads it (`POST /code/{projeto}/uploads`), starts the scan and, with `--wait` (default), exits by the gate verdict: 0 approved, 1 a **new** finding at or above `--fail-on` (`--all-findings` counts known ones too), 3 not measured. The project defaults to the folder name; keep it the same on every upload so the gate knows what is new | `scans:run` |
+| `scan code [PASTA] [--project/-p NOME] [--auth-ref R] [--fail-on high] [--all-findings] [--ai/--no-ai] [--wait/--no-wait]` | Packs the folder (default: the current one) the way git would commit it now: tracked files plus untracked ones the `.gitignore` does not ignore, never `.git/`, no symlinks. Uploads it (`POST /code/{projeto}/uploads`), starts the scan and, with `--wait` (default), exits by the gate verdict: 0 approved, 1 a **new** finding at or above `--fail-on` (`--all-findings` counts known ones too), 3 not measured. The project defaults to the folder name; keep it the same on every upload so the gate knows what is new | `scans:run` |
 | `gate SCAN_ID [--fail-on high] [--all-findings]` | The gate verdict of a finished scan (`GET /scans/{id}/gate`), with the same exit codes as `scan code` | `scans:read` |
 | `scan watch SCAN_ID [--fail-on S] [--intervalo 5.0] [--prazo 7200.0]` | Follows a scan to the end and exits by the exit-code contract | `scans:read` |
 | `scan list [--limit 20]` | The most recent scans | `scans:read` |
@@ -220,6 +220,7 @@ Permission `public` means no credential; `any` means any valid credential.
 | `auth` | `null` | `{headers: {...}, openapi_url}` for authenticated scanning. Header values never reach the `scans` table; they ride only in the job and are redacted in the audit |
 | `authorization_ref` | `null` | Required (403) when `REQUIRE_AUTH_REF=true` |
 | `actor` | `null` | Accepted and not used: the actor in the audit is the authenticated identity |
+| `ai` | `true` | `false` skips the AI triage (the deterministic triage still runs). For a CI or agent gate, which decides by severity and baseline and cannot wait for the LLM to triage hundreds of findings |
 | `code_upload_id` | `null` | The `upload_id` from `POST /code/{projeto}/uploads`. Required when the target is `code://<projeto>` (422 without it, 422 for another project's upload, 404 for one already used or expired) and refused for any other target. A target with no code would close the scan with zero findings |
 
 Target and `openapi_url` outside the scope: 403 `target rejeitado pela policy: <reason>` (target rejected by the policy).
@@ -243,7 +244,7 @@ One protocol core (`orchestrator/cliente/mcp_nucleo.py`, written by hand: `initi
 | `get_ai_bundle` | `scan_id` | Same rule as `get_findings`, with the partial bundle |
 | `list_targets` | none | Registered targets |
 | `gate_verdict` | `scan_id`, `fail_on` (default `high`), `all_findings` | The gate verdict (`GET /scans/{id}/gate`). `nao_medido` and `em_andamento` come back with `isError: true`, so an agent never reads them as "no blockers" |
-| `scan_code` | `path` (absolute), `project`, `authorization_ref`, `fail_on`, `wait_seconds` (0 to 1800) | **stdio only**: it reads the caller's disk, which the HTTP server cannot see. Packs and uploads the folder like `roqueshield scan code` and starts the scan; with `wait_seconds` it waits and returns the gate verdict. Listed whether actions are on or not, because scanning your own code touches no third-party target; the server still requires `scans:run` and, with `REQUIRE_AUTH_REF`, the reference |
+| `scan_code` | `path` (absolute), `project`, `authorization_ref`, `fail_on`, `wait_seconds` (0 to 1800), `ai` (default `true`) | **stdio only**: it reads the caller's disk, which the HTTP server cannot see. Packs and uploads the folder like `roqueshield scan code` and starts the scan; with `wait_seconds` it waits and returns the gate verdict. Listed whether actions are on or not, because scanning your own code touches no third-party target; the server still requires `scans:run` and, with `REQUIRE_AUTH_REF`, the reference |
 | `start_scan` | `target`, `authorization_ref` (3+ characters, required), `asset_type` (`url`, `domain`, `host`, `port`, `image`, `repo`), `profile` (`web`, `network`, `full`, `active`, `exposure`) | Only listed when actions are on. Registers the target and starts the scan under the token's RBAC |
 
 The server's `instructions` tell the agent: `Zero achado só é limpo com coverage_complete=true` (zero findings is only clean with `coverage_complete=true`).
@@ -335,6 +336,7 @@ The AI and scope fields can also be set in the screen (`app_settings` table). **
 | `NUCLEI_TEMPLATES_DIR` | nuclei adapter | Default `/opt/nuclei-templates`, baked in the image |
 | `ROQUESHIELD_URL`, `ROQUESHIELD_TOKEN` | `roqueshield` CLI | Server and token, ahead of the config file |
 | `ROQUESHIELD_MCP_ACTIONS` | `roqueshield mcp` | `1` lists `start_scan` over stdio |
+| `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | `roqueshield` (CLI and stdio MCP) | When the shield sits behind Cloudflare Access (a CI outside the network reaching a public hostname), the service token sent as `CF-Access-Client-Id` and `CF-Access-Client-Secret` on every request. Both or neither; read from the environment only, never from the saved config |
 | `XDG_CONFIG_HOME` | `roqueshield` CLI | Base of the config file |
 | `SHIELD_VERSION`, `POSTGRES_PASSWORD` | `docker/compose.prod.yml` | Image tag and Postgres password of the production compose |
 

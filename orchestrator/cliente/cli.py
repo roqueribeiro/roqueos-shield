@@ -255,6 +255,13 @@ def scan_code(
         ),
     ] = False,
     esperar: Annotated[bool, typer.Option("--wait/--no-wait")] = True,
+    ia: Annotated[
+        bool,
+        typer.Option(
+            "--ai/--no-ai",
+            help="Triagem de IA dos achados (o gate não depende dela; --no-ai é bem mais rápido)",
+        ),
+    ] = True,
     intervalo: Annotated[float, typer.Option(help="Segundos entre leituras")] = 5.0,
     prazo: Annotated[float, typer.Option(help="Segundos até desistir")] = 3600.0,
 ) -> None:
@@ -280,6 +287,7 @@ def scan_code(
     corpo: dict[str, Any] = {
         "target_id": envio["target_id"],
         "code_upload_id": envio["upload_id"],
+        "ai": ia,
     }
     if auth_ref:
         corpo["authorization_ref"] = auth_ref

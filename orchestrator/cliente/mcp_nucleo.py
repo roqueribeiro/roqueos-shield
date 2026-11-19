@@ -143,6 +143,11 @@ FERRAMENTAS_LOCAIS: list[dict[str, Any]] = [
                     "enum": ["info", "low", "medium", "high", "critical"],
                 },
                 "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 1800},
+                "ai": {
+                    "type": "boolean",
+                    "description": "triagem de IA (padrão true); false é bem mais rápido "
+                    "e o veredito do gate não depende dela",
+                },
             },
             ["path"],
         ),
@@ -315,6 +320,7 @@ class Servidor:
         corpo: dict[str, Any] = {
             "target_id": envio["target_id"],
             "code_upload_id": envio["upload_id"],
+            "ai": a.get("ai", True) is not False,
         }
         if a.get("authorization_ref"):
             corpo["authorization_ref"] = str(a["authorization_ref"])

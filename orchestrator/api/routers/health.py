@@ -93,14 +93,23 @@ async def _check_llm_local() -> dict[str, Any]:
             "latency_ms": 0,
             "detail": {"reason": "LLM_API_BASE not set"},
         }
+    # O gateway OpenAI-compatível pode exigir a chave até para listar modelos (o proxy
+    # LiteLLM exige: sem ela responde 401). Sem mandar a chave, um gateway saudável
+    # aparecia `down` e o painel dizia que a IA estava fora com a triagem funcionando.
+    cabecalhos = {"Authorization": f"Bearer {settings.LLM_API_KEY}"} if settings.LLM_API_KEY else {}
     try:
-        async with httpx.AsyncClient(timeout=3.0) as c:
-            r = await c.get(f"{settings.LLM_API_BASE.rstrip('/')}/models")
+        async with httpx.AsyncClient(timeout=5.0) as c:
+            r = await c.get(f"{settings.LLM_API_BASE.rstrip('/')}/models", headers=cabecalhos)
             if r.status_code == 200:
                 data = r.json()
                 models = [m.get("id") for m in data.get("data", [])][:5]
                 return _ok("llm_local", t0, detail={"models": models, "url": settings.LLM_API_BASE})
-            return _down("llm_local", t0, f"HTTP {r.status_code}")
+            motivo = (
+                "credencial recusada pelo gateway (LLM_API_KEY)"
+                if r.status_code in (401, 403)
+                else ""
+            )
+            return _down("llm_local", t0, f"HTTP {r.status_code} {motivo}".strip())
     except Exception as e:  # noqa: BLE001
         return _down("llm_local", t0, str(e))
 

@@ -77,6 +77,16 @@ RUN set -eux; \
         cp -r "/src/$d" /opt/semgrep-rules/; \
     done; \
     find /opt/semgrep-rules -type d -name .semgrep_logs -prune -exec rm -rf {} +; \
+    # So o que e SEGURANCA. Os diretorios por linguagem trazem tambem boa pratica,
+    # desempenho, manutencao, correcao e compatibilidade: achado MEDIUM de
+    # "use raise_for_status" num codigo correto. A regua noturna do shield central
+    # pegou isso em 19/11/2026: falso positivo num controle limpo do gabarito que o
+    # CI (pacotes de seguranca do registry) nao via. Producao e CI tem que medir o
+    # mesmo conjunto.
+    for cat in best-practice best-practices performance maintainability correctness \
+               compatibility portability caching; do \
+        find /opt/semgrep-rules -type d -name "$cat" -prune -exec rm -rf {} +; \
+    done; \
     cd /; rm -rf /src; \
     # O `cd /` acima nao e enfeite: o RUN faz `cd /src` no comeco, e apagar /src
     # deixava o processo com um cwd inexistente. O semgrep seguinte morria em

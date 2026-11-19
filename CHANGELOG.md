@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-19
+
+### Added
+
+- **`ai` no `POST /scans`** (`roqueshield scan code --no-ai`, `scan_code` com `ai: false`): pula a triagem de IA, com a determinística mantida. O gate decide por severidade e linha de base; esperar o LLM triar 346 achados passou de 30 min no shield central.
+- **Cliente atrás do Cloudflare Access.** `roqueshield` (CLI e MCP stdio) manda `CF-Access-Client-Id` e `CF-Access-Client-Secret` quando `CF_ACCESS_CLIENT_ID` e `CF_ACCESS_CLIENT_SECRET` estão no ambiente: é como um CI de fora da rede alcança um shield publicado por hostname protegido.
+
+### Fixed
+
+- **O ruleset offline do semgrep na imagem é só de segurança.** Os diretórios por linguagem traziam boa prática, desempenho, manutenção, correção e compatibilidade, e a produção marcava como MEDIUM código correto (`use-raise-for-status` num controle limpo). A régua noturna do shield central pegou a divergência com o CI, que mede pelos pacotes de segurança do registry: falso positivo de SAST 1 contra 0 na linha de base.
+- **`llm_local` no `/health/full` manda a chave.** O gateway OpenAI-compatível pode exigir a `LLM_API_KEY` até para listar modelos (o proxy LiteLLM exige), e o painel mostrava a IA `down` com a triagem funcionando. Um 401/403 agora diz que foi a credencial.
+
 ## [0.7.0] - 2026-11-19
 
 ### Added

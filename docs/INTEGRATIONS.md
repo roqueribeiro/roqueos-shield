@@ -169,13 +169,13 @@ Getting the CLI: inside the container it is already there. Outside, run it from 
 ```bash
 docker run --rm -it --entrypoint roqueshield \
   -e ROQUESHIELD_URL=https://shield.example -e ROQUESHIELD_TOKEN \
-  roqueribeiro1988/roqueos-shield:v0.7.0-standalone status
+  roqueribeiro1988/roqueos-shield:v0.7.1-standalone status
 ```
 
 or install it from the repository (Python 3.13 or newer; it is not on PyPI and brings the engine's dependencies along):
 
 ```bash
-pip install "git+https://github.com/roqueribeiro/roqueos-shield@v0.7.0"
+pip install "git+https://github.com/roqueribeiro/roqueos-shield@v0.7.1"
 ```
 
 ## 4. The REST API
@@ -329,7 +329,7 @@ One shell step against a shield you already run. The token is a CI secret create
     ROQUESHIELD_TOKEN: ${{ secrets.ROQUESHIELD_TOKEN }}
   run: |
     docker run --rm -e ROQUESHIELD_URL -e ROQUESHIELD_TOKEN --entrypoint roqueshield \
-      roqueribeiro1988/roqueos-shield:v0.7.0-standalone \
+      roqueribeiro1988/roqueos-shield:v0.7.1-standalone \
       scan start https://staging.example.com --auth-ref "$GITHUB_RUN_ID" --wait --fail-on high
 ```
 
@@ -345,7 +345,7 @@ For the code of the pull request itself, without a URL the shield can clone:
     ROQUESHIELD_TOKEN: ${{ secrets.ROQUESHIELD_TOKEN }}
   run: |
     docker run --rm -e ROQUESHIELD_URL -e ROQUESHIELD_TOKEN -v "$PWD:/src:ro" -w /src \
-      --entrypoint roqueshield roqueribeiro1988/roqueos-shield:v0.7.0-standalone \
+      --entrypoint roqueshield roqueribeiro1988/roqueos-shield:v0.7.1-standalone \
       scan code /src -p "${{ github.event.repository.name }}" --fail-on high
 ```
 
