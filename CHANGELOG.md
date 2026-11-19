@@ -7,15 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-19
+
 ### Added
 
 - **Régua de efetividade** (`scripts/regua.py`, `orchestrator/regua/`, `tests/regua/`, jobs `regua-deteccao` e `regua-mutacao` no CI). Detecção: recall por camada, falsos positivos em controles limpos e classificação por CWE contra um gabarito de 19 defeitos plantados e 7 controles limpos, com linha de base em catraca e camada sem scanner marcada como "não medida". Testes: catálogo de mutações dos controles críticos, em que cada controle desfeito tem de derrubar o teste que diz protegê-lo.
+- **Testes contra Postgres real** (`tests/postgres/`) e o job de CI "Postgres real (migrations, travas, concorrência)".
+- **Inventário de ativos entre scans** (Frente A): tabelas `assets` e `asset_observations`, campo `asset_id` no `Finding` e no `FindingRow`, e as rotas `GET /inventory` e `GET /inventory/{id}` (`scans:read`). O ativo tem identidade determinística (`asset_key`), persiste entre scans e cada achado aponta para o seu. Vale o contrato do silêncio: ausência num scan posterior só é "sumiu" se um scanner que vê o tipo rodou, senão é "não verificado" (`orchestrator/domain/assets.py`). Migration `0010`. O veredito cross-scan (diff) vem na Frente B.
+- **Aprovação humana por comando** (Frente E, modo `ask`): tabela `command_approvals`, permissão nova `commands:approve` (só ADMIN) e as rotas `GET /approvals`, `POST /approvals/{id}/approve` e `/deny`. A coleira decide primeiro; o que passa vira pendência que uma pessoa aprova ou nega. Tempo limite **nega** (`APPROVAL_TIMEOUT_SECONDS`, fecha fechado); quatro olhos impede quem propôs de aprovar o próprio (`APPROVAL_FOUR_EYES`, ligado). Cada decisão na trilha de auditoria. Sem juiz LLM. Migration `0012`. Mudança aditiva em `roles.py`/`deps.py`, sem remover nenhum gate existente.
+- **Evidência que se sustenta** (Frente C): armazém endereçado por conteúdo (`orchestrator/evidence/`), tabelas write-once `evidence_snapshots` e `evidence_links`, e as rotas `GET /evidence/finding/{deduped_key}`, `GET /evidence/blob/{sha256}`, `GET /evidence/bundle/{scan_id}` (`scans:read`) e `POST /evidence/purge` (`config:manage`). O corpo é **redigido pelo scrubber antes de ser hasheado e gravado** (ao contrário do ARTEX, que grava tráfego em texto puro); toda leitura confere o hash; o bundle derruba o download inteiro se um corpo faltar ou estiver corrompido. Original cifrado é opt-in (`EVIDENCE_ENCRYPT_ORIGINAL`, exige `SECRETS_KEY`). Retenção auditada por `EVIDENCE_RETENTION_DAYS` (apaga o corpo, mantém hash e registro). Trigger append-only em `evidence_snapshots` no Postgres. Migration `0011`.
 
 ### Security
 
 - **Aprovação presa ao comando exato, com consumo único.** A aprovação valia para o `approval_id`, não para o comando: quem aprovava via o texto redigido pelo scrubber (que pode esconder trecho executável) e a execução podia rodar outro comando, ou o mesmo várias vezes. Agora a pendência guarda o HMAC do comando original, a execução chama `consumir(approval_id, comando)` (`approved -> consumed` atômico, só com o comando idêntico), quem aprova lê o original em `GET /approvals/{id}/command` (auditado como `command.read`), e aprovar um comando redigido cujo original não foi guardado é recusado. Migration `0014`.
 - **Evidência redigida também em `findings.payload` e no relatório técnico HTML.** O armazém de blobs já era redigido, mas a evidência crua do scanner ia para o banco e para o HTML gravado em disco.
-
 - **Proveniência da evidência é HMAC, não SHA-256 puro.** O `original_sha256` era o hash sem chave do corpo original, que só difere do redigido nos campos de baixa entropia (CPF, PAN, CVV): dava para descobrir o dado redigido por força bruta. Agora é `hmac-sha256:v1:` com chave derivada da `SECRETS_KEY` (vazio sem ela).
 - **O scrubber roda antes do corte em 16 KB.** Cortar antes deixava o começo de um token ou de um PAN, curto demais para as regex, em claro no disco.
 - **Ler o original cifrado exige `config:manage`** e fica na trilha (`evidence.read_original`); antes qualquer `scans:read` recebia o original com PII sem registro.
@@ -35,14 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bundle sem blob repetido e com teto (413 acima de 5.000 corpos ou 256 MB); `sha256` validado na rota.
 - **`GET /findings` devolve o `asset_id`.** Estava gravado (132 de 132 no teste real) mas só aparecia dentro do `payload`; a tela não tinha como ligar o achado ao ativo. Achado pelo ponta a ponta com scan real.
 - `DELETE /scans/{id}` de scan em andamento responde 409 (o worker recriava o scan apagado); `GET /approvals` paginado; `reason` da decisão limitado a 2.000 caracteres e redigido.
-
-### Added
-
-- **Testes contra Postgres real** (`tests/postgres/`) e o job de CI "Postgres real (migrations, travas, concorrência)".
-
-- **Inventário de ativos entre scans** (Frente A): tabelas `assets` e `asset_observations`, campo `asset_id` no `Finding` e no `FindingRow`, e as rotas `GET /inventory` e `GET /inventory/{id}` (`scans:read`). O ativo tem identidade determinística (`asset_key`), persiste entre scans e cada achado aponta para o seu. Vale o contrato do silêncio: ausência num scan posterior só é "sumiu" se um scanner que vê o tipo rodou, senão é "não verificado" (`orchestrator/domain/assets.py`). Migration `0010`. O veredito cross-scan (diff) vem na Frente B.
-- **Aprovação humana por comando** (Frente E, modo `ask`): tabela `command_approvals`, permissão nova `commands:approve` (só ADMIN) e as rotas `GET /approvals`, `POST /approvals/{id}/approve` e `/deny`. A coleira decide primeiro; o que passa vira pendência que uma pessoa aprova ou nega. Tempo limite **nega** (`APPROVAL_TIMEOUT_SECONDS`, fecha fechado); quatro olhos impede quem propôs de aprovar o próprio (`APPROVAL_FOUR_EYES`, ligado). Cada decisão na trilha de auditoria. Sem juiz LLM. Migration `0012`. Mudança aditiva em `roles.py`/`deps.py`, sem remover nenhum gate existente.
-- **Evidência que se sustenta** (Frente C): armazém endereçado por conteúdo (`orchestrator/evidence/`), tabelas write-once `evidence_snapshots` e `evidence_links`, e as rotas `GET /evidence/finding/{deduped_key}`, `GET /evidence/blob/{sha256}`, `GET /evidence/bundle/{scan_id}` (`scans:read`) e `POST /evidence/purge` (`config:manage`). O corpo é **redigido pelo scrubber antes de ser hasheado e gravado** (ao contrário do ARTEX, que grava tráfego em texto puro); toda leitura confere o hash; o bundle derruba o download inteiro se um corpo faltar ou estiver corrompido. Original cifrado é opt-in (`EVIDENCE_ENCRYPT_ORIGINAL`, exige `SECRETS_KEY`). Retenção auditada por `EVIDENCE_RETENTION_DAYS` (apaga o corpo, mantém hash e registro). Trigger append-only em `evidence_snapshots` no Postgres. Migration `0011`.
 
 ## [0.5.2] - 2026-11-08
 
