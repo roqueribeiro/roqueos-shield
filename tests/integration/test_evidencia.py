@@ -102,6 +102,14 @@ async def test_expurgo_preserva_blob_compartilhado_dentro_da_retencao(_data_dir)
                 )
             )
         await s.commit()
+        # Os blobs acabaram de ser gravados: sem envelhecer o mtime, a janela de captura
+        # (blob tocado há menos de 1 h) os pouparia, e o teste não exercitaria o refcount.
+        import os
+        import time
+
+        velho_ts = time.time() - 2 * 3600
+        for ref in (compartilhado, so_velho):
+            os.utime(store._path(ref.sha256), (velho_ts, velho_ts))
         apagados = await expurgar_antigas(s, 7, actor="adm@x")
 
     assert apagados >= 1

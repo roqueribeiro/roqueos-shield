@@ -358,6 +358,9 @@ class FindingOut(BaseModel):
     id: UUID
     scan_id: UUID
     target_id: UUID
+    # Ativo do inventário (Frente A). Estava só dentro do `payload`: quem consome a API
+    # (a tela, o bundle) não tinha como ligar o achado ao ativo sem cavar no JSON.
+    asset_id: UUID | None = None
     deduped_key: str
     source_tool: str
     title: str
@@ -414,6 +417,7 @@ def _to_out(r: FindingRow, st: FindingStatusRow | None) -> FindingOut:
         id=r.id,
         scan_id=r.scan_id,
         target_id=r.target_id,
+        asset_id=r.asset_id,
         deduped_key=r.deduped_key,
         source_tool=r.source_tool,
         title=r.title,

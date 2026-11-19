@@ -353,6 +353,11 @@ async def delete_scan(scan_id: UUID, session: SessionDep, principal: Principal =
     scan = await session.get(ScanRow, scan_id)
     if scan is None:
         raise HTTPException(404, "scan não encontrado")
+    # Scan em andamento não sai: o worker, ao terminar, recriava a linha (o persist faz
+    # upsert do ScanRow) com findings e ativos, e a trilha diria `scan.delete` de um scan
+    # que estava de volta.
+    if scan.state in (ScanState.PENDING.value, ScanState.RUNNING.value):
+        raise HTTPException(409, f"scan em andamento ({scan.state}): espere terminar para apagar")
 
     # Audita ANTES de apagar (o audit_log é append-only e não referencia o scan
     # por FK, então sobrevive à remoção).

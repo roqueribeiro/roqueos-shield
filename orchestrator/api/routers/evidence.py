@@ -15,17 +15,25 @@ import zipfile
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Path, Response
 from pydantic import BaseModel
 from sqlmodel import col, select
 
 from orchestrator.api.deps import Principal, RequireConfigManage, RequireScansRead, SessionDep
+from orchestrator.audit.logger import log_audit_event
 from orchestrator.config import settings
+from orchestrator.domain.roles import Permission, has_permission
 from orchestrator.evidence import store
 from orchestrator.evidence.service import expurgar_antigas
 from orchestrator.persistence.models import EvidenceLinkRow, EvidenceSnapshotRow
 
 router = APIRouter(prefix="/evidence", tags=["evidence"])
+
+# Teto do bundle: o zip é montado em memória. Acima disto a rota recusa com 413 em vez de
+# segurar centenas de MB por pedido; recusar é visível, cortar em silêncio não seria.
+_BUNDLE_MAX_BLOBS = 5_000
+_BUNDLE_MAX_BYTES = 256 * 1024 * 1024
+_SHA256_DA_URL = Path(pattern=r"^[0-9a-f]{64}$", description="sha256 do corpo gravado")
 
 
 class EvidenceItemOut(BaseModel):
@@ -90,20 +98,29 @@ async def list_evidence(
 
 @router.get("/blob/{sha256}")
 async def get_blob(
-    sha256: str,
     session: SessionDep,
-    _principal: Principal = RequireScansRead,
+    sha256: str = _SHA256_DA_URL,
+    principal: Principal = RequireScansRead,
 ) -> Response:
     """O corpo da evidência, com o hash conferido. `scans:read`.
 
     410 se o corpo foi expurgado (o registro fica, o corpo não); 422 se o que está em
     disco não bate com o hash (corrompido/adulterado); 404 se não há snapshot com esse sha.
+
+    Blob cifrado é o ORIGINAL, com o PII que o modo redigido apaga: decifrar exige
+    `config:manage` e fica na trilha (`evidence.read_original`), com o ator. Antes,
+    qualquer `scans:read` recebia o original em claro sem deixar registro.
     """
     snap = (
         await session.exec(select(EvidenceSnapshotRow).where(EvidenceSnapshotRow.sha256 == sha256))
     ).first()
     if snap is None:
         raise HTTPException(status_code=404, detail="evidência não encontrada")
+    if snap.encrypted and not has_permission(principal.role, Permission.CONFIG_MANAGE):
+        raise HTTPException(
+            status_code=403,
+            detail="evidência cifrada é o original com dado pessoal: exige config:manage",
+        )
     try:
         # ler_claro confere o hash e, se o blob for o original cifrado, decifra.
         data = store.ler_claro(sha256, encrypted=snap.encrypted)
@@ -111,6 +128,16 @@ async def get_blob(
         raise HTTPException(status_code=410, detail=f"corpo expurgado pela retenção: {e}") from e
     except store.EvidenceIntegrityError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    if snap.encrypted:
+        await log_audit_event(
+            session,
+            action="evidence.read_original",
+            actor=principal.email,
+            resource_type="evidence",
+            resource_id=snap.id,
+            metadata={"sha256": sha256},
+        )
+        await session.commit()
     return Response(content=data, media_type=snap.content_type)
 
 
@@ -135,10 +162,23 @@ async def get_bundle(
     if not snaps:
         raise HTTPException(status_code=404, detail="scan sem evidência")
 
+    # Dois achados com o mesmo corpo geram dois snapshots com o mesmo sha: um blob só no
+    # zip (entrada duplicada no zip é ambígua), e o teto vale para o que de fato entra.
+    unicos = list({snap.sha256: snap for snap in snaps}.values())
+    total = sum(snap.size_bytes for snap in unicos)
+    if len(unicos) > _BUNDLE_MAX_BLOBS or total > _BUNDLE_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"bundle grande demais: {len(unicos)} corpos, {total} bytes "
+                f"(teto {_BUNDLE_MAX_BLOBS} corpos, {_BUNDLE_MAX_BYTES} bytes)"
+            ),
+        )
+
     buffer = io.BytesIO()
     manifesto: list[dict[str, object]] = []
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for snap in snaps:
+        for snap in unicos:
             try:
                 # O bundle é verificável por hash: empacota os BYTES ARMAZENADOS (store.get
                 # confere o sha256), para o arquivo bater com o `sha256` do manifesto. Não

@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, DateTime
+from sqlalchemy import JSON, DateTime, Text
 from sqlalchemy.types import TypeDecorator
 from sqlmodel import Field, SQLModel
 
@@ -366,6 +366,8 @@ class AppSettingRow(SQLModel, table=True):
     __tablename__ = "app_settings"
 
     key: str = Field(primary_key=True)
-    value: str  # JSON; segredo vai como "enc:v1:<fernet>"
+    # TEXT, como a migration 0008 cria: valor JSON sem limite de tamanho. O modelo dizia
+    # `str` (VARCHAR) e o schema do standalone (create_all) divergia do de produção.
+    value: str = Field(sa_type=Text)  # JSON; segredo vai como "enc:v1:<fernet>"
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=UTCDateTime())
     updated_by: str | None = None

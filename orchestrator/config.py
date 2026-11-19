@@ -205,13 +205,20 @@ def insecure_boot_errors(s: Settings) -> list[str]:
     é o escape explícito para dev local.
     """
     errors: list[str] = []
-    if s.ALLOW_INSECURE_APP_TOKEN:
-        return errors
-    if s.APP_TOKEN.strip().lower() in _INSECURE_APP_TOKENS:
+    # O escape vale só para o que ele nomeia: o token de exemplo. Antes ele saía da função
+    # inteira, e com ele ligado o REQUIRE_IMMUTABLE_AUDIT=true sobre SQLite também
+    # passava calado (a trilha editável num boot que pediu trilha imutável).
+    if not s.ALLOW_INSECURE_APP_TOKEN and s.APP_TOKEN.strip().lower() in _INSECURE_APP_TOKENS:
         errors.append(
             "APP_TOKEN está com um valor de exemplo/vazio — ele concede ADMIN de serviço. "
             "Defina um APP_TOKEN forte (ex.: `openssl rand -hex 32`) ou, só em dev local, "
             "ALLOW_INSECURE_APP_TOKEN=true."
+        )
+    if s.EVIDENCE_ENCRYPT_ORIGINAL and not s.SECRETS_KEY.strip():
+        errors.append(
+            "EVIDENCE_ENCRYPT_ORIGINAL=true sem SECRETS_KEY: toda captura de evidência "
+            "falharia e os achados ficariam sem prova. Defina SECRETS_KEY (Fernet) ou "
+            "desligue o modo cifrado."
         )
     if s.REQUIRE_IMMUTABLE_AUDIT and audit_is_mutable(s):
         errors.append(

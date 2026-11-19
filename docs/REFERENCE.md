@@ -170,18 +170,18 @@ Permission `public` means no credential; `any` means any valid credential.
 | targets | `POST /targets` | `scans:run` | Registers a target (`asset_type`, `value`, `criticality`, `contains_pii`, `label`, `metadata`); validated against the scope |
 | targets | `POST /targets/check` | `scans:run` | Says whether a target passes the scope, without creating it |
 | targets | `GET /targets`, `GET /targets/{id}` | `scans:read` | List and detail |
-| inventory | `GET /inventory[?asset_type=&q=]`, `GET /inventory/{id}` | `scans:read` | Cross-scan asset inventory: list, and detail with observations (one per scan, carrying that scan's coverage) and linked findings. Written by the pipeline; read only here |
+| inventory | `GET /inventory[?asset_type=&q=]`, `GET /inventory/{id}` | `scans:read` | Cross-scan asset inventory: list (`q` is a case-insensitive substring), and detail with observations (one per scan, with that scan's coverage for the asset's type) and linked findings. Written by the pipeline; read only here |
 | scans | `POST /scans` | `scans:run` | Starts a scan (202). Body below |
 | scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | List (last 100) and detail |
-| scans | `DELETE /scans/{id}` | `scans:run` | Deletes the scan, its findings and AI runs; audits first |
-| findings | `GET /findings` | `scans:read` | Filters `scan_id`, `severity`, `source_tool`, `limit`, `offset` |
+| scans | `DELETE /scans/{id}` | `scans:run` | Deletes the scan, its findings, AI runs and asset observations (the assets stay); audits first. A `pending` or `running` scan answers 409 |
+| findings | `GET /findings` | `scans:read` | Filters `scan_id`, `severity`, `source_tool`, `limit`, `offset`. Each item carries `asset_id`, the inventory asset it belongs to (`null` for findings older than the inventory) |
 | findings | `GET /findings/{id}` | `scans:read` | One finding |
 | findings | `GET /findings/queue` | `scans:read` | Queue of unique problems by `deduped_key`, severity first (`status`, `min_severity`, `source_tool`) |
 | findings | `GET /findings/summary` | `scans:read` | Counts per severity and status |
 | findings | `POST /findings/resolve` | `scans:run` | Sets the status of a problem: `open`, `in_progress`, `resolved`, `false_positive`, `wont_fix`, `risk_accepted` |
 | evidence | `GET /evidence/finding/{deduped_key}` | `scans:read` | Evidence snapshots for a problem, by version and order |
-| evidence | `GET /evidence/blob/{sha256}` | `scans:read` | The evidence body, hash-verified: 410 if the body was purged, 422 if it does not match its hash |
-| evidence | `GET /evidence/bundle/{scan_id}` | `scans:read` | Zip with a manifest of hashes; a missing or corrupt body fails the whole download |
+| evidence | `GET /evidence/blob/{sha256}` | `scans:read`; an encrypted original also needs `config:manage` | The evidence body, hash-verified: 410 if the body was purged, 422 if it does not match its hash or the sha is malformed. Reading an encrypted original is audited (`evidence.read_original`) |
+| evidence | `GET /evidence/bundle/{scan_id}` | `scans:read` | Zip with a manifest of hashes; a missing or corrupt body fails the whole download. One entry per distinct body; above 5,000 bodies or 256 MB it answers 413 |
 | evidence | `POST /evidence/purge` | `config:manage` | Runs retention (`EVIDENCE_RETENTION_DAYS`): deletes the body, keeps hash and record, audits `evidence.purge`. A body shared with a snapshot still inside retention is kept |
 | reports | `GET /reports/{scan_id}` | `scans:read` | Technical HTML report |
 | reports | `GET /reports/{scan_id}/ai-bundle` | `scans:read` | AI Fix Bundle, schema 1.0.0 |
@@ -191,7 +191,7 @@ Permission `public` means no credential; `any` means any valid credential.
 | exposure | `POST /exposure/scan` | `scans:run` | Queues the OSINT pipeline (`company_name`, `domains`, `github_orgs`, `dorks`). Writes `exposure.scan` to the audit trail before queueing |
 | audit | `GET /audit` | `audit:read` | The audit trail, newest first. Filters `action`, `actor`, `resource_id`, `authorization_ref`, `since`; `offset`, `limit` (1 to 500, default 100). Read only |
 | investigate | `POST /investigate/{finding_id}` | `scans:run`; `dry_run=false` also needs `config:manage` and `AGENT_LIVE_EXECUTION=true` | The investigation agent on one finding. Body: `instructions`, `dry_run` (default `true`), `max_steps` (default 10) |
-| approvals | `GET /approvals[?status=]` | `commands:approve` | Pending command approvals (mode `ask`), newest first; a pending request past its timeout is marked `expired` on read |
+| approvals | `GET /approvals[?status=&offset=&limit=]` | `commands:approve` | Command approvals (mode `ask`), newest first, paginated (`limit` 1 to 500, default 100); a pending request past its timeout is marked `expired` on read. Not wired to execution yet: see ARCHITECTURE section 8 |
 | approvals | `POST /approvals/{id}/approve`, `POST /approvals/{id}/deny` | `commands:approve` | Decides a pending command. Four eyes (`APPROVAL_FOUR_EYES`) blocks the proposer approving their own, the `APP_TOKEN` service principal, and a request with no proposer (403); already decided or expired is 409. Audited |
 | settings | `GET`/`PUT /settings/ai` | `config:manage` | Models, API base and keys. Keys are stored encrypted and never returned (`hasApiKey`). Fields set by the environment come back in `locked` |
 | settings | `POST /settings/ai/models` | `config:manage` | The models each key reaches, fetched server side |

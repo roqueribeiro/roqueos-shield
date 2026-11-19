@@ -14,8 +14,8 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlmodel import col, select
 
 from orchestrator.api.deps import Principal, RequireCommandsApprove, SessionDep
@@ -40,7 +40,8 @@ class ApprovalOut(BaseModel):
 
 
 class DecisionIn(BaseModel):
-    reason: str | None = None
+    # Vai para a pendência e para a resposta: limitado e redigido como o comando.
+    reason: str | None = Field(default=None, max_length=2000)
 
 
 def _to_out(r: CommandApprovalRow) -> ApprovalOut:
@@ -63,15 +64,24 @@ def _to_out(r: CommandApprovalRow) -> ApprovalOut:
 async def list_approvals(
     session: SessionDep,
     status: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     _principal: Principal = RequireCommandsApprove,
 ) -> list[ApprovalOut]:
     """Pendências, mais recentes primeiro. Filtra por `status`. Exige `commands:approve`.
 
     Uma pendência vencida ainda em `pending` é marcada `expired` na leitura — o tempo
     limite nega mesmo sem ninguém decidir."""
+    stmt = select(CommandApprovalRow)
+    if status:
+        stmt = stmt.where(col(CommandApprovalRow.status) == status)
     rows = (
         await session.exec(
-            select(CommandApprovalRow).order_by(col(CommandApprovalRow.created_at).desc())
+            stmt.order_by(
+                col(CommandApprovalRow.created_at).desc(), col(CommandApprovalRow.id).desc()
+            )
+            .offset(offset)
+            .limit(limit)
         )
     ).all()
     saida: list[ApprovalOut] = []

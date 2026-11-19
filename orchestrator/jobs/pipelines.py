@@ -727,11 +727,24 @@ async def _persist_findings(
         s.add(existing_scan)
         await s.flush()
 
-        # Inventário de ativos (Frente A): upsert dos ativos vistos e preenche
-        # f.asset_id a partir do target de cada finding, ANTES de gravar os FindingRow.
+        # Inventário (Frente A) e evidência (Frente C) são ACESSÓRIOS dos findings: falha
+        # numa dessas etapas não pode custar o scan. Por isso cada uma roda num savepoint.
+        # Sem ele, um erro de banco (constraint, tipo, disco) invalidava a sessão inteira,
+        # o commit final falhava e o scan terminava com 0 findings preso em `running`. E a
+        # falha vai para `errors` do scan (que a API, a tela e o bundle mostram), não só
+        # para o log: "sem evidência" e "a captura falhou" não podem parecer a mesma coisa.
         from orchestrator.domain.assets import registrar_ativos
+        from orchestrator.evidence.service import capturar_evidencias
 
-        await registrar_ativos(s, scan_id, target, findings)
+        lacunas: list[str] = []
+        try:
+            async with s.begin_nested():
+                await registrar_ativos(s, scan_id, target, findings, scanners_ran=rodaram)
+        except Exception as e:  # noqa: BLE001
+            for f in findings:
+                f.asset_id = None  # o savepoint desfez os ativos; não aponte para o que não existe
+            log.error("assets.register_failed", scan_id=str(scan_id), error=str(e))
+            lacunas.append(f"inventário de ativos não registrado: {e}")
 
         for f in findings:
             s.add(
@@ -751,15 +764,32 @@ async def _persist_findings(
                     payload=f.model_dump(mode="json"),
                 )
             )
+        # Os findings vão ao banco AQUI, fora de qualquer savepoint: erro ao gravar o
+        # próprio finding é falha do persist e tem de aparecer como tal, não ser engolido
+        # por uma etapa acessória (o autoflush da evidência o rotulava como
+        # `evidence.capture_failed`).
+        await s.flush()
 
-        # Evidência que se sustenta (Frente C): snapshot redigido + vínculo `proof` por
-        # achado. Best-effort: uma falha aqui não derruba a persistência do scan.
-        from orchestrator.evidence.service import capturar_evidencias
-
+        sem_evidencia = 0
+        ultimo_erro = ""
         for f in findings:
             try:
-                await capturar_evidencias(s, scan_id, f)
+                async with s.begin_nested():
+                    await capturar_evidencias(s, scan_id, f)
             except Exception as e:  # noqa: BLE001
-                log.warning("evidence.capture_failed", deduped_key=f.deduped_key, error=str(e))
+                sem_evidencia += 1
+                log.error("evidence.capture_failed", deduped_key=f.deduped_key, error=str(e))
+                ultimo_erro = str(e)
+        if sem_evidencia:
+            lacunas.append(
+                f"evidência não capturada para {sem_evidencia} de {len(findings)} achado(s): "
+                f"{ultimo_erro}"
+            )
+
+        if lacunas:
+            existing_scan.errors = [*existing_scan.errors, *lacunas]
+            s.add(existing_scan)
+            if result is not None:
+                result.errors.extend(lacunas)
 
         await s.commit()

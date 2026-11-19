@@ -477,6 +477,7 @@
           "reason": {
             "anyOf": [
               {
+                "maxLength": 2000,
                 "type": "string"
               },
               {
@@ -714,6 +715,18 @@
       },
       "FindingOut": {
         "properties": {
+          "asset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          },
           "confidence": {
             "title": "Confidence",
             "type": "string"
@@ -2334,6 +2347,29 @@
               ],
               "title": "Status"
             }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -2826,14 +2862,17 @@
     },
     "/evidence/blob/{sha256}": {
       "get": {
-        "description": "O corpo da evidência, com o hash conferido. `scans:read`.\n\n410 se o corpo foi expurgado (o registro fica, o corpo não); 422 se o que está em\ndisco não bate com o hash (corrompido/adulterado); 404 se não há snapshot com esse sha.",
+        "description": "O corpo da evidência, com o hash conferido. `scans:read`.\n\n410 se o corpo foi expurgado (o registro fica, o corpo não); 422 se o que está em\ndisco não bate com o hash (corrompido/adulterado); 404 se não há snapshot com esse sha.\n\nBlob cifrado é o ORIGINAL, com o PII que o modo redigido apaga: decifrar exige\n`config:manage` e fica na trilha (`evidence.read_original`), com o ator. Antes,\nqualquer `scans:read` recebia o original em claro sem deixar registro.",
         "operationId": "get_blob_evidence_blob__sha256__get",
         "parameters": [
           {
+            "description": "sha256 do corpo gravado",
             "in": "path",
             "name": "sha256",
             "required": true,
             "schema": {
+              "description": "sha256 do corpo gravado",
+              "pattern": "^[0-9a-f]{64}$",
               "title": "Sha256",
               "type": "string"
             }
