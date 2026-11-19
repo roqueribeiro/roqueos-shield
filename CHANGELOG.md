@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-19
+
+### Security
+
+- **Imagem: trivy 0.76.2**, que corrige o go-jose e o x/net/html aceitos com prazo na 0.5.0 (o caminho do trivy saiu desses dois aceites). A 0.6.0 não foi publicada no Docker Hub: o gate do Trivy do `release-docker.sh` reprovou a candidata por CVE-2026-97054 (stdlib Go antes de 1.26.11/1.27.4) nos binários de nuclei 3.11.1, gitleaks 8.30.1 e trivy. As últimas releases dos três saem com Go anterior, então o CVE entra no `.trivyignore.yaml` com prazo até 2026-12-23, só no caminho de cada binário: nenhum deles serve HTTP no RoqueShield, que é onde o defeito vive. O código é o mesmo da 0.6.0.
+
 ## [0.6.0] - 2026-11-19
 
 ### Added

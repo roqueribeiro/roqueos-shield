@@ -28,7 +28,7 @@ ARG TRUFFLEHOG_VERSION=3.99.2
 # releases antigas. Medido em 2026-08-29: das cinco versoes testadas so a atual
 # responde 200. Um pin de release do GitHub nao e imutavel como um digest de
 # imagem; se este 404 voltar, e subir a versao de novo, nao vendorizar o binario.
-ARG TRIVY_VERSION=0.76.0
+ARG TRIVY_VERSION=0.76.2
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /tools

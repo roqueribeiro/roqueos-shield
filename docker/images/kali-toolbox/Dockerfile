@@ -31,7 +31,7 @@ ARG NUCLEI_VERSION=3.11.1
 ARG NAABU_VERSION=2.7.0
 ARG GITLEAKS_VERSION=8.30.1
 ARG TRUFFLEHOG_VERSION=3.99.2
-ARG TRIVY_VERSION=0.76.0
+ARG TRIVY_VERSION=0.76.2
 ARG KUBEBENCH_VERSION=0.16.0
 RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends unzip libpcap0.8 \
