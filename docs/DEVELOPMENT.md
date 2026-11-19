@@ -268,6 +268,8 @@ OK: <n> diagramas em dia.
 | `secrets` | gitleaks over the whole history, with `.gitleaks.toml` | always |
 | `self-scan` | Semgrep (`p/security-audit`, `p/secrets`) over `orchestrator/` and `scripts/` | always |
 | `efetividade` | `tests/integration/test_efetividade_e2e.py` with semgrep and checkov installed | always |
+| `regua-deteccao` | `scripts/regua.py deteccao --exigir-scanners` with semgrep, checkov and gitleaks (checksum verified) installed | always |
+| `regua-mutacao` | `scripts/regua.py mutacao --postgres` against a Postgres service | always |
 | `typecheck` | `mypy orchestrator` in strict mode, mypy pinned in the dev extra | always |
 | `test` | pytest with `--cov-fail-under=64` | always |
 | `web` | lockfile age, `yarn install --frozen-lockfile`, `yarn build`, Playwright, `scripts/web_e2e.sh` | always |

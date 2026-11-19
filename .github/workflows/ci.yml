@@ -174,6 +174,78 @@ jobs:
       - name: e2e de efetividade
         run: pytest tests/integration/test_efetividade_e2e.py -v
 
+  regua-deteccao:
+    name: Régua de detecção (recall, falsos positivos, CWE)
+    runs-on: ubuntu-latest
+    # O e2e acima pergunta "acha ALGUMA coisa?". A régua pergunta "acha QUANTO, e
+    # erra onde?": 19 defeitos plantados (SAST, IaC, segredos num commit de verdade)
+    # e 7 controles limpos, medidos contra tests/regua/linha_de_base.json. Recall que
+    # cai, falso positivo que sobe, CWE trocada ou camada sem medir reprovam. A linha
+    # de base é catraca: `--atualizar` só grava melhora.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install package + scanners
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          python -m venv /tmp/checkov-venv
+          /tmp/checkov-venv/bin/pip install --quiet "checkov==3.3.15"
+          mkdir -p /tmp/scanners-bin /tmp/gl
+          ln -sf /tmp/checkov-venv/bin/checkov /tmp/scanners-bin/checkov
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tgz="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL -o "/tmp/gl/${tgz}" "${base}/${tgz}"
+          curl -fsSL -o /tmp/gl/checksums.txt "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          (cd /tmp/gl && grep " ${tgz}\$" checksums.txt | sha256sum -c -)
+          tar -xzf "/tmp/gl/${tgz}" -C /tmp/scanners-bin gitleaks
+          echo "/tmp/scanners-bin" >> "$GITHUB_PATH"
+      - name: Régua de detecção
+        run: python scripts/regua.py deteccao --exigir-scanners --saida regua-placar
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: regua-placar
+          path: regua-placar/
+          if-no-files-found: ignore
+
+  regua-mutacao:
+    name: Régua dos testes (mutação dos controles críticos)
+    runs-on: ubuntu-latest
+    # Teste verde não prova que o teste mede. Cada entrada de tests/regua/mutacoes.yaml
+    # desfaz um controle crítico (savepoint, scrub antes do corte, HMAC, quatro olhos,
+    # consumo atômico...) e exige que o teste que diz protegê-lo reprove. Mutação que
+    # escapa, ou trecho do catálogo que sumiu do código, reprovam. Com Postgres para as
+    # mutações de concorrência, que o SQLite não mostra.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cai
+          POSTGRES_PASSWORD: cai
+          POSTGRES_DB: cai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cai -d cai"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ROQUESHIELD_PG_TEST_URL: postgresql+asyncpg://cai:cai@127.0.0.1:5432/cai
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+      - name: Régua dos testes
+        run: uv run --frozen --extra dev python scripts/regua.py mutacao --postgres
+
   typecheck:
     name: Typecheck (mypy)
     runs-on: ubuntu-latest

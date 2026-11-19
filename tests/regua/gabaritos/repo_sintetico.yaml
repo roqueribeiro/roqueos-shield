@@ -1,0 +1,77 @@
+# Gabarito do repositório sintético (tests/regua/repo_sintetico/ + segredos gerados).
+#
+# defeito: TEM de ser achado, no arquivo dele e pelo motivo certo (cwe ou regra).
+# limpo:   código seguro; qualquer alarme aqui é falso positivo.
+#
+# Os segredos (camada `segredo`) não ficam no repositório: o próprio gitleaks do CI
+# reprovaria. O construtor da régua os gera na hora, com valores fixos de teste.
+nome: repo_sintetico
+descricao: SAST, IaC e segredos plantados num repositório git, com controles limpos
+camadas:
+  sast: {scanners: [semgrep]}
+  iac: {scanners: [checkov]}
+  segredo: {scanners: [gitleaks]}
+itens:
+  # ---------------------------------------------------------------- SAST
+  - {id: SAST-01, camada: sast, tipo: defeito, arquivo: sast/injecao_comando.py,
+     descricao: "injeção de comando (subprocess com shell=True e entrada do usuário)",
+     cwe: [CWE-78]}
+  # A regra que pega este defeito (python.flask...tainted-sql-string) vem do pacote do
+  # semgrep marcada com uma CWE de conversão de tipo, não com a CWE-89. Por isso a
+  # detecção aceita a regra de SQL, e a CLASSIFICAÇÃO (cwe) é medida à parte: é a CWE
+  # que alimenta o mapeamento OWASP/PCI/LGPD do relatório de compliance.
+  - {id: SAST-02, camada: sast, tipo: defeito, arquivo: sast/sql_concatenado.py,
+     descricao: "SQL montado por concatenação com entrada do usuário", cwe: [CWE-89],
+     regra: "(?i)sql"}
+  - {id: SAST-03, camada: sast, tipo: defeito, arquivo: sast/pickle_inseguro.py,
+     descricao: "pickle.loads de dado da requisição", cwe: [CWE-502]}
+  - {id: SAST-04, camada: sast, tipo: defeito, arquivo: sast/hash_fraco.py,
+     descricao: "MD5 para senha", cwe: [CWE-327, CWE-328, CWE-916]}
+  - {id: SAST-05, camada: sast, tipo: defeito, arquivo: sast/flask_debug.py,
+     descricao: "Flask com debug=True", cwe: [CWE-489, CWE-94, CWE-668], regra: "(?i)debug"}
+  - {id: SAST-06, camada: sast, tipo: defeito, arquivo: sast/yaml_inseguro.py,
+     descricao: "yaml.load com Loader inseguro e entrada do usuário", cwe: [CWE-502]}
+  - {id: SAST-07, camada: sast, tipo: defeito, arquivo: sast/eval_entrada.py,
+     descricao: "eval de parâmetro da requisição", cwe: [CWE-95, CWE-94]}
+  - {id: SAST-08, camada: sast, tipo: defeito, arquivo: sast/tls_sem_verificacao.py,
+     descricao: "requests com verify=False", cwe: [CWE-295]}
+  - {id: SAST-09, camada: sast, tipo: defeito, arquivo: sast/path_traversal.py,
+     descricao: "open() com caminho vindo da requisição", cwe: [CWE-22]}
+  - {id: SAST-10, camada: sast, tipo: defeito, arquivo: sast/ssrf.py,
+     descricao: "requests.get de URL vinda da requisição (SSRF)", cwe: [CWE-918]}
+  # ---------------------------------------------------------------- IaC
+  - {id: IAC-01, camada: iac, tipo: defeito, arquivo: iac/s3_publico.tf,
+     descricao: "bucket S3 com ACL public-read", regra: "CKV_AWS_20\\b"}
+  - {id: IAC-02, camada: iac, tipo: defeito, arquivo: iac/sg_ssh_aberto.tf,
+     descricao: "security group com SSH aberto para 0.0.0.0/0", regra: "CKV_AWS_24\\b"}
+  - {id: IAC-03, camada: iac, tipo: defeito, arquivo: iac/ebs_sem_cifra.tf,
+     descricao: "volume EBS sem cifra", regra: "CKV_AWS_3\\b"}
+  - {id: IAC-04, camada: iac, tipo: defeito, arquivo: iac/rds_publico.tf,
+     descricao: "RDS acessível publicamente", regra: "CKV_AWS_17\\b"}
+  - {id: IAC-05, camada: iac, tipo: defeito, arquivo: iac/iam_curinga.tf,
+     descricao: "política IAM com Action e Resource '*'",
+     regra: "CKV_AWS_(1|62|63|286|287|288|289|290|355)\\b"}
+  # ---------------------------------------------------------------- segredos
+  - {id: SEG-01, camada: segredo, tipo: defeito, arquivo: segredos/aws_credentials.ini,
+     descricao: "chave de acesso AWS commitada", regra: "(?i)aws"}
+  - {id: SEG-02, camada: segredo, tipo: defeito, arquivo: segredos/github_token.txt,
+     descricao: "token pessoal do GitHub commitado", regra: "(?i)github"}
+  - {id: SEG-03, camada: segredo, tipo: defeito, arquivo: segredos/deploy_key.pem,
+     descricao: "chave privada RSA commitada", regra: "(?i)private"}
+  - {id: SEG-04, camada: segredo, tipo: defeito, arquivo: segredos/slack_bot.txt,
+     descricao: "token de bot do Slack commitado", regra: "(?i)slack"}
+  # ---------------------------------------------------------------- controles limpos
+  - {id: LIMPO-01, camada: sast, tipo: limpo, arquivo: limpo/sql_parametrizado.py,
+     descricao: "SQL parametrizado"}
+  - {id: LIMPO-02, camada: sast, tipo: limpo, arquivo: limpo/subprocess_lista.py,
+     descricao: "subprocess com argv em lista e literal"}
+  - {id: LIMPO-03, camada: sast, tipo: limpo, arquivo: limpo/hash_forte.py,
+     descricao: "SHA-256 para integridade"}
+  - {id: LIMPO-04, camada: sast, tipo: limpo, arquivo: limpo/yaml_seguro.py,
+     descricao: "yaml.safe_load"}
+  - {id: LIMPO-05, camada: sast, tipo: limpo, arquivo: limpo/json_seguro.py,
+     descricao: "json.loads"}
+  - {id: LIMPO-06, camada: sast, tipo: limpo, arquivo: limpo/requests_verificado.py,
+     descricao: "requests com TLS verificado e URL fixa"}
+  - {id: LIMPO-07, camada: segredo, tipo: limpo, arquivo: limpo/config_por_ambiente.py,
+     descricao: "credenciais lidas do ambiente, não escritas no código"}

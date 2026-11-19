@@ -146,10 +146,27 @@ Quando o executor muda, a prova exigida no fechamento é um teste mostrando que 
 | --- | --- | --- |
 | **silencio** (`scripts/check_no_silence.py`) | reprova `except` vazio no ciclo de vida do scan, `poll` que decide por `task.done()`, payload de sucesso fabricado e persistência que não grava a cobertura | quatro plantios, todos `exit 1`; as burlas do próprio gate são testes em `test_gate_do_silencio.py` |
 | **efetividade** (`tests/integration/test_efetividade_e2e.py`) | monta um repositório com defeito conhecido e exige achado real de cada camada | com `--config auto`, o SAST não roda e o gate reprova |
+| **regua-deteccao** (`scripts/regua.py deteccao --exigir-scanners`) | mede QUANTO a ferramenta acha e onde erra: recall por camada, falsos positivos nos controles limpos e classificação por CWE, contra um gabarito, com linha de base em catraca | tirar o `eval` do SAST-07 do gabarito derruba o recall para 90%; um alarme plantado num arquivo limpo dá 1 falso positivo; sem a correção de CWE do semgrep a classificação cai para 90%; sem checkov a camada fica "não medida" |
+| **regua-mutacao** (`scripts/regua.py mutacao --postgres`) | desfaz cada controle crítico de `tests/regua/mutacoes.yaml` e exige que o teste que diz protegê-lo reprove | mutação que escapa, ou trecho do catálogo que sumiu do código, reprova |
 | **docs** (`scripts/check_docs_fresh.py`) | todo scanner construível aparece na doc, a contagem de adapters bate, todo campo de `Settings` está no `.env.example`, nada é chamado de "stub" se já roda, os pares de docs e os links resolvem | scanner sem doc, campo de `Settings` fora do `.env.example`, doc chamando o agente de stub |
 | **postgres-real** (`tests/postgres/`, job "Postgres real") | o que o SQLite não prova: migrations iguais aos modelos (`alembic check`), `audit_log` e `evidence_snapshots` recusando UPDATE e DELETE, DELETE de scan com as FKs forçadas, decisões simultâneas numa aprovação, scans simultâneos no mesmo ativo novo. Local: `ROQUESHIELD_PG_TEST_URL=postgresql+asyncpg://... uv run pytest tests/postgres` | achou o drift de índices consertado pela migration `0013` e um savepoint que não isolava o insert de ativo; com o `add` de volta fora do savepoint, reprova 4 de 4 execuções |
 
 O gate é o piso, não o teto. Check que nunca reprovou não é check: antes de declarar um gate pronto, quebre de propósito e confirme que ele reprova.
+
+### A régua de efetividade
+
+Teste verde prova que cada conserto funciona; não diz quão bom é o resultado. A régua (`orchestrator/regua/`, `scripts/regua.py`, `tests/regua/`) mede duas coisas:
+
+1. **Detecção.** `tests/regua/gabaritos/repo_sintetico.yaml` lista 19 defeitos plantados (10 de SAST, 5 de IaC, 4 segredos gerados na hora e commitados num histórico git de verdade, porque o gitleaks varre o histórico) e 7 controles limpos (SQL parametrizado, `subprocess` com lista, `yaml.safe_load`). Defeito só conta se um scanner da camada dele disparar no arquivo dele pelo motivo certo (CWE ou padrão de regra). Qualquer alarme num arquivo limpo é falso positivo. Detecção certa com a CWE errada conta como detectada mas não como classificada, porque é a CWE que alimenta o mapeamento OWASP/PCI/LGPD. Camada cujo scanner não rodou é `não medida`, nunca zero e nunca cem.
+2. **Os próprios testes.** `tests/regua/mutacoes.yaml` é o catálogo dos controles críticos (savepoints, scrub antes do corte, proveniência HMAC, quatro olhos, consumo atômico, retenção agendada, correção de CWE). Cada entrada desfaz um controle e roda o teste que diz protegê-lo, que tem de reprovar.
+
+```bash
+uv run --frozen --extra dev python scripts/regua.py deteccao                 # local: avisa quando uma camada não é medida
+uv run --frozen --extra dev python scripts/regua.py deteccao --exigir-scanners  # CI: camada sem medir reprova
+uv run --frozen --extra dev python scripts/regua.py mutacao                  # some --postgres com ROQUESHIELD_PG_TEST_URL
+```
+
+A linha de base (`tests/regua/linha_de_base.json`) é catraca: `--atualizar` só grava melhora; gravar piora exige editar o arquivo à mão, com o motivo no commit. Medido em 18/11/2026: SAST com recall 100% (10/10) e classificação 100%, IaC 100% (5/5), segredos 100% (4/4), 0 falsos positivos. Localmente sem checkov a camada de IaC imprime `NÃO MEDIDA` em vez de passar, a mesma regra que o contrato do silêncio aplica aos scanners.
 
 ## 12. O que rodar, por tipo de alvo
 
