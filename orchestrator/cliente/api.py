@@ -112,3 +112,13 @@ class Api:
 
     def delete(self, caminho: str) -> Any:
         return self._req("DELETE", caminho)
+
+    def enviar_codigo(self, projeto: str, dados: bytes) -> Any:
+        """`POST /code/{projeto}/uploads` com o .tar.gz cru. Prazo maior: é upload."""
+        return self._req(
+            "POST",
+            f"/code/{projeto}/uploads",
+            content=dados,
+            headers={"Content-Type": "application/gzip"},
+            timeout=300,
+        )

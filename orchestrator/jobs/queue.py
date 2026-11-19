@@ -67,7 +67,11 @@ WorkerSettings.functions = _functions()
 def _crons() -> list[Any]:
     from orchestrator.jobs import workers
 
-    return [cron(workers.evidence_retention_job, hour={3}, minute={17}, run_at_startup=False)]
+    return [
+        cron(workers.evidence_retention_job, hour={3}, minute={17}, run_at_startup=False),
+        # Código enviado e nunca escaneado: de hora em hora, porque o prazo é em horas.
+        cron(workers.code_upload_purge_job, minute={41}, run_at_startup=True),
+    ]
 
 
 WorkerSettings.cron_jobs = _crons()

@@ -48,6 +48,21 @@ class ApiHttp:
     async def post(self, caminho: str, corpo: Any = None) -> Any:
         return await self._req("POST", caminho, corpo or {})
 
+    async def enviar_codigo(self, projeto: str, dados: bytes) -> Any:
+        r = await self.http.post(
+            f"/code/{projeto}/uploads",
+            content=dados,
+            headers={"Content-Type": "application/gzip"},
+            timeout=300,
+        )
+        if r.status_code >= 400:
+            try:
+                detalhe = r.json().get("detail")
+            except Exception:  # noqa: BLE001
+                detalhe = r.text[:300]
+            raise ErroDaApi(r.status_code, detalhe)
+        return r.json()
+
 
 async def _laco(servidor: Servidor) -> None:
     loop = asyncio.get_running_loop()
@@ -80,4 +95,4 @@ def rodar(cfg: Config) -> None:
     )
     from orchestrator import __version__
 
-    asyncio.run(_laco(Servidor(ApiHttp(cfg), acoes=acoes, versao=__version__)))
+    asyncio.run(_laco(Servidor(ApiHttp(cfg), acoes=acoes, versao=__version__, local=True)))

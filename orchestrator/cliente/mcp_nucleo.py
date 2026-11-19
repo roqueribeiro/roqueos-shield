@@ -91,6 +91,62 @@ FERRAMENTAS_DE_LEITURA: list[dict[str, Any]] = [
         "description": "Os alvos registrados.",
         "inputSchema": _schema({}),
     },
+    {
+        "name": "gate_verdict",
+        "description": (
+            "O veredito de gate de um scan terminado: aprovado, reprovado ou nao_medido. "
+            "Por padrão só achado NOVO (que não estava no último scan completo do mesmo "
+            "alvo) com severidade no limite ou acima reprova. nao_medido volta como erro: "
+            "scanner que não rodou não aprova código."
+        ),
+        "inputSchema": _schema(
+            {
+                "scan_id": _ID,
+                "fail_on": {
+                    "type": "string",
+                    "enum": ["info", "low", "medium", "high", "critical"],
+                },
+                "all_findings": {
+                    "type": "boolean",
+                    "description": "true = bloqueia também achado já conhecido",
+                },
+            },
+            ["scan_id"],
+        ),
+    },
+]
+
+# Só no MCP por stdio, que roda na máquina de quem chama e enxerga o disco dela. Não
+# depende das ações ligadas: escanear o próprio código não toca alvo de terceiro. O
+# servidor ainda exige `scans:run` e, com REQUIRE_AUTH_REF, a referência.
+FERRAMENTAS_LOCAIS: list[dict[str, Any]] = [
+    {
+        "name": "scan_code",
+        "description": (
+            "Empacota uma pasta de código local (respeitando o .gitignore, sem a pasta "
+            ".git), envia ao RoqueShield e dispara o scan de código (SAST, segredos, IaC, "
+            "dependências). Use antes de entregar uma mudança. Com wait_seconds > 0 espera "
+            "o fim e devolve o veredito do gate; senão devolve o scan_id para get_scan e "
+            "gate_verdict."
+        ),
+        "inputSchema": _schema(
+            {
+                "path": {"type": "string", "description": "pasta absoluta do código"},
+                "project": {
+                    "type": "string",
+                    "description": "nome do projeto (padrão: nome da pasta); o mesmo nome "
+                    "em todo envio, para o gate saber o que é novo",
+                },
+                "authorization_ref": {"type": "string", "minLength": 3},
+                "fail_on": {
+                    "type": "string",
+                    "enum": ["info", "low", "medium", "high", "critical"],
+                },
+                "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 1800},
+            },
+            ["path"],
+        ),
+    },
 ]
 
 FERRAMENTAS_DE_ACAO: list[dict[str, Any]] = [
@@ -131,6 +187,20 @@ FERRAMENTAS_DE_ACAO: list[dict[str, Any]] = [
 ]
 
 
+def _empacotar_pasta(caminho: str, projeto: Any) -> tuple[Any, str]:
+    """Síncrono (disco), roda numa thread. Recusa caminho relativo: o cwd do servidor MCP
+    é o de quem o lançou, e "." ali escanearia a pasta errada sem avisar."""
+    from pathlib import Path
+
+    from orchestrator.cliente.empacotar import EmpacotamentoFalhou, empacotar
+
+    raiz = Path(caminho).expanduser()
+    if not raiz.is_absolute():
+        raise EmpacotamentoFalhou("path precisa ser absoluto")
+    nome = str(projeto or raiz.resolve().name).strip().lower()
+    return empacotar(raiz), nome
+
+
 def _incompleto(scan: dict[str, Any]) -> str | None:
     if scan.get("state") == "failed":
         return "o scan FALHOU"
@@ -144,9 +214,12 @@ def _incompleto(scan: dict[str, Any]) -> str | None:
 
 
 class Servidor:
-    def __init__(self, api: ApiAssincrona, *, acoes: bool = False, versao: str = "") -> None:
+    def __init__(
+        self, api: ApiAssincrona, *, acoes: bool = False, versao: str = "", local: bool = False
+    ) -> None:
         self.api = api
         self.acoes = acoes
+        self.local = local
         self.versao = versao
         self._acoes_por_nome: dict[str, Callable[[dict[str, Any]], Awaitable[Any]]] = {
             "list_scans": self._list_scans,
@@ -155,10 +228,16 @@ class Servidor:
             "get_ai_bundle": self._get_ai_bundle,
             "list_targets": self._list_targets,
             "start_scan": self._start_scan,
+            "gate_verdict": self._gate_verdict,
+            "scan_code": self._scan_code,
         }
 
     def ferramentas(self) -> list[dict[str, Any]]:
-        return FERRAMENTAS_DE_LEITURA + (FERRAMENTAS_DE_ACAO if self.acoes else [])
+        return (
+            FERRAMENTAS_DE_LEITURA
+            + (FERRAMENTAS_LOCAIS if self.local else [])
+            + (FERRAMENTAS_DE_ACAO if self.acoes else [])
+        )
 
     # --- ferramentas -----------------------------------------------------------
 
@@ -206,6 +285,58 @@ class Servidor:
         return await self.api.post(
             "/scans",
             {"target_id": alvo["id"], "profile": a.get("profile", "web"), "authorization_ref": ref},
+        )
+
+    async def _gate_verdict(self, a: dict[str, Any]) -> Any:
+        fail_on = str(a.get("fail_on") or "high")
+        so_novos = "false" if a.get("all_findings") else "true"
+        g = await self.api.get(f"/scans/{a['scan_id']}/gate?fail_on={fail_on}&so_novos={so_novos}")
+        if isinstance(g, dict) and g.get("verdict") in ("nao_medido", "em_andamento"):
+            raise ErroDeFerramenta(json.dumps(g, ensure_ascii=False))
+        return g
+
+    async def _scan_code(self, a: dict[str, Any]) -> Any:
+        import asyncio
+
+        from orchestrator.cliente.empacotar import EmpacotamentoFalhou
+
+        if not self.local:
+            raise ErroDeFerramenta("scan_code só existe no MCP por stdio (roqueshield mcp)")
+        enviar = getattr(self.api, "enviar_codigo", None)
+        if enviar is None:
+            raise ErroDeFerramenta("este cliente não sabe enviar código")
+        try:
+            pacote, projeto = await asyncio.to_thread(
+                _empacotar_pasta, str(a["path"]), a.get("project")
+            )
+        except EmpacotamentoFalhou as e:
+            raise ErroDeFerramenta(str(e)) from e
+        envio = await enviar(projeto, pacote.dados)
+        corpo: dict[str, Any] = {
+            "target_id": envio["target_id"],
+            "code_upload_id": envio["upload_id"],
+        }
+        if a.get("authorization_ref"):
+            corpo["authorization_ref"] = str(a["authorization_ref"])
+        scan = await self.api.post("/scans", corpo)
+        espera = max(0, min(int(a.get("wait_seconds") or 0), 1800))
+        if not espera:
+            return {
+                "scan_id": scan["id"],
+                "target": envio["target_value"],
+                "arquivos": pacote.arquivos,
+            }
+        prazo = asyncio.get_running_loop().time() + espera
+        while asyncio.get_running_loop().time() < prazo:
+            s = await self.api.get(f"/ui/api/scans/{scan['id']}")
+            if s.get("state") in ("done", "failed", "canceled"):
+                return await self._gate_verdict({**a, "scan_id": scan["id"]})
+            await asyncio.sleep(5)
+        raise ErroDeFerramenta(
+            json.dumps(
+                {"erro": f"o scan não terminou em {espera}s", "scan_id": scan["id"]},
+                ensure_ascii=False,
+            )
         )
 
     # --- protocolo -------------------------------------------------------------

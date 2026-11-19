@@ -477,6 +477,57 @@
         "title": "AuthContext",
         "type": "object"
       },
+      "CodeUploadOut": {
+        "properties": {
+          "arquivos": {
+            "title": "Arquivos",
+            "type": "integer"
+          },
+          "bytes_comprimidos": {
+            "title": "Bytes Comprimidos",
+            "type": "integer"
+          },
+          "bytes_descomprimidos": {
+            "title": "Bytes Descomprimidos",
+            "type": "integer"
+          },
+          "expira_em": {
+            "format": "date-time",
+            "title": "Expira Em",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_value": {
+            "title": "Target Value",
+            "type": "string"
+          },
+          "upload_id": {
+            "format": "uuid",
+            "title": "Upload Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "upload_id",
+          "target_id",
+          "target_value",
+          "sha256",
+          "bytes_comprimidos",
+          "arquivos",
+          "bytes_descomprimidos",
+          "expira_em"
+        ],
+        "title": "CodeUploadOut",
+        "type": "object"
+      },
       "CommandOut": {
         "properties": {
           "command": {
@@ -829,6 +880,139 @@
         ],
         "title": "FindingStatus",
         "type": "string"
+      },
+      "GateAchado": {
+        "properties": {
+          "deduped_key": {
+            "title": "Deduped Key",
+            "type": "string"
+          },
+          "novo": {
+            "title": "Novo",
+            "type": "boolean"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "source_tool": {
+            "title": "Source Tool",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deduped_key",
+          "title",
+          "severity",
+          "source_tool",
+          "novo"
+        ],
+        "title": "GateAchado",
+        "type": "object"
+      },
+      "GateOut": {
+        "properties": {
+          "baseline_scan_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Scan Id"
+          },
+          "bloqueantes": {
+            "items": {
+              "$ref": "#/components/schemas/GateAchado"
+            },
+            "title": "Bloqueantes",
+            "type": "array"
+          },
+          "conhecidos": {
+            "title": "Conhecidos",
+            "type": "integer"
+          },
+          "coverage_complete": {
+            "title": "Coverage Complete",
+            "type": "boolean"
+          },
+          "coverage_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Note"
+          },
+          "fail_on": {
+            "title": "Fail On",
+            "type": "string"
+          },
+          "fora_do_gate": {
+            "title": "Fora Do Gate",
+            "type": "integer"
+          },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          },
+          "novos": {
+            "title": "Novos",
+            "type": "integer"
+          },
+          "por_severidade": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Por Severidade",
+            "type": "object"
+          },
+          "scan_id": {
+            "format": "uuid",
+            "title": "Scan Id",
+            "type": "string"
+          },
+          "so_novos": {
+            "title": "So Novos",
+            "type": "boolean"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scan_id",
+          "verdict",
+          "motivo",
+          "fail_on",
+          "so_novos",
+          "coverage_complete",
+          "coverage_note",
+          "baseline_scan_id",
+          "total",
+          "novos",
+          "conhecidos",
+          "fora_do_gate",
+          "por_severidade",
+          "bloqueantes"
+        ],
+        "title": "GateOut",
+        "type": "object"
       },
       "GrupoOut": {
         "properties": {
@@ -1647,6 +1831,19 @@
             ],
             "description": "Referencia formal a autorizacao do scan (ticket, change, aprovacao escrita). Exigido quando settings.REQUIRE_AUTH_REF=true.",
             "title": "Authorization Ref"
+          },
+          "code_upload_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Envio de `POST /code/{projeto}/uploads`. Obrigatório quando o alvo é `code://<projeto>` (e só nesse caso); é de uso único.",
+            "title": "Code Upload Id"
           },
           "options": {
             "additionalProperties": true,
@@ -2964,6 +3161,57 @@
         "summary": "Login",
         "tags": [
           "conta"
+        ]
+      }
+    },
+    "/code/{projeto}/uploads": {
+      "post": {
+        "description": "Recebe a árvore de código como `.tar.gz` e prepara o alvo `code://<projeto>`.",
+        "operationId": "upload_code_code__projeto__uploads_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "projeto",
+            "required": true,
+            "schema": {
+              "title": "Projeto",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeUploadOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Upload Code",
+        "tags": [
+          "code"
         ]
       }
     },
@@ -4344,6 +4592,78 @@
           }
         ],
         "summary": "Get Scan",
+        "tags": [
+          "scans"
+        ]
+      }
+    },
+    "/scans/{scan_id}/gate": {
+      "get": {
+        "description": "O veredito de um scan para um gate de CI ou de agente.\n\n- Cobertura incompleta ou desconhecida: `nao_medido`. Nunca `aprovado`: scanner que\n  não rodou não aprova nada.\n- `so_novos=true` (padrão): só bloqueia achado que não estava no último scan\n  completo do mesmo alvo (a linha de base). A dívida antiga aparece em `conhecidos`\n  e não trava o gate, senão o gate nasce reprovado em todo repo e alguém o desliga.\n- Achado marcado como falso positivo, risco aceito, não corrigir ou resolvido fica\n  fora (`fora_do_gate`): a decisão está assinada na trilha.",
+        "operationId": "gate_do_scan_scans__scan_id__gate_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fail_on",
+            "required": false,
+            "schema": {
+              "default": "high",
+              "title": "Fail On",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "so_novos",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "So Novos",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GateOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ApiToken": []
+          },
+          {
+            "Sessao": []
+          }
+        ],
+        "summary": "Gate Do Scan",
         "tags": [
           "scans"
         ]

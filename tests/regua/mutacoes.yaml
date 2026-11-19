@@ -36,8 +36,8 @@ mutacoes:
   - id: M-SCAN-01
     controle: scan em andamento não pode ser apagado (409)
     arquivo: orchestrator/api/routers/scans.py
-    de: "    if scan.state in (ScanState.PENDING.value, ScanState.RUNNING.value):"
-    para: "    if False:"
+    de: "    if scan.state in (ScanState.PENDING.value, ScanState.RUNNING.value):\n        raise HTTPException(409"
+    para: "    if False:\n        raise HTTPException(409"
     teste: tests/integration/test_revisao_frentes_ace.py -k em_andamento_nao_pode
   - id: M-SCAN-02
     controle: GET /scans expõe a cobertura
@@ -242,8 +242,8 @@ mutacoes:
   - id: M-RET-01
     controle: retenção agendada no worker
     arquivo: orchestrator/jobs/queue.py
-    de: "    return [cron(workers.evidence_retention_job, hour={3}, minute={17}, run_at_startup=False)]"
-    para: "    return []"
+    de: "        cron(workers.evidence_retention_job, hour={3}, minute={17}, run_at_startup=False),\n"
+    para: ""
     teste: tests/integration/test_limites_resolvidos.py -k agendada_no_worker
   - id: M-CWE-01
     controle: injeção de SQL do semgrep sai com a CWE-89
@@ -251,3 +251,58 @@ mutacoes:
     de: 'cwe=_corrigir_cwes(check_id, _extract_cwes(meta.get("cwe"))),'
     para: 'cwe=_extract_cwes(meta.get("cwe")),'
     teste: tests/unit/test_semgrep_cwe.py
+  # ======================================================== código enviado e o gate
+  - id: M-COD-01
+    controle: tarball com caminho fora da raiz é recusado antes de extrair
+    arquivo: orchestrator/domain/codigo.py
+    de: "def _dentro(nome: str) -> bool:\n"
+    para: "def _dentro(nome: str) -> bool:\n    return True\n"
+    teste: tests/unit/test_codigo_enviado.py -k escapa_da_raiz
+  - id: M-COD-02
+    controle: bomba de compressão barrada pelo teto de bytes descomprimidos
+    arquivo: orchestrator/domain/codigo.py
+    de: "                if total > max_bytes:"
+    para: "                if False:"
+    teste: tests/unit/test_codigo_enviado.py -k bomba
+  - id: M-COD-03
+    controle: alvo code:// sem envio não vira scan "limpo"
+    arquivo: orchestrator/api/routers/scans.py
+    de: "    if code_upload_id is None:\n        raise HTTPException("
+    para: "    if False:\n        raise HTTPException("
+    teste: tests/unit/test_codigo_enviado.py -k sem_envio
+  - id: M-COD-04
+    controle: envio que não prepara vira scanner pulado e scan failed
+    arquivo: orchestrator/jobs/pipelines.py
+    de: "    if code_error is not None:\n        for a in adapters:"
+    para: "    if False:\n        for a in adapters:"
+    teste: tests/unit/test_codigo_enviado.py -k nao_prepara
+  - id: M-COD-05
+    controle: código de cliente apagado do disco depois do scan
+    arquivo: orchestrator/jobs/workers.py
+    de: "            codigo_enviado.apagar(code_upload_id)"
+    para: "            pass"
+    teste: tests/unit/test_codigo_enviado.py -k apaga_o_envio
+  - id: M-GATE-01
+    controle: cobertura incompleta é nao_medido, nunca aprovado
+    arquivo: orchestrator/api/routers/scans.py
+    de: "    if not cob[\"completa\"]:\n        return _saida(\n            \"nao_medido\""
+    para: "    if False:\n        return _saida(\n            \"nao_medido\""
+    teste: tests/unit/test_codigo_enviado.py -k nao_medido
+  - id: M-GATE-02
+    controle: o gate separa achado novo da dívida antiga (linha de base)
+    arquivo: orchestrator/api/routers/scans.py
+    de: "        novo = r.deduped_key not in conhecidas"
+    para: "        novo = True"
+    teste: tests/unit/test_codigo_enviado.py -k so_reprova_achado_novo
+  - id: M-GATE-03
+    controle: identidade do achado estável entre envios (chave recalculada)
+    arquivo: orchestrator/domain/codigo.py
+    de: "        dados[\"deduped_key\"] = \"\"\n"
+    para: "\n"
+    teste: tests/unit/test_codigo_enviado.py -k mesma_chave
+  - id: M-GATE-04
+    controle: commit da fotografia fora da chave do achado (gitleaks)
+    arquivo: orchestrator/domain/codigo.py
+    de: "        if sha and isinstance(disc, str) and sha in disc:"
+    para: "        if False:"
+    teste: tests/unit/test_codigo_enviado.py -k commit_da_fotografia

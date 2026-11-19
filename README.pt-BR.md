@@ -125,9 +125,9 @@ Três superfícies existem hoje, e elas bastam para fechar o laço varrer, corri
 
 | Superfície | Ponto de entrada | Serve para |
 | --- | --- | --- |
-| **CLI** | `roqueshield scan start … --wait --fail-on high` | um passo de CI, ou um agente que já tem shell |
+| **CLI** | `roqueshield scan start … --wait --fail-on high`, e `roqueshield scan code .` para uma árvore local (sai por um gate que só reprova achado **novo**) | um passo de CI, ou um agente que já tem shell |
 | **REST** | OpenAPI em `/docs` (fotografia em [`docs/openapi.json`](docs/openapi.json)), SSE em `/ui/api/events` | um serviço integrando pela rede |
-| **MCP** | `roqueshield mcp` (stdio) e `POST /mcp` (HTTP) | Claude Code, Claude Desktop, Cursor |
+| **MCP** | `roqueshield mcp` (stdio, com `scan_code` para uma pasta local) e `POST /mcp` (HTTP) | Claude Code, Claude Desktop, Cursor |
 | **AI Fix Bundle** | `GET /reports/{scan_id}/ai-bundle`, schema `1.0.0` | o agente que escreve o patch |
 
 <picture>

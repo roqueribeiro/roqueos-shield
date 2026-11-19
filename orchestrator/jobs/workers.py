@@ -5,6 +5,9 @@ Wraps run_scan() e run_exposure_scan() em job assíncrono.
 
 from __future__ import annotations
 
+import shutil
+import tempfile
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -29,6 +32,7 @@ async def run_scan_job(
     auth_headers: dict[str, str] | None = None,
     openapi_url: str | None = None,
     profile: str | None = None,
+    code_upload_id: str | None = None,
 ) -> dict[str, Any]:
     """Job arq: roda pipeline de scan completo.
 
@@ -53,18 +57,36 @@ async def run_scan_job(
 
     log.info("scan.started", target=target_value, scanners=scanners, actor=actor)
 
-    # Pass the requested scan_id so the pipeline UPDATES the scan POST /scans
-    # created (the one the UI is watching) instead of minting a new id — which
-    # left the UI's scan stuck in `pending` forever.
-    result = await run_scan(
-        target,
-        scanners=scanners or None,
-        options=options or {},
-        scan_id=UUID(scan_id) if scan_id else None,
-        auth_headers=auth_headers or None,
-        openapi_url=openapi_url or None,
-        profile=profile,
-    )
+    # Código enviado: extrai numa pasta temporária, escaneia e apaga tudo, a pasta e o
+    # tarball, dê certo ou não. O envio é de uso único.
+    tmp: Path | None = None
+    code_root: Path | None = None
+    code_error: str | None = None
+    if code_upload_id:
+        code_root, code_error, tmp = _preparar_codigo(code_upload_id)
+
+    try:
+        # Pass the requested scan_id so the pipeline UPDATES the scan POST /scans
+        # created (the one the UI is watching) instead of minting a new id — which
+        # left the UI's scan stuck in `pending` forever.
+        result = await run_scan(
+            target,
+            scanners=scanners or None,
+            options=options or {},
+            scan_id=UUID(scan_id) if scan_id else None,
+            auth_headers=auth_headers or None,
+            openapi_url=openapi_url or None,
+            profile=profile,
+            code_root=code_root,
+            code_error=code_error,
+        )
+    finally:
+        if code_upload_id:
+            from orchestrator import codigo_enviado
+
+            codigo_enviado.apagar(code_upload_id)
+        if tmp is not None:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     log.info(
         "scan.finished",
@@ -80,6 +102,40 @@ async def run_scan_job(
         "errors": result.errors,
         "report_path": str(result.report_path) if result.report_path else None,
     }
+
+
+def _preparar_codigo(upload_id: str) -> tuple[Path | None, str | None, Path | None]:
+    """(pasta do repo, erro, pasta temporária). Erro vira `scanners_skipped`, não zero."""
+    from orchestrator import codigo_enviado
+    from orchestrator.config import settings
+    from orchestrator.domain.codigo import CodigoRecusado, extrair, fotografar_em_git
+
+    if codigo_enviado.ler(upload_id) is None:
+        return None, "o envio não existe mais no disco (expirou ou já foi usado)", None
+    tmp = Path(tempfile.mkdtemp(prefix="cai-code-"))
+    raiz = tmp / "repo"
+    try:
+        extrair(
+            codigo_enviado.tarball(upload_id),
+            raiz,
+            max_arquivos=settings.CODE_UPLOAD_MAX_FILES,
+            max_bytes=settings.CODE_UPLOAD_MAX_EXTRACTED_MB * 1024 * 1024,
+        )
+        fotografar_em_git(raiz)
+    except CodigoRecusado as e:
+        log.error("codigo.preparo_falhou", upload_id=upload_id, erro=str(e))
+        return None, str(e), tmp
+    return raiz, None, tmp
+
+
+async def code_upload_purge_job(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Cron: apaga o código enviado que passou de CODE_UPLOAD_TTL_HOURS sem scan."""
+    from orchestrator import codigo_enviado
+
+    apagados = codigo_enviado.expurgar_vencidos()
+    if apagados:
+        log.info("codigo.expurgo", apagados=len(apagados))
+    return {"apagados": len(apagados)}
 
 
 async def run_exposure_job(

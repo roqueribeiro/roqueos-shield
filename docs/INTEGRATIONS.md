@@ -94,6 +94,8 @@ The options an integration uses, from `roqueshield scan start --help`, `report -
 | Command | Options |
 | --- | --- |
 | `scan start <alvo>` | `--type url\|domain\|host\|port\|image\|repo` (default `url`), `--profile web\|network\|full\|active\|exposure` (default `web`), `--scanner` (repeat for more), `--auth-ref` (authorization reference), `--wait`, `--fail-on info\|low\|medium\|high\|critical`, `--intervalo` (poll seconds, default 5), `--prazo` (give-up seconds, default 7200) |
+| `scan code [pasta]` | `--project/-p` (default: the folder name), `--auth-ref`, `--fail-on` (default `high`), `--all-findings`, `--wait/--no-wait` (default `--wait`), `--intervalo`, `--prazo` (default 3600) |
+| `gate <scan_id>` | `--fail-on` (default `high`), `--all-findings` |
 | `scan watch <scan_id>` | `--fail-on`, `--intervalo`, `--prazo` |
 | `scan show <scan_id>` | `--json` |
 | `findings <scan_id>` | `--severity`, `--limit` (default 200), `--json` |
@@ -137,6 +139,29 @@ sem conexão com o RoqueShield: ConnectError: [Errno 111] Connection refused
 
 (`--fail-on` accepts only the five severities; "no server or token: run login or set the two variables"; "no connection to RoqueShield".) An API refusal prints `a API recusou (<status>): <detail>` ("the API refused") and also exits `2`.
 
+### Code that no git URL reaches
+
+`scan start --type repo` needs a git URL the worker can clone. Code an agent is still writing, or a private repository the worker has no credential for, does not get there. `scan code` sends the tree instead:
+
+```bash
+roqueshield scan code .                       # the current folder, project = folder name
+roqueshield scan code ~/src/api -p api --fail-on critical
+roqueshield gate <scan_id> --all-findings     # verdict of a finished scan, counting known findings too
+```
+
+What goes in is what git would commit right now: tracked files plus untracked ones the `.gitignore` does not ignore. So `node_modules/`, `.venv/` and `.env` stay out by the rule the project already uses, and uncommitted code goes in. The `.git` folder never goes, and neither do symlinks. The history is therefore not scanned: the report carries an INFO finding saying that a secret committed and later deleted is not seen this way, and that scanning the repository by URL is the way to cover it.
+
+`scan code` exits by the **gate verdict**, not by raw counts:
+
+| Code | Verdict |
+| --- | --- |
+| `0` | `aprovado`: coverage complete, no **new** finding at or above `--fail-on` |
+| `1` | `reprovado`: a new finding at or above `--fail-on` (with `--all-findings`, a known one too) |
+| `2` | usage, connection or credential error, or nothing to upload |
+| `3` | `nao_medido` or `em_andamento`: some scanner did not run, or the scan did not finish |
+
+"New" means absent from the last earlier scan of the same project with complete coverage. That is why the project name has to be the same on every upload: the target is `code://<project>`, and a finding keeps the same `deduped_key` across uploads because the server rewrites the temporary path to `code://<project>/<file>` and drops the snapshot commit from the key. Without that, every upload would be "all new" and the gate would only ever fail. A finding marked false positive, risk accepted, won't fix or resolved stays out of the gate.
+
 Two behaviors to know. `findings` lists whatever exists and does not look at coverage; use `scan show`, `scan watch` or the MCP tools when "zero" has to mean something. And the API also accepts `--type port` (`host:port/proto`), although the CLI help does not list it.
 
 Getting the CLI: inside the container it is already there. Outside, run it from the image with nothing to install:
@@ -144,13 +169,13 @@ Getting the CLI: inside the container it is already there. Outside, run it from 
 ```bash
 docker run --rm -it --entrypoint roqueshield \
   -e ROQUESHIELD_URL=https://shield.example -e ROQUESHIELD_TOKEN \
-  roqueribeiro1988/roqueos-shield:v0.5.1-standalone status
+  roqueribeiro1988/roqueos-shield:v0.6.1-standalone status
 ```
 
 or install it from the repository (Python 3.13 or newer; it is not on PyPI and brings the engine's dependencies along):
 
 ```bash
-pip install "git+https://github.com/roqueribeiro/roqueos-shield@v0.5.1"
+pip install "git+https://github.com/roqueribeiro/roqueos-shield@v0.6.1"
 ```
 
 ## 4. The REST API
@@ -167,6 +192,9 @@ The OpenAPI page is at `/docs` on the shield. The calls an integration needs:
 | Compliance posture | `GET /reports/{id}/compliance` | `viewer` |
 | The AI Fix Bundle | `GET /reports/{id}/ai-bundle` | `viewer` |
 | Mark a problem resolved | `POST /findings/resolve` with `deduped_key` and `status` | `operator` |
+| Send a code tree | `POST /code/{projeto}/uploads` with the raw `.tar.gz` (`Content-Type: application/gzip`) → `201` with `upload_id` and `target_id` | `operator` |
+| Scan the sent code | `POST /scans` with `target_id` and `code_upload_id` | `operator` |
+| Gate verdict | `GET /scans/{id}/gate?fail_on=high&so_novos=true` | `viewer` |
 
 `POST /scans` refuses before anything is queued: a target outside the scope (`403`), a missing `authorization_ref` when `REQUIRE_AUTH_REF=true` (`403`), and any scanner option outside the closed list for that scanner (`422`, naming the field). Details in [THREAT-MODEL.md](THREAT-MODEL.md#4-scope-and-target-validation).
 
@@ -226,6 +254,8 @@ The tools:
 | `get_findings` | `scan_id`, `severity`, `limit` (1 to 500) | the findings, or an error (below) |
 | `get_ai_bundle` | `scan_id` | the AI Fix Bundle, or an error (below) |
 | `list_targets` | none | registered targets |
+| `gate_verdict` | `scan_id`, `fail_on`, `all_findings` | the gate verdict; `nao_medido` comes back as an error |
+| `scan_code` | `path` (absolute), `project`, `authorization_ref`, `fail_on`, `wait_seconds` | **stdio only**: packs and uploads a local folder, starts the scan, and with `wait_seconds` returns the verdict |
 | `start_scan` | `target`, `asset_type` (`url`, `domain`, `host`, `port`, `image`, `repo`), `profile` (`web`, `network`, `full`, `active`, `exposure`), `authorization_ref` (required, 3+ characters) | only when actions are on |
 
 **A tool does not return an empty list for a scan that did not verify.** `get_findings` and `get_ai_bundle` on a scan that failed, is still running or has incomplete coverage come back with `isError: true`, the reason and the partial data. Run here with a fake API returning a finished scan where ZAP was skipped:
@@ -235,6 +265,8 @@ The tools:
 ```
 
 ("Incomplete coverage, these vectors were not verified: zap: ZAP down", with the partial findings.) An agent that reads `[]` concludes "clean"; this is what stops it.
+
+**`scan_code` is not an action.** It is listed on stdio whether actions are on or not, because scanning your own code touches no third-party target. It does not exist over HTTP: there the server runs inside the shield and cannot read the caller's disk. The server still applies the token's role (`scans:run`) and, with `REQUIRE_AUTH_REF=true`, the reference.
 
 **Actions.** `start_scan` is not even listed unless actions are on, and calling it anyway is a protocol error (`ferramenta desconhecida: start_scan`, "unknown tool"). Who turns actions on depends on the transport:
 
@@ -297,11 +329,27 @@ One shell step against a shield you already run. The token is a CI secret create
     ROQUESHIELD_TOKEN: ${{ secrets.ROQUESHIELD_TOKEN }}
   run: |
     docker run --rm -e ROQUESHIELD_URL -e ROQUESHIELD_TOKEN --entrypoint roqueshield \
-      roqueribeiro1988/roqueos-shield:v0.5.1-standalone \
+      roqueribeiro1988/roqueos-shield:v0.6.1-standalone \
       scan start https://staging.example.com --auth-ref "$GITHUB_RUN_ID" --wait --fail-on high
 ```
 
-`docker run` returns the CLI's exit code, so `1` (findings at `high` or above) and `3` (failed scan or incomplete coverage) fail the step. A scanner that did not run never passes as clean.
+`docker run` returns the CLI's exit code, so `1` (findings at `high` or above) and `3` (failed scan or incomplete coverage) fail the step.
+
+For the code of the pull request itself, without a URL the shield can clone:
+
+```yaml
+- uses: actions/checkout@v7
+- name: RoqueShield (code)
+  env:
+    ROQUESHIELD_URL: https://shield.example
+    ROQUESHIELD_TOKEN: ${{ secrets.ROQUESHIELD_TOKEN }}
+  run: |
+    docker run --rm -e ROQUESHIELD_URL -e ROQUESHIELD_TOKEN -v "$PWD:/src:ro" -w /src \
+      --entrypoint roqueshield roqueribeiro1988/roqueos-shield:v0.6.1-standalone \
+      scan code /src -p "${{ github.event.repository.name }}" --fail-on high
+```
+
+Only new findings fail the step, so the first run of a repository (no baseline yet: everything is new) is the one to look at before turning the step into a required check. A scanner that did not run never passes as clean.
 
 This step is not run by this repository's CI (it needs a reachable shield and a target you are authorized to scan). What CI does check is that the image carries the CLI: `.github/workflows/ci.yml` runs `docker exec rs roqueshield --help` against the built standalone image. Pin the image tag; a scanner that changes version between runs without anyone noticing is worse than no scanner.
 
@@ -313,7 +361,7 @@ Stated here so nobody finds out in production:
 
 - **No reusable GitHub Action.** `.github/workflows/` has only `ci.yml`, with no `workflow_call`, and there is no `action.yml`. Another project's pipeline uses the shell step of [section 8](#8-ci).
 - **No GitHub code annotations or PR comment** from findings, and no SARIF export. The machine output is the AI Fix Bundle and the compliance JSON.
-- **No scan comparison tool** (`shield_compare` was proposed and not built). Section 7 does it with `jq`.
+- **No general scan comparison tool** (`shield_compare` was proposed and not built). The gate (`GET /scans/{id}/gate`) compares a scan with its baseline by `deduped_key`; section 7 does the full comparison with `jq`.
 - **No server stream on `POST /mcp`** and no batch messages. The server never sends notifications on its own.
 - **No PyPI package.** The CLI comes from the image or from `pip install git+…`.
 

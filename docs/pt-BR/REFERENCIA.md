@@ -77,6 +77,8 @@ Sem nenhum deles, sai com 2 e `sem servidor ou token: rode roqueshield login --s
 | `login --server/-s URL [--token T]` | Confere o token contra `GET /auth/session` e grava servidor e token. Sem `--token`, pergunta sem eco | qualquer token válido |
 | `status` | Versão, quem está logado, e o `GET /health/full` por componente | qualquer token válido |
 | `scan start ALVO [opções]` | Registra o alvo (`POST /targets`) e dispara o scan (`POST /scans`) | `scans:run` |
+| `scan code [PASTA] [--project/-p NOME] [--auth-ref R] [--fail-on high] [--all-findings] [--wait/--no-wait]` | Empacota a pasta (padrão: a atual) do jeito que o git a commitaria agora: arquivos rastreados mais os não rastreados que o `.gitignore` não ignora, nunca `.git/`, sem symlinks. Envia (`POST /code/{projeto}/uploads`), dispara o scan e, com `--wait` (padrão), sai pelo veredito do gate: 0 aprovado, 1 um achado **novo** no `--fail-on` ou acima (`--all-findings` conta os conhecidos também), 3 não medido. O projeto tem como padrão o nome da pasta; mantenha o mesmo em todo upload para o gate saber o que é novo | `scans:run` |
+| `gate SCAN_ID [--fail-on high] [--all-findings]` | O veredito do gate de um scan terminado (`GET /scans/{id}/gate`), com os mesmos códigos de saída do `scan code` | `scans:read` |
 | `scan watch SCAN_ID [--fail-on S] [--intervalo 5.0] [--prazo 7200.0]` | Acompanha um scan até o fim e sai pelo contrato de códigos | `scans:read` |
 | `scan list [--limit 20]` | Os scans mais recentes | `scans:read` |
 | `scan show SCAN_ID [--json]` | Estado, contagem por severidade, que scanners rodaram, quais não e por quê | `scans:read` |
@@ -172,6 +174,8 @@ Permissão `pública` quer dizer sem credencial; `qualquer` quer dizer qualquer 
 | targets | `GET /targets`, `GET /targets/{id}` | `scans:read` | Lista e detalhe |
 | inventory | `GET /inventory[?asset_type=&q=]`, `GET /inventory/{id}` | `scans:read` | Inventário de ativos entre scans: lista (`q` é trecho, sem diferenciar maiúsculas), e detalhe com observações (uma por scan, com a cobertura daquele scan para o tipo do ativo) e findings ligados. Escrito pelo pipeline; aqui só leitura |
 | scans | `POST /scans` | `scans:run` | Dispara um scan (202). Corpo abaixo |
+| code | `POST /code/{projeto}/uploads` | `scans:run` | Recebe uma árvore de código como corpo `.tar.gz` cru (`Content-Type: application/gzip`; multipart não é aceito). Recusa com 422 antes de extrair qualquer coisa: caminho fora da raiz (absoluto, `..`), link apontando para fora, membro que não é arquivo, pasta ou link, mais de `CODE_UPLOAD_MAX_FILES` arquivos ou de `CODE_UPLOAD_MAX_EXTRACTED_MB` descomprimido (bomba de compressão), arquivo sem nenhum arquivo dentro, ou que não é gzip legível. Acima de `CODE_UPLOAD_MAX_MB` comprimido é 413; outro content type é 415. Cria o alvo `code://<projeto>` (tipo `repo`) quando não existe e responde 201 com `upload_id`, `target_id`, `sha256`, tamanhos e `expira_em`. Auditado (`code.upload`). O upload é de uso único: o worker apaga quando o scan termina; o que nunca foi escaneado é apagado depois de `CODE_UPLOAD_TTL_HOURS` |
+| scans | `GET /scans/{id}/gate[?fail_on=high&so_novos=true]` | `scans:read` | O veredito para um gate de CI ou de agente: `aprovado`, `reprovado`, `nao_medido` (cobertura incompleta ou desconhecida, nunca aprovado) ou `em_andamento`. Com `so_novos=true` (padrão) só achado ausente da linha de base reprova o gate. A linha de base é o último scan `done` anterior do mesmo alvo com cobertura completa. Achados marcados `false_positive`, `risk_accepted`, `wont_fix` ou `resolved` ficam de fora (`fora_do_gate`). Devolve também `baseline_scan_id`, `total`, `novos`, `conhecidos`, `por_severidade` e até 100 `bloqueantes` |
 | scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | Lista (últimos 100) e detalhe. Cada scan traz a cobertura: `scanners_ran`, `scanners_skipped` (com o motivo), `coverage_state` (`completa`, `incompleta`, `desconhecida`), `coverage_complete` e `coverage_note`. Zero achados só significa alvo limpo quando `coverage_complete` é `true` |
 | scans | `DELETE /scans/{id}` | `scans:run` | Apaga o scan, os achados, as chamadas de IA e as observações de ativo (os ativos ficam); audita antes. Scan `pending` ou `running` responde 409 |
 | findings | `GET /findings` | `scans:read` | Filtros `scan_id`, `severity`, `source_tool`, `limit`, `offset`. Cada item traz `asset_id`, o ativo do inventário a que pertence (`null` para achados anteriores ao inventário) |
@@ -216,6 +220,7 @@ Corpo do `POST /scans` (`ScanIn`):
 | `auth` | `null` | `{headers: {...}, openapi_url}` para scan autenticado. O valor dos headers nunca chega à tabela `scans`; vai só no job e sai redigido na auditoria |
 | `authorization_ref` | `null` | Obrigatório (403) com `REQUIRE_AUTH_REF=true` |
 | `actor` | `null` | Aceito e não usado: o ator na auditoria é a identidade autenticada |
+| `code_upload_id` | `null` | O `upload_id` do `POST /code/{projeto}/uploads`. Obrigatório quando o alvo é `code://<projeto>` (422 sem ele, 422 para upload de outro projeto, 404 para um já usado ou expirado) e recusado para qualquer outro alvo. Alvo sem código fecharia o scan com zero achados |
 
 Alvo e `openapi_url` fora do escopo: 403 `target rejeitado pela policy: <motivo>`.
 
@@ -237,6 +242,8 @@ Um núcleo de protocolo (`orchestrator/cliente/mcp_nucleo.py`, escrito à mão: 
 | `get_findings` | `scan_id`, `severity`, `limit` (1 a 500) | Volta com `isError: true` e os achados parciais quando o scan falhou, não terminou ou tem cobertura incompleta |
 | `get_ai_bundle` | `scan_id` | A mesma regra do `get_findings`, com o bundle parcial |
 | `list_targets` | nenhum | Alvos registrados |
+| `gate_verdict` | `scan_id`, `fail_on` (padrão `high`), `all_findings` | O veredito do gate (`GET /scans/{id}/gate`). `nao_medido` e `em_andamento` voltam com `isError: true`, para que o agente nunca os leia como "nada bloqueando" |
+| `scan_code` | `path` (absoluto), `project`, `authorization_ref`, `fail_on`, `wait_seconds` (0 a 1800) | **Só no stdio**: ele lê o disco de quem chama, que o servidor HTTP não enxerga. Empacota e envia a pasta como o `roqueshield scan code` e dispara o scan; com `wait_seconds`, espera e devolve o veredito do gate. Aparece com as ações ligadas ou não, porque escanear o próprio código não toca alvo de terceiro; o servidor continua exigindo `scans:run` e, com `REQUIRE_AUTH_REF`, a referência |
 | `start_scan` | `target`, `authorization_ref` (3+ caracteres, obrigatório), `asset_type` (`url`, `domain`, `host`, `port`, `image`, `repo`), `profile` (`web`, `network`, `full`, `active`, `exposure`) | Só aparece com as ações ligadas. Registra o alvo e dispara o scan sob o RBAC do token |
 
 As `instructions` do servidor dizem ao agente: `Zero achado só é limpo com coverage_complete=true`.
@@ -301,7 +308,11 @@ Os campos de IA e de escopo também podem ser definidos na tela (tabela `app_set
 | --- | --- | --- |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./data/cai.db` | Standalone: `sqlite+aiosqlite:////data/shield.db`. Postgres: `postgresql+asyncpg://...` |
 | `REDIS_URL` | `redis://redis:6379/0` | Fila do arq, logs e rate limit. Standalone: o Redis embutido em `127.0.0.1` com senha; apontar para outro desliga o embutido |
-| `DATA_DIR` | `./data` | Standalone: `/data` |
+| `DATA_DIR` | `./data` | Standalone: `/data`. Código enviado espera em `DATA_DIR/code/`: API e worker precisam compartilhá-lo |
+| `CODE_UPLOAD_MAX_MB` | `100` | Teto de um `.tar.gz` enviado, comprimido (413 acima disso) |
+| `CODE_UPLOAD_MAX_EXTRACTED_MB` | `1024` | Teto descomprimido, pelo índice do arquivo, conferido antes de extrair (bomba de compressão). O worker extrai em `/tmp`: tem que caber lá |
+| `CODE_UPLOAD_MAX_FILES` | `50000` | Teto de arquivos num upload |
+| `CODE_UPLOAD_TTL_HOURS` | `24` | Upload nunca escaneado é apagado depois disso; quem faz é o cron de hora em hora do worker (`code_upload_purge_job`) |
 | `REPORTS_DIR` | `./reports` | Standalone: `/data/reports` |
 | `ZAP_BASE_URL` | `http://zap:8090` | Standalone: o ZAP embutido em `127.0.0.1:8090`; apontar para outro desliga o embutido |
 | `ZAP_API_KEY` | vazio | Chave da API do ZAP. Standalone: gerada |

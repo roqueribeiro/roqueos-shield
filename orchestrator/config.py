@@ -121,6 +121,14 @@ class Settings(BaseSettings):
     # Retenção de evidência em dias; 0 = guarda para sempre. O expurgo apaga o CORPO
     # (o blob em disco), mantém o hash e o registro, e é auditado (`evidence.purge`).
     EVIDENCE_RETENTION_DAYS: int = 0
+    # Código enviado para scan (`POST /code/{projeto}/uploads`, `roqueshield scan code`).
+    # Tetos do tarball: comprimido (lido do corpo da requisição), descomprimido e número
+    # de arquivos (bomba de compressão). O envio que não foi escaneado é apagado depois
+    # de CODE_UPLOAD_TTL_HOURS; o que foi escaneado é apagado quando o scan termina.
+    CODE_UPLOAD_MAX_MB: int = 100
+    CODE_UPLOAD_MAX_EXTRACTED_MB: int = 1024
+    CODE_UPLOAD_MAX_FILES: int = 50000
+    CODE_UPLOAD_TTL_HOURS: int = 24
     # Aprovação humana por comando (Frente E, modo `ask`). Tempo até uma pendência
     # expirar — e expirar NEGA (fecha fechado), nunca libera.
     APPROVAL_TIMEOUT_SECONDS: int = 3600
