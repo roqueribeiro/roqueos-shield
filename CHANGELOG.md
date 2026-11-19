@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-19
+
 ### Added
 
 - **Código enviado para scan** (`POST /code/{projeto}/uploads`, `roqueshield scan code`, ferramenta MCP `scan_code` no stdio). Para a árvore que nenhuma URL git alcança: código ainda não commitado, repositório privado. O tarball é recusado antes de extrair quando sai da raiz, traz link para fora, dispositivo, bomba de compressão ou nenhum arquivo; o alvo é `code://<projeto>`, o `POST /scans` exige o `code_upload_id`, o envio é de uso único e o não escaneado sai em `CODE_UPLOAD_TTL_HOURS`. O achado guarda a mesma `deduped_key` entre envios (caminho temporário e commit da fotografia fora da chave). Variáveis novas: `CODE_UPLOAD_MAX_MB`, `CODE_UPLOAD_MAX_EXTRACTED_MB`, `CODE_UPLOAD_MAX_FILES`, `CODE_UPLOAD_TTL_HOURS`.
