@@ -50,6 +50,7 @@ from orchestrator.persistence.models import (
     ScanState,
     TargetRow,
 )
+from orchestrator.reporting.coverage import resumo
 
 # Gates de RBAC deste router.
 _RUN = Depends(require_permission(Permission.SCANS_RUN))
@@ -122,6 +123,15 @@ class ScanOut(BaseModel):
     finished_at: datetime | None
     report_path: str | None
     errors: list[str]
+    # COBERTURA. Sem estes campos, quem integra pela API REST (CI, scripts) via
+    # `state=done` com zero achados e não tinha como saber se o alvo estava limpo ou se
+    # nenhum scanner rodou: a cobertura só chegava pela rota interna da tela e pelo
+    # bundle. Mesma regra do relatório (`reporting.coverage.resumo`).
+    scanners_ran: list[str] = []
+    scanners_skipped: dict[str, str] = {}
+    coverage_state: str = "desconhecida"  # completa | incompleta | desconhecida
+    coverage_complete: bool = False
+    coverage_note: str | None = None
 
 
 def split_scan_auth(
@@ -401,6 +411,7 @@ async def list_scans(
 
 
 def _to_out(s: ScanRow) -> ScanOut:
+    cob = resumo(s)
     return ScanOut(
         id=s.id,
         target_id=s.target_id,
@@ -411,4 +422,9 @@ def _to_out(s: ScanRow) -> ScanOut:
         finished_at=s.finished_at,
         report_path=s.report_path,
         errors=list(s.errors or []),
+        scanners_ran=cob["rodaram"],
+        scanners_skipped=cob["pulados"],
+        coverage_state=cob["estado"],
+        coverage_complete=cob["completa"],
+        coverage_note=cob["nota"],
     )

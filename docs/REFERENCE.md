@@ -172,7 +172,7 @@ Permission `public` means no credential; `any` means any valid credential.
 | targets | `GET /targets`, `GET /targets/{id}` | `scans:read` | List and detail |
 | inventory | `GET /inventory[?asset_type=&q=]`, `GET /inventory/{id}` | `scans:read` | Cross-scan asset inventory: list (`q` is a case-insensitive substring), and detail with observations (one per scan, with that scan's coverage for the asset's type) and linked findings. Written by the pipeline; read only here |
 | scans | `POST /scans` | `scans:run` | Starts a scan (202). Body below |
-| scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | List (last 100) and detail |
+| scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | List (last 100) and detail. Each scan carries its coverage: `scanners_ran`, `scanners_skipped` (with the reason), `coverage_state` (`completa`, `incompleta`, `desconhecida`), `coverage_complete` and `coverage_note`. Zero findings means a clean target only when `coverage_complete` is `true` |
 | scans | `DELETE /scans/{id}` | `scans:run` | Deletes the scan, its findings, AI runs and asset observations (the assets stay); audits first. A `pending` or `running` scan answers 409 |
 | findings | `GET /findings` | `scans:read` | Filters `scan_id`, `severity`, `source_tool`, `limit`, `offset`. Each item carries `asset_id`, the inventory asset it belongs to (`null` for findings older than the inventory) |
 | findings | `GET /findings/{id}` | `scans:read` | One finding |
@@ -193,6 +193,7 @@ Permission `public` means no credential; `any` means any valid credential.
 | investigate | `POST /investigate/{finding_id}` | `scans:run`; `dry_run=false` also needs `config:manage` and `AGENT_LIVE_EXECUTION=true` | The investigation agent on one finding. Body: `instructions`, `dry_run` (default `true`), `max_steps` (default 10) |
 | approvals | `GET /approvals[?status=&offset=&limit=]` | `commands:approve` | Command approvals (mode `ask`), newest first, paginated (`limit` 1 to 500, default 100); a pending request past its timeout is marked `expired` on read. Not wired to execution yet: see ARCHITECTURE section 8 |
 | approvals | `POST /approvals/{id}/approve`, `POST /approvals/{id}/deny` | `commands:approve` | Decides a pending command. Four eyes (`APPROVAL_FOUR_EYES`) blocks the proposer approving their own, the `APP_TOKEN` service principal, and a request with no proposer (403); already decided or expired is 409. Audited |
+| approvals | `GET /approvals/{id}/command` | `commands:approve` | The exact command that will run, without redaction, for whoever approves it; the read is audited (`command.read`). When `command_redacted` is `true` the listing shows a redacted text, and approving a redacted command whose original was not kept (no `SECRETS_KEY`) answers 409 |
 | settings | `GET`/`PUT /settings/ai` | `config:manage` | Models, API base and keys. Keys are stored encrypted and never returned (`hasApiKey`). Fields set by the environment come back in `locked` |
 | settings | `POST /settings/ai/models` | `config:manage` | The models each key reaches, fetched server side |
 | settings | `GET`/`PUT /settings/scope` | `config:manage` | `labOnly`, `allowlist`, `requireAuthRef`, `allowCloudFallback`, plus `locked` |

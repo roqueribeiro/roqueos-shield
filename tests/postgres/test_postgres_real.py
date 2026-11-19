@@ -301,3 +301,30 @@ def test_settings_aponta_para_o_postgres_so_neste_modulo() -> None:
     # Sanidade: a suíte padrão continua em SQLite; este módulo fala com o Postgres por
     # engine próprio, sem mexer no settings global.
     assert settings.DATABASE_URL.startswith("sqlite")
+
+
+async def test_consumo_simultaneo_da_mesma_aprovacao_so_um_ganha(engine: AsyncEngine) -> None:
+    # Várias execuções disparadas ao mesmo tempo com a mesma aprovação: a aprovação vale
+    # para UM comando, UMA vez. Só o UPDATE condicional approved->consumed garante isso.
+    fabrica = _fabrica(engine)
+    comando = f"nmap -sV alvo-{uuid.uuid4().hex[:6]}.test"
+    async with fabrica() as s:
+        aid = (await aprovacoes.criar_pendencia(s, command=comando, proposed_by="op@x")).id
+    async with fabrica() as s:
+        await aprovacoes.decidir(s, aid, aprovar=True, decided_by="adm@x")
+
+    async def executar() -> bool:
+        async with fabrica() as s:
+            return await aprovacoes.consumir(s, aid, comando)
+
+    resultados = await asyncio.gather(*[executar() for _ in range(10)])
+    assert resultados.count(True) == 1, resultados
+    async with fabrica() as s:
+        consumos = (
+            await s.exec(
+                select(AuditLogRow)
+                .where(col(AuditLogRow.resource_id) == aid)
+                .where(col(AuditLogRow.action) == "command.consume")
+            )
+        ).all()
+        assert len(consumos) == 1

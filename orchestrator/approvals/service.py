@@ -16,6 +16,8 @@ Nada de juiz LLM aqui, de propósito: modelo aprovando modelo não é aprovaçã
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -48,6 +50,45 @@ class Expirada(AprovacaoError):
     """A pendência estourou o tempo limite; expirar nega."""
 
 
+class ComandoIndisponivel(AprovacaoError):
+    """O comando tem trechos redigidos e o original não foi guardado (sem SECRETS_KEY):
+    não há como mostrar a quem aprova o que de fato vai rodar."""
+
+
+def _chave_do_comando() -> bytes:
+    # SECRETS_KEY quando existe; senão o APP_TOKEN (o boot recusa o de exemplo). Separação
+    # de domínio: a mesma chave não serve a dois usos sem um rótulo distinto.
+    base = settings.SECRETS_KEY.strip() or settings.APP_TOKEN
+    return hashlib.sha256(b"roqueshield/command-binding/v1\x00" + base.encode()).digest()
+
+
+def hmac_do_comando(command: str) -> str:
+    """Identidade do comando EXATO que foi aprovado. Com chave: o hash do comando não
+    serve para adivinhar o segredo que o scrubber escondeu dele."""
+    return hmac.new(_chave_do_comando(), command.encode(), hashlib.sha256).hexdigest()
+
+
+def _cifrar(texto: str) -> str | None:
+    chave = settings.SECRETS_KEY.strip()
+    if not chave:
+        return None
+    from cryptography.fernet import Fernet
+
+    return Fernet(chave.encode()).encrypt(texto.encode()).decode()
+
+
+def _decifrar(token: str) -> str:
+    from cryptography.fernet import Fernet, InvalidToken
+
+    chave = settings.SECRETS_KEY.strip()
+    if not chave:
+        raise ComandoIndisponivel("SECRETS_KEY ausente: o comando original não pode ser lido")
+    try:
+        return Fernet(chave.encode()).decrypt(token.encode()).decode()
+    except InvalidToken as e:
+        raise ComandoIndisponivel("comando original ilegível (SECRETS_KEY trocada?)") from e
+
+
 async def criar_pendencia(
     session: AsyncSession,
     *,
@@ -56,13 +97,21 @@ async def criar_pendencia(
     reference_type: str = "investigation",
     reference_id: UUID | None = None,
 ) -> CommandApprovalRow:
-    """Cria a pendência de um comando que a coleira já liberou. O comando é REDIGIDO
-    antes de guardar. `expires_at = agora + APPROVAL_TIMEOUT_SECONDS`."""
+    """Cria a pendência de um comando que a coleira já liberou.
+
+    Guarda três coisas: o comando REDIGIDO (para listar), o HMAC do comando original
+    (para a execução provar que vai rodar exatamente o que foi aprovado) e, havendo
+    SECRETS_KEY, o original cifrado (para quem aprova ler o que de fato vai rodar).
+    `expires_at = agora + APPROVAL_TIMEOUT_SECONDS`."""
     agora = datetime.now(UTC)
+    redigido = scrub(command)
     row = CommandApprovalRow(
         reference_type=reference_type,
         reference_id=reference_id,
-        command=scrub(command),
+        command=redigido,
+        command_hmac=hmac_do_comando(command),
+        command_enc=_cifrar(command),
+        command_redacted=redigido != command,
         proposed_by=proposed_by,
         status=CommandApprovalStatus.PENDING.value,
         expires_at=agora + timedelta(seconds=settings.APPROVAL_TIMEOUT_SECONDS),
@@ -207,6 +256,14 @@ async def decidir(
         raise Expirada("pendência expirada; o tempo limite nega")
     if aprovar:
         _checar_quatro_olhos(row, decided_by, decided_by_is_service)
+        if row.command_redacted and not row.command_enc:
+            # Quem aprova veria só o texto redigido, e o scrubber pode esconder trecho
+            # executável (o valor de um Cookie, uma atribuição entre aspas). Aprovar o que
+            # não se vê não é aprovação humana: fecha fechado.
+            raise ComandoIndisponivel(
+                "o comando tem trechos redigidos e o original não foi guardado (sem "
+                "SECRETS_KEY): não dá para aprovar o que não se vê"
+            )
 
     mudou = await _transicionar(
         session,
@@ -241,7 +298,10 @@ async def decidir(
 
 
 async def esta_aprovado(session: AsyncSession, approval_id: UUID) -> bool:
-    """True só se a pendência está `approved`. Pendência vencida ainda em `pending` é
+    """Consulta de status (para a tela). NÃO é o ponto de execução: quem executa usa
+    `consumir`, que prende a aprovação ao comando exato e a gasta uma vez.
+
+    True só se a pendência está `approved`. Pendência vencida ainda em `pending` é
     expirada (atômico) e devolve False: o ponto de execução pergunta isto e fecha fechado.
     Uma aprovação só acontece dentro do prazo (`_transicionar(no_prazo=True)`), então um
     comando expirado nunca vira `approved` depois."""
@@ -252,3 +312,57 @@ async def esta_aprovado(session: AsyncSession, approval_id: UUID) -> bool:
         await _expirar(session, approval_id, row.proposed_by)
         return False
     return row.status == CommandApprovalStatus.APPROVED.value
+
+
+async def ler_comando_original(session: AsyncSession, approval_id: UUID, *, actor: str) -> str:
+    """O comando exato que vai rodar, para quem aprova. Auditado (`command.read`)."""
+    row = await session.get(CommandApprovalRow, approval_id)
+    if row is None:
+        raise AprovacaoError("pendência não encontrada")
+    if not row.command_redacted:
+        return row.command  # nada foi escondido: o texto guardado é o comando
+    if not row.command_enc:
+        raise ComandoIndisponivel(
+            "o comando tem trechos redigidos e o original não foi guardado (sem SECRETS_KEY)"
+        )
+    original = _decifrar(row.command_enc)
+    await log_audit_event(
+        session,
+        action="command.read",
+        actor=actor,
+        resource_type="command_approval",
+        resource_id=approval_id,
+    )
+    await session.commit()
+    return original
+
+
+async def consumir(session: AsyncSession, approval_id: UUID, command: str) -> bool:
+    """O ponto de execução chama ISTO, não `esta_aprovado`, imediatamente antes de rodar.
+
+    Devolve True uma única vez, e só se a pendência está `approved` e o comando
+    apresentado é exatamente o que foi aprovado (HMAC). Transição atômica
+    `approved -> consumed`: duas execuções simultâneas com a mesma aprovação, ou uma
+    execução com outro comando, recebem False. Pendência antiga, sem HMAC, nunca é
+    consumível (fecha fechado)."""
+    stmt = (
+        update(CommandApprovalRow)
+        .where(col(CommandApprovalRow.id) == approval_id)
+        .where(col(CommandApprovalRow.status) == CommandApprovalStatus.APPROVED.value)
+        .where(col(CommandApprovalRow.command_hmac) == hmac_do_comando(command))
+        .values(status=CommandApprovalStatus.CONSUMED.value)
+        .execution_options(synchronize_session=False)
+    )
+    resultado = await session.exec(stmt)
+    if int(getattr(resultado, "rowcount", 0) or 0) != 1:
+        await session.rollback()
+        return False
+    await log_audit_event(
+        session,
+        action="command.consume",
+        actor=None,
+        resource_type="command_approval",
+        resource_id=approval_id,
+    )
+    await session.commit()
+    return True

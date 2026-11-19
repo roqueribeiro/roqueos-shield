@@ -734,6 +734,7 @@ async def _persist_findings(
         # falha vai para `errors` do scan (que a API, a tela e o bundle mostram), não só
         # para o log: "sem evidência" e "a captura falhou" não podem parecer a mesma coisa.
         from orchestrator.domain.assets import registrar_ativos
+        from orchestrator.domain.redacao import finding_redigido
         from orchestrator.evidence.service import capturar_evidencias
 
         lacunas: list[str] = []
@@ -761,7 +762,8 @@ async def _persist_findings(
                         f.ai_triage.adjusted_severity.value if f.ai_triage else f.severity.value
                     ),
                     confidence=f.confidence.value,
-                    payload=f.model_dump(mode="json"),
+                    # Redigido em repouso: o payload guardava a evidência crua.
+                    payload=finding_redigido(f).model_dump(mode="json"),
                 )
             )
         # Os findings vão ao banco AQUI, fora de qualquer savepoint: erro ao gravar o

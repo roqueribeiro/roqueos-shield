@@ -172,7 +172,7 @@ Permissão `pública` quer dizer sem credencial; `qualquer` quer dizer qualquer 
 | targets | `GET /targets`, `GET /targets/{id}` | `scans:read` | Lista e detalhe |
 | inventory | `GET /inventory[?asset_type=&q=]`, `GET /inventory/{id}` | `scans:read` | Inventário de ativos entre scans: lista (`q` é trecho, sem diferenciar maiúsculas), e detalhe com observações (uma por scan, com a cobertura daquele scan para o tipo do ativo) e findings ligados. Escrito pelo pipeline; aqui só leitura |
 | scans | `POST /scans` | `scans:run` | Dispara um scan (202). Corpo abaixo |
-| scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | Lista (últimos 100) e detalhe |
+| scans | `GET /scans[?state=]`, `GET /scans/{id}` | `scans:read` | Lista (últimos 100) e detalhe. Cada scan traz a cobertura: `scanners_ran`, `scanners_skipped` (com o motivo), `coverage_state` (`completa`, `incompleta`, `desconhecida`), `coverage_complete` e `coverage_note`. Zero achados só significa alvo limpo quando `coverage_complete` é `true` |
 | scans | `DELETE /scans/{id}` | `scans:run` | Apaga o scan, os achados, as chamadas de IA e as observações de ativo (os ativos ficam); audita antes. Scan `pending` ou `running` responde 409 |
 | findings | `GET /findings` | `scans:read` | Filtros `scan_id`, `severity`, `source_tool`, `limit`, `offset`. Cada item traz `asset_id`, o ativo do inventário a que pertence (`null` para achados anteriores ao inventário) |
 | findings | `GET /findings/{id}` | `scans:read` | Um achado |
@@ -193,6 +193,7 @@ Permissão `pública` quer dizer sem credencial; `qualquer` quer dizer qualquer 
 | investigate | `POST /investigate/{finding_id}` | `scans:run`; `dry_run=false` exige também `config:manage` e `AGENT_LIVE_EXECUTION=true` | O agente de investigação sobre um achado. Corpo: `instructions`, `dry_run` (default `true`), `max_steps` (default 10) |
 | approvals | `GET /approvals[?status=&offset=&limit=]` | `commands:approve` | Aprovações de comando (modo `ask`), mais recentes primeiro, paginadas (`limit` de 1 a 500, padrão 100); pendência além do tempo limite é marcada `expired` na leitura. Ainda não ligado à execução: veja a seção 8 da ARQUITETURA |
 | approvals | `POST /approvals/{id}/approve`, `POST /approvals/{id}/deny` | `commands:approve` | Decide uma pendência. Quatro olhos (`APPROVAL_FOUR_EYES`) barra quem propôs, o principal de serviço do `APP_TOKEN` e pendência sem propositor (403); já decidida ou expirada dá 409. Auditado |
+| approvals | `GET /approvals/{id}/command` | `commands:approve` | O comando exato que vai rodar, sem redação, para quem aprova; a leitura fica na trilha (`command.read`). Com `command_redacted` em `true` a listagem mostra o texto redigido, e aprovar um comando redigido cujo original não foi guardado (sem `SECRETS_KEY`) responde 409 |
 | settings | `GET`/`PUT /settings/ai` | `config:manage` | Modelos, API base e chaves. Chave é gravada cifrada e nunca volta (`hasApiKey`). Campo definido pelo ambiente volta em `locked` |
 | settings | `POST /settings/ai/models` | `config:manage` | Os modelos que cada chave alcança, buscados do lado do servidor |
 | settings | `GET`/`PUT /settings/scope` | `config:manage` | `labOnly`, `allowlist`, `requireAuthRef`, `allowCloudFallback`, mais `locked` |

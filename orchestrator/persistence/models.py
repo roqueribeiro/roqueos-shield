@@ -278,6 +278,8 @@ class CommandApprovalStatus(StrEnum):
     APPROVED = "approved"
     DENIED = "denied"
     EXPIRED = "expired"  # tempo limite estourou com a pendência aberta — fecha fechado
+    # Aprovada e já usada pela execução: uma aprovação vale para UM comando, UMA vez.
+    CONSUMED = "consumed"
 
 
 class CommandApprovalRow(SQLModel, table=True):
@@ -296,6 +298,15 @@ class CommandApprovalRow(SQLModel, table=True):
     reference_type: str = Field(default="investigation", index=True)  # investigation|scan
     reference_id: UUID | None = Field(default=None, index=True)
     command: str  # texto do comando, redigido pelo scrubber
+    # Amarração com o comando EXATO (Frente E). `command` acima é a versão redigida para
+    # exibir; quem aprova precisa ver o original, e a execução só pode consumir a
+    # aprovação apresentando o mesmo comando.
+    # HMAC-SHA256 (chave do servidor) do comando original; `consumir` compara com ele.
+    command_hmac: str | None = None
+    # Original cifrado (Fernet/SECRETS_KEY) para quem aprova ler; None sem SECRETS_KEY.
+    command_enc: str | None = Field(default=None, sa_type=Text)
+    # O scrubber escondeu algo? Se sim e não há original guardado, aprovar é recusado.
+    command_redacted: bool = False
     proposed_by: str | None = Field(default=None, index=True)
     status: str = Field(default=CommandApprovalStatus.PENDING.value, index=True)
     decided_by: str | None = None
