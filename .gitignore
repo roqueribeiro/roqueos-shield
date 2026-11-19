@@ -80,3 +80,10 @@ orchestrator/web_dist/
 
 # ledger dos ciclos de goals (roqueos-kit), não versionado
 .roqueos/
+
+# Config local de outros agentes (Codex e afins) e o log diário de sessão do
+# Claude Code: são da máquina de quem desenvolve, não do projeto.
+.agents/
+.codex/
+AGENTS.md
+.claude/audit/*.jsonl
