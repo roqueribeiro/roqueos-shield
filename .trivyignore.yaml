@@ -285,17 +285,29 @@ vulnerabilities:
   - id: CVE-2026-116587
     paths:
       - "usr/local/bin/nuclei"
-      - "usr/local/bin/trivy"
     expired_at: 2026-12-07
-    statement: "binário oficial de scanner de terceiro; nuclei sem release corrigida, trivy corrigido há menos de 14 dias"
+    statement: "binário oficial de scanner de terceiro; nuclei sem release corrigida (o trivy saiu com a 0.76.2)"
   - id: CVE-2026-78661
     paths:
       - "usr/local/bin/nuclei"
-      - "usr/local/bin/trivy"
     expired_at: 2026-12-07
-    statement: "binário oficial de scanner de terceiro; nuclei sem release corrigida, trivy corrigido há menos de 14 dias"
+    statement: "binário oficial de scanner de terceiro; nuclei sem release corrigida (o trivy saiu com a 0.76.2)"
   - id: CVE-2026-112940
     paths:
       - "usr/local/lib/python3.13/site-packages/filelock-3.32.7.dist-info/METADATA"
     expired_at: 2026-12-07
     statement: "exceção do app decidida pelo mantenedor em 2026-11-07: litellm exige filelock<4; ReadWriteLock não é usado"
+
+# 2026-11-19, release 0.6.1: trivy 0.76.2 (corrige go-jose e x/net/html acima). A stdlib
+# do Go 1.27.3 e anteriores tem CVE-2026-97054 (DoS no MaxBytesReader de servidor HTTP/1),
+# corrigido no Go 1.26.11/1.27.4; medido em 2026-11-19: nuclei 3.11.1, gitleaks 8.30.1 e
+# trivy 0.76.2 (as últimas releases) saem todas com Go anterior. Nenhum dos três roda
+# servidor HTTP no RoqueShield (são clientes de linha de comando, não-root, sem
+# capability), que é onde o defeito vive.
+  - id: CVE-2026-97054
+    paths:
+      - "usr/local/bin/gitleaks"
+      - "usr/local/bin/nuclei"
+      - "usr/local/bin/trivy"
+    expired_at: 2026-12-23
+    statement: "stdlib Go em binário oficial de scanner de terceiro, sem release corrigida em 2026-11-19; nenhum serve HTTP aqui"
