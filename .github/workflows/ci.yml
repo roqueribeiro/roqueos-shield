@@ -220,8 +220,14 @@ jobs:
           sh scripts/semgrep_ruleset.sh "$RUNNER_TEMP/semgrep-rules"
           echo "SEMGREP_RULES_DIR=$RUNNER_TEMP/semgrep-rules" >> "$GITHUB_ENV"
       - name: Régua de detecção
+        # Sem servidor do trivy no runner: o padrão do Settings (http://trivy:4954) é o
+        # da stack. Vazio faz o trivy baixar a base e rodar sozinho.
+        env:
+          TRIVY_SERVER_URL: ""
         run: python scripts/regua.py deteccao --exigir-scanners --saida regua-placar
       - name: Régua da imagem de container (CVEs de pacote do sistema)
+        env:
+          TRIVY_SERVER_URL: ""
         run: python scripts/regua.py deteccao --gabarito imagem --exigir-scanners --saida regua-placar
       - name: OWASP Benchmark Python (gabarito de terceiros)
         run: python scripts/regua.py benchmark --nome python --saida regua-placar
@@ -277,7 +283,8 @@ jobs:
           echo "ZAP não subiu"; docker logs regua-zap | tail -50; exit 1
       - name: Régua do DAST
         run: |
-          mkdir -p regua-placar
+          # O container roda como o usuário 1000, e a pasta montada é do usuário do runner.
+          mkdir -p regua-placar && chmod a+rwx regua-placar
           docker run --rm --network regua -v "$PWD:/src" -w /src \
             -e PYTHONPATH=/src -e ZAP_BASE_URL=http://regua-zap:8080 -e ZAP_API_KEY=regua \
             -e GITHUB_STEP_SUMMARY=/src/regua-placar/resumo.md \
