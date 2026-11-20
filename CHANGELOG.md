@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-19
+
+### Fixed
+
+- **Scan cujo job morre não fica `running` para sempre.** Quando o arq cancela o job no `job_timeout` (ou o worker cai no meio), o `run_scan_job` fecha o scan como `failed`, com o motivo nos `errors`. Antes ninguém o fechava: a tela mostrava "em andamento" e o roqueos-server, que não recria a stack com scan ativo, deixava de atualizar o shield. Medido no shield central em 19/11/2026: 346 achados na triagem de IA, 3600 s, job morto, scan preso e reconcile adiado para sempre.
+
 ## [0.7.1] - 2026-11-19
 
 ### Added

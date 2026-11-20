@@ -7,6 +7,7 @@ hostil é recusado sem extrair nada, e um envio que não pôde ser preparado vir
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import subprocess
@@ -684,3 +685,37 @@ async def test_scan_com_ai_false_pula_a_ia_no_worker(fila: dict[str, Any]) -> No
             "/scans", json={"target_id": envio2["target_id"], "code_upload_id": envio2["upload_id"]}
         )
     assert fila["skip_ai"] is False  # o padrão continua com IA
+
+
+@pytest.mark.parametrize("erro", [asyncio.CancelledError, TimeoutError])
+async def test_job_interrompido_fecha_o_scan_como_failed(
+    monkeypatch: pytest.MonkeyPatch, erro: type[BaseException]
+) -> None:
+    # Mutação: tirar o `except BaseException` do run_scan_job -> o scan cujo job o arq
+    # matou no job_timeout fica `running` para sempre e trava o reconcile do server.
+    alvo = await _alvo()
+    async with session() as s:
+        row = ScanRow(target_id=alvo.id, state=ScanState.RUNNING.value)
+        s.add(row)
+        await s.commit()
+        await s.refresh(row)
+
+    async def _morre(target: Target, **kw: Any) -> pipelines.ScanResult:
+        raise erro()
+
+    monkeypatch.setattr(pipelines, "run_scan", _morre)
+    import orchestrator.runtime_settings as rs
+
+    async def _nada(_s: Any) -> list[str]:
+        return []
+
+    monkeypatch.setattr(rs, "aplicar", _nada)
+    with pytest.raises(erro):
+        await workers.run_scan_job(
+            {}, target_value=alvo.value, asset_type="repo", scan_id=str(row.id)
+        )
+    async with session() as s:
+        fim = await s.get(ScanRow, row.id)
+    assert fim is not None and fim.state == ScanState.FAILED.value
+    assert any("interrompido" in e for e in fim.errors)
+    assert fim.finished_at is not None

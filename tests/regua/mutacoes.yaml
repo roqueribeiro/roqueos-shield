@@ -306,3 +306,9 @@ mutacoes:
     de: "        if sha and isinstance(disc, str) and sha in disc:"
     para: "        if False:"
     teste: tests/unit/test_codigo_enviado.py -k commit_da_fotografia
+  - id: M-JOB-01
+    controle: job interrompido (job_timeout do arq) fecha o scan como failed
+    arquivo: orchestrator/jobs/workers.py
+    de: "        if scan_id:\n            await asyncio.shield(_fechar_scan_interrompido(UUID(scan_id), e))"
+    para: "        if False:\n            await asyncio.shield(_fechar_scan_interrompido(UUID(scan_id), e))"
+    teste: tests/unit/test_codigo_enviado.py -k interrompido
