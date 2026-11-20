@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.7.3] - 2026-11-20
+## [0.7.4] - 2026-11-20
+
+### Security
+
+- **`mcp` 1.30.0 na imagem (CVE-2026-115563).** O semgrep fixa o `mcp==1.29.0` em todas as versões publicadas, e a 1.29.0 tem uma CVE alta no cliente OAuth do SDK. A imagem instala a 1.30.0 por cima: o semgrep só usa o `mcp` no subcomando `semgrep mcp`, que o RoqueShield não chama, e o scan foi medido igual com ela. O gate do Trivy do release recusou a 0.7.3 por isso; a 0.7.3 não tem imagem publicada, e tudo o que ela trazia sai nesta.
+
+## [0.7.3] - 2026-11-20 (não publicada: o gate do Trivy recusou a imagem)
 
 ### Added
 

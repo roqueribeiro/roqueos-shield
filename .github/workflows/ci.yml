@@ -262,7 +262,13 @@ jobs:
         run: |
           # A imagem da última versão publicada (não a `:latest` do Docker Hub, que já
           # ficou para trás de um release e faltava dependência do código deste commit).
-          versao=$(git ls-remote --tags --refs origin 'v*' | sed 's#.*/##' | sort -V | tail -1)
+          # Tag sem imagem existe (release que o gate do Trivy recusou, como a v0.7.3):
+          # a mais nova cuja imagem está publicada.
+          for versao in $(git ls-remote --tags --refs origin 'v*' | sed 's#.*/##' | sort -rV); do
+            if docker manifest inspect "roqueribeiro1988/roqueos-shield:${versao}" >/dev/null 2>&1; then
+              break
+            fi
+          done
           echo "IMAGEM=roqueribeiro1988/roqueos-shield:${versao}" >> "$GITHUB_ENV"
           IMAGEM="roqueribeiro1988/roqueos-shield:${versao}"
           echo "scanners da imagem ${IMAGEM}"
