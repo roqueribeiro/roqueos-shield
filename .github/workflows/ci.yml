@@ -249,12 +249,17 @@ jobs:
     # Os scanners vêm da última imagem publicada (nuclei, templates pinados, nmap); o
     # CÓDIGO dos adapters e do pipeline é o deste commit, montado por cima em /src.
     env:
-      IMAGEM: roqueribeiro1988/roqueos-shield:latest
       ZAP: zaproxy/zap-stable:2.17.0
     steps:
       - uses: actions/checkout@v7
       - name: Sobe o alvo e o ZAP numa rede isolada
         run: |
+          # A imagem da última versão publicada (não a `:latest` do Docker Hub, que já
+          # ficou para trás de um release e faltava dependência do código deste commit).
+          versao=$(git ls-remote --tags --refs origin 'v*' | sed 's#.*/##' | sort -V | tail -1)
+          echo "IMAGEM=roqueribeiro1988/roqueos-shield:${versao}" >> "$GITHUB_ENV"
+          IMAGEM="roqueribeiro1988/roqueos-shield:${versao}"
+          echo "scanners da imagem ${IMAGEM}"
           docker network create regua
           docker run -d --name regua-alvo --network regua \
             -v "$PWD/tests/regua/alvo_web:/alvo:ro" python:3.13-slim python /alvo/app.py --porta 8088
