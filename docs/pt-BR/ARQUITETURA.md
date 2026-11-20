@@ -106,7 +106,7 @@ A fábrica constrói nove scanners. Os outros seis adapters pertencem à esteira
 | `checkov` | fábrica | repo | Misconfiguração de IaC (Terraform, CloudFormation, Kubernetes, Dockerfile) |
 | `trivy` | fábrica | image, repo | CVE de dependência e de pacote do SO, segredo embutido, misconfiguração |
 | `nmap` | fábrica | host, port, url, domain | Porta aberta e versão de serviço |
-| `zap` | fábrica | url, host, domain | DAST; varredura ativa (payload real de injection) só com o profile `full` ou `active` |
+| `zap` | fábrica | url, host, domain | DAST; varredura ativa (payload real de injection) só com o profile `full` ou `active`. O daemon é compartilhado: cada scan primeiro tira o nó do site e os alertas do seu alvo (sem isso o re-scan não percorria e o alerta velho voltava), e o header de autenticação vale só para a origem do alvo e sai no cleanup |
 | `nuclei` | fábrica | url, host, domain | Templates de CVE conhecida, painel exposto, credencial padrão |
 | `greenbone` | fábrica | host, domain | VAS de rede (OpenVAS). Precisa da stack Greenbone e do feed |
 | `github_exposure` | exposure | n/a | Dorks contra repositórios públicos do GitHub |
@@ -116,7 +116,7 @@ A fábrica constrói nove scanners. Os outros seis adapters pertencem à esteira
 | `censys` | nenhum | n/a | Implementado e testado, não construído por caminho de produção nenhum |
 | `kube_bench` | nenhum | k8s_resource | Implementado e testado, não construído por caminho de produção nenhum |
 
-**SAST sem o registry.** O `--config auto` do Semgrep se recusa a rodar com `--metrics off`, que este projeto exige; os packs `p/...` são baixados na hora do scan e, numa rede restrita, o Semgrep sai com código 0 e zero regras. Por isso a imagem embarca o `semgrep-rules` em `/opt/semgrep-rules`, pinado por commit, com `semgrep --validate` por diretório de linguagem como gate de build (`docker/images/orchestrator/Dockerfile`). O adapter carrega só os diretórios das linguagens presentes no checkout. `SEMGREP_RULES_DIR` aponta para outro lugar quando há ruleset próprio. As licenças estão no `NOTICE` (motor LGPL-2.1, regras sob a Semgrep Rules License v1.0).
+**SAST sem o registry.** O `--config auto` do Semgrep se recusa a rodar com `--metrics off`, que este projeto exige; os packs `p/...` são baixados na hora do scan e, numa rede restrita, o Semgrep sai com código 0 e zero regras. Por isso a imagem embarca o `semgrep-rules` em `/opt/semgrep-rules`, pinado por commit, com `semgrep --validate` por diretório de linguagem como gate de build (`docker/images/orchestrator/Dockerfile`). O adapter carrega só os diretórios das linguagens presentes no checkout; TypeScript carrega também o diretório de JavaScript, onde mora quase toda regra que pega TS (só com TypeScript o conjunto pinado rodava 13 regras e não achava nada). `orchestrator/adapters/regras_semgrep/` soma as regras próprias do RoqueShield a todo scan, uma por lacuna que a régua de efetividade mediu (injeção de comando em Java e C#, `InsecureSkipVerify` do Go, aleatório previsível e XSS em Flask no Python), e o `_corrigir_cwes` conserta regra do pacote com a CWE errada (execução de comando marcada como injeção de código). A imagem e a régua do CI montam o ruleset pelo mesmo script, `scripts/semgrep_ruleset.sh`. `SEMGREP_RULES_DIR` aponta para outro lugar quando há ruleset próprio. As licenças estão no `NOTICE` (motor LGPL-2.1, regras sob a Semgrep Rules License v1.0).
 
 ## 5. O ciclo de vida do adapter e o contrato do silêncio
 

@@ -106,7 +106,7 @@ The factory builds nine scanners. The other six adapters belong to the OSINT pip
 | `checkov` | factory | repo | IaC misconfiguration (Terraform, CloudFormation, Kubernetes, Dockerfile) |
 | `trivy` | factory | image, repo | CVEs in dependencies and OS packages, embedded secrets, misconfiguration |
 | `nmap` | factory | host, port, url, domain | Open ports and service versions |
-| `zap` | factory | url, host, domain | DAST; active scan (real injection payloads) only with the `full` or `active` profile |
+| `zap` | factory | url, host, domain | DAST; active scan (real injection payloads) only with the `full` or `active` profile. The daemon is shared: each scan first drops its target's site node and alerts (otherwise a re-scan did not crawl and old alerts came back), and auth headers are scoped to the target's origin and removed at cleanup |
 | `nuclei` | factory | url, host, domain | Templates for known CVEs, exposed panels, default credentials |
 | `greenbone` | factory | host, domain | Network VAS (OpenVAS). Needs the Greenbone stack and its feed |
 | `github_exposure` | exposure | n/a | Dorks against public GitHub repositories |
@@ -116,7 +116,7 @@ The factory builds nine scanners. The other six adapters belong to the OSINT pip
 | `censys` | none | n/a | Implemented and tested, not constructed by any production path |
 | `kube_bench` | none | k8s_resource | Implemented and tested, not constructed by any production path |
 
-**SAST without the registry.** Semgrep's `--config auto` refuses to run with `--metrics off`, which this project requires; the `p/...` packs are downloaded at scan time and, on a restricted network, Semgrep exits 0 with zero rules. So the image ships `semgrep-rules` in `/opt/semgrep-rules`, pinned by commit, with `semgrep --validate` per language directory as a build gate (`docker/images/orchestrator/Dockerfile`). The adapter loads only the directories for the languages present in the checkout. `SEMGREP_RULES_DIR` points elsewhere for a custom ruleset. Licenses are in `NOTICE` (engine LGPL-2.1, rules under the Semgrep Rules License v1.0).
+**SAST without the registry.** Semgrep's `--config auto` refuses to run with `--metrics off`, which this project requires; the `p/...` packs are downloaded at scan time and, on a restricted network, Semgrep exits 0 with zero rules. So the image ships `semgrep-rules` in `/opt/semgrep-rules`, pinned by commit, with `semgrep --validate` per language directory as a build gate (`docker/images/orchestrator/Dockerfile`). The adapter loads only the directories for the languages present in the checkout; TypeScript also loads the JavaScript directory, where almost every rule that matches TS lives (with TypeScript alone the pinned set ran 13 rules and found nothing). `orchestrator/adapters/regras_semgrep/` adds RoqueShield's own rules to every scan, one per gap the effectiveness ruler measured (command injection in Java and C#, Go `InsecureSkipVerify`, Python weak randomness and Flask XSS), and `_corrigir_cwes` fixes package rules whose CWE metadata is wrong (command execution shipped as code injection). The image and the CI ruler build the ruleset with the same script, `scripts/semgrep_ruleset.sh`. `SEMGREP_RULES_DIR` points elsewhere for a custom ruleset. Licenses are in `NOTICE` (engine LGPL-2.1, rules under the Semgrep Rules License v1.0).
 
 ## 5. The adapter lifecycle and the silence contract
 

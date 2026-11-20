@@ -1,0 +1,25 @@
+# Gabarito da camada de imagem de container: o trivy acha as CVEs de pacote do sistema?
+#
+# A imagem é pinada por versão (alpine 3.10.0, de 2019) e não muda: as CVEs abaixo estão
+# nela para sempre. `arquivo: "*"` porque CVE de pacote do sistema não tem arquivo; o
+# critério é a CVE certa (regra).
+#
+# Sem controle limpo: imagem "sem CVE" deixa de ser a cada CVE nova publicada, e o alarme
+# seria da base de vulnerabilidades, não da ferramenta. A precisão do trivy é medida na
+# camada `dependencia` do repo_sintetico, com versão de pacote fixa.
+nome: imagem
+descricao: CVEs conhecidas de uma imagem de container antiga e pinada
+alvo:
+  tipo: imagem
+  valor: alpine:3.10.0
+camadas:
+  imagem: {scanners: [trivy]}
+itens:
+  - {id: IMG-01, camada: imagem, tipo: defeito, arquivo: "*",
+     descricao: "apk-tools 2.10.4 (CVE-2021-36159, crítica)", regra: "CVE-2021-36159\\b"}
+  - {id: IMG-02, camada: imagem, tipo: defeito, arquivo: "*",
+     descricao: "busybox 1.30.1 (CVE-2021-28831)", regra: "CVE-2021-28831\\b"}
+  - {id: IMG-03, camada: imagem, tipo: defeito, arquivo: "*",
+     descricao: "OpenSSL 1.1.1c (CVE-2020-1967, DoS no TLS 1.3)", regra: "CVE-2020-1967\\b"}
+  - {id: IMG-04, camada: imagem, tipo: defeito, arquivo: "*",
+     descricao: "OpenSSL 1.1.1c (CVE-2021-3450, verificação de CA)", regra: "CVE-2021-3450\\b"}

@@ -181,6 +181,25 @@ Dois gates na CI seguram as duas metades dessa promessa, e **os dois foram valid
 - **`silencio`** ([`scripts/check_no_silence.py`](scripts/check_no_silence.py)) lê a AST dos adapters e recusa um `except` no ciclo do scan que termina em resultado vazio, um `poll()` que decide por `task.done()` sem ler `task.result()`, e um payload de sucesso fabricado. `# silencio-ok: motivo` é a única passagem, e o motivo escrito é o que denuncia se um silêncio de verdade passar um dia.
 - **`efetividade`** (`tests/integration/test_efetividade_e2e.py`) monta um repositório com defeitos conhecidos (injeção de comando, SQL por taint, `pickle`, MD5, Flask com `debug=True`, bucket S3 público, security group `0.0.0.0/0`, disco sem cifra), roda a esteira inteira e exige achado real de cada camada, enquanto confere que um scanner ausente aparece como pulado.
 
+### Quão boa ela é, medido
+
+Teste verde diz que o código faz o que promete. Não diz quanto a ferramenta acha. A régua de efetividade (`scripts/regua.py`, `tests/regua/`) mede isso contra gabaritos, toda noite contra o shield de produção e em todo pull request no CI. Camada cujo scanner não rodou sai "não medida", nunca verde. Medido em 20/11/2026:
+
+| O quê | Gabarito | Resultado |
+| --- | --- | --- |
+| SAST, 8 linguagens (Python, JS, TS, Java, Go, PHP, Ruby, C#) | nosso: 38 defeitos plantados e 13 controles limpos, uma camada por linguagem | 38/38, CWE certa em todos, 0 falso positivo |
+| IaC (Terraform, Kubernetes, Dockerfile) | nosso: 9 configurações erradas plantadas | 9/9 |
+| Dependências (npm, pip, Go, Maven, Bundler) | nosso: 5 CVEs conhecidas (o Log4Shell entre elas) e um lockfile limpo | 5/5, 0 falso positivo |
+| Imagem de container | uma imagem antiga e pinada, 4 CVEs conhecidas | 4/4 |
+| Segredos | 4 credenciais geradas num histórico git de verdade | 4/4 |
+| DAST no nosso alvo de laboratório | XSS, SQLi, injeção de comando, path traversal, open redirect, flags de cookie, `.git` e `.env` expostos, cada um com a versão segura | ZAP 7/7 (1 falso positivo: DOM XSS numa página sem JavaScript), nuclei 2/2, nmap 1/1 |
+| **DAST no OWASP Juice Shop** (de terceiros) | 9 falhas documentadas alcançáveis sem login | ZAP 3/7, nuclei 1/2 |
+| **SAST no OWASP Benchmark** (de terceiros; nota = acerto menos falso positivo por categoria, 0 é chutar) | Python, 1.230 casos | **+24%** (59% de acerto, 34% de falso positivo); zero acerto em LDAP, XPath e trust boundary |
+| | Java, 2.740 casos | **+44%** (88% de acerto, 44% de falso positivo) |
+| Triagem da IA numa amostra do Benchmark (modelo local no DGX) | 60 achados reais e 60 falsos positivos conhecidos | descartou 3% dos falsos positivos e 0% dos reais |
+
+As duas linhas de terceiros são as honestas: os nossos gabaritos foram escritos junto com o ruleset e mostram que a ferramenta acha o que plantamos. Os números externos mostram onde ela é fraca (precisão de taint em Python, endpoint atrás de login e com corpo JSON no DAST, uma triagem de IA segura mas que quase não tira ruído), e as linhas de base são catraca: só sobem. O que a régua pegou no primeiro dia, e está consertado: projeto só em TypeScript rodava 13 regras e não achava nada; injeção de comando em Java e C# e o `InsecureSkipVerify` do Go não tinham regra; execução de comando saía classificada como injeção de código; o ZAP compartilhado vazava o header de autenticação de um usuário para os scans de outros, o re-scan não percorria a aplicação e o alerta velho voltava depois do conserto. Detalhes em [docs/pt-BR/CRITERIOS-DE-TESTE.md](docs/pt-BR/CRITERIOS-DE-TESTE.md#a-régua-de-efetividade).
+
 **E o gate tem gate.** Uma auditoria adversarial burlou a primeira versão de quatro jeitos e reintroduziu o silêncio no adapter do nmap com a CI verde. As quatro viraram `tests/unit/test_gate_do_silencio.py`, e o gate foi endurecido contra cada uma. A regra inteira, com os nove casos históricos por trás dela, está em [`.claude/rules/60-contrato-do-silencio.md`](.claude/rules/60-contrato-do-silencio.md).
 
 ## Dentro do RoqueOS

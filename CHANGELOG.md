@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Régua de efetividade completa.** A régua media SAST em Python, IaC Terraform e segredos. Agora mede, com gabarito, linha de base em catraca e "não medido" que nunca vira verde:
+  - **SAST em oito linguagens** (Python, JavaScript, TypeScript, Java, Go, PHP, Ruby, C#), uma camada por linguagem, com controles limpos em cada uma;
+  - **IaC** de Kubernetes e Dockerfile, além de Terraform;
+  - **dependências com CVE** (npm, pip, Go, Maven, Bundler) pelo Trivy;
+  - **imagem de container** (CVEs de uma imagem antiga e pinada);
+  - **DAST** contra um alvo de laboratório próprio (`tests/regua/alvo_web/app.py`: XSS, SQLi, injeção de comando, path traversal, open redirect, cookie sem HttpOnly, `.git` e `.env` expostos, cada um com a versão segura como controle), com ZAP em active scan, nuclei e nmap; job `regua-dast` no CI;
+  - **DAST contra o OWASP Juice Shop**, aplicação real de terceiros (régua noturna);
+  - **OWASP Benchmark** Python e Java, o gabarito de terceiros, pontuado como o scorecard oficial (acerto menos falso positivo), por categoria (`scripts/regua.py benchmark`);
+  - **a triagem da IA**, com o Benchmark como gabarito: o modelo descarta o falso positivo sem descartar o real? (`--com-ia`).
+  `--metricas` grava tudo no formato do Prometheus para a régua noturna da produção.
+- **Regras próprias do semgrep** (`orchestrator/adapters/regras_semgrep/`), uma por lacuna medida: injeção de comando em Java (`Runtime.exec`) e C# (`Process.Start`), TLS sem verificação em Go, número aleatório previsível e XSS em resposta Flask em Python.
+
+### Fixed
+
+- **SAST de projeto só em TypeScript rodava 13 regras e achava zero.** As regras que pegam TS moram na pasta de JavaScript do ruleset; o adapter agora carrega as duas.
+- **CWE de execução de comando e de `eval`.** Go, Ruby e PHP saíam como CWE-94 (injeção de código) em vez de CWE-78, e o `eval` do PHP como CWE-78: a CWE errada tira o achado da linha certa do relatório OWASP/PCI/LGPD.
+- **O ZAP compartilhado vazava credencial entre scans.** A regra do replacer com o header de autenticação (`Cookie`, `Authorization`) valia para toda requisição do daemon e nunca era removida: ia junto nos scans seguintes de qualquer alvo. Agora vale só para a origem do alvo e sai no cleanup.
+- **Re-scan com o ZAP compartilhado não percorria a aplicação e devolvia alertas velhos.** O spider do segundo scan do mesmo alvo parava em "No seeds available" (página nova nunca era achada) e o relatório trazia os alertas do scan anterior. Cada scan agora começa limpo para o seu alvo (nó do site e alertas), sem sessão nova, que derrubaria os scans em paralelo. Limpeza que falha vira lacuna declarada.
+- **A régua do CI media um ruleset diferente da produção.** CI e imagem montam o ruleset do semgrep pelo mesmo script (`scripts/semgrep_ruleset.sh`).
+
+
 ## [0.7.2] - 2026-11-19
 
 ### Fixed

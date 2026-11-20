@@ -1,0 +1,128 @@
+# Regras próprias do RoqueShield, carregadas junto com o ruleset do pacote.
+#
+# Cada uma fecha uma lacuna MEDIDA pela régua de detecção (tests/regua/): um defeito
+# plantado que nenhuma regra do pacote semgrep-rules pinado pegava pelo motivo certo.
+# Só entra regra com caso no gabarito; tirar uma daqui faz a régua reprovar.
+rules:
+  - id: roqueshield.java.comando-montado-por-concatenacao
+    languages: [java]
+    severity: ERROR
+    message: >-
+      Comando do sistema montado por concatenação de texto. Se uma das partes vier de
+      fora (parâmetro, cabeçalho, arquivo), quem envia escolhe o comando executado.
+      Passe o programa e os argumentos como um array (ProcessBuilder com lista), sem
+      shell, e valide os argumentos contra uma lista permitida.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"]
+      owasp: ["A03:2021 - Injection"]
+      category: security
+      confidence: MEDIUM
+      origem: "régua de detecção, item SAST-JAVA-02"
+    patterns:
+      - pattern-either:
+          - pattern: (Runtime $R).exec($A + $B, ...)
+          - pattern: Runtime.getRuntime().exec($A + $B, ...)
+          - pattern: new ProcessBuilder($A + $B, ...)
+          - pattern: new ProcessBuilder(..., "-c", $A + $B, ...)
+      - pattern-not: (Runtime $R).exec("..." + "...", ...)
+      - pattern-not: Runtime.getRuntime().exec("..." + "...", ...)
+
+  - id: roqueshield.csharp.comando-montado-por-concatenacao
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      Process.Start com o comando ou os argumentos montados por concatenação. Se uma
+      das partes vier de fora, quem envia escolhe o que roda no servidor (cmd.exe /c
+      executa qualquer coisa). Use ProcessStartInfo com ArgumentList, sem shell, e
+      valide a entrada contra uma lista permitida.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"]
+      owasp: ["A03:2021 - Injection"]
+      category: security
+      confidence: MEDIUM
+      origem: "régua de detecção, item SAST-CS-03"
+    patterns:
+      - pattern-either:
+          - pattern: Process.Start($P, $A + $B)
+          - pattern: Process.Start($A + $B)
+          - pattern: System.Diagnostics.Process.Start($P, $A + $B)
+          - pattern: new ProcessStartInfo($P, $A + $B)
+      - pattern-not: Process.Start($P, "..." + "...")
+      - pattern-not: Process.Start("..." + "...")
+
+  - id: roqueshield.go.tls-sem-verificacao-de-certificado
+    languages: [go]
+    severity: ERROR
+    message: >-
+      InsecureSkipVerify: true desliga a verificação do certificado do servidor. Qualquer
+      um no caminho da conexão se passa pelo servidor e lê ou altera o tráfego. Confie
+      na CA certa (RootCAs) em vez de desligar a verificação.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      owasp: ["A02:2021 - Cryptographic Failures", "A07:2021 - Identification and Authentication Failures"]
+      category: security
+      confidence: HIGH
+      origem: "régua de detecção, item SAST-GO-03"
+    pattern-either:
+      - pattern: "tls.Config{..., InsecureSkipVerify: true, ...}"
+      - pattern: $C.InsecureSkipVerify = true
+
+  - id: roqueshield.python.aleatorio-previsivel
+    languages: [python]
+    severity: WARNING
+    message: >-
+      O módulo `random` é previsível: quem vê alguns valores reconstrói o estado do
+      gerador e adivinha os próximos. Para token, senha, id de sessão, nonce ou qualquer
+      valor que proteja algo, use `secrets` (secrets.token_urlsafe, secrets.randbelow).
+      Para sorteio sem valor de segurança, ignore.
+    metadata:
+      cwe: ["CWE-330: Use of Insufficiently Random Values"]
+      owasp: ["A02:2021 - Cryptographic Failures"]
+      category: security
+      confidence: LOW
+      origem: "OWASP Benchmark Python, categoria weakrand (0 de 99 antes da regra)"
+    patterns:
+      - pattern-either:
+          - pattern: random.$F(...)
+          - pattern: random.Random(...).$F(...)
+      - metavariable-regex:
+          metavariable: $F
+          regex: ^(random|randint|randrange|randbytes|getrandbits|choice|choices|sample|shuffle|uniform|normalvariate|gauss|triangular|betavariate|expovariate|gammavariate|lognormvariate|vonmisesvariate|paretovariate|weibullvariate)$
+
+  - id: roqueshield.python.flask-resposta-com-entrada-sem-escapar
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Valor da requisição volta na resposta HTML da rota sem escapar: quem monta o link
+      escolhe o HTML (e o JavaScript) que a página executa no navegador de outra pessoa.
+      Renderize com template (o Jinja escapa) ou passe por markupsafe.escape/html.escape.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"]
+      owasp: ["A03:2021 - Injection"]
+      category: security
+      confidence: MEDIUM
+      origem: "OWASP Benchmark Python, categoria xss (0 de 31 antes da regra)"
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A.get(...)
+          - pattern: flask.request.$A[...]
+          - pattern: flask.request.$A.getlist(...)
+          - pattern: flask.request.get_data(...)
+          - pattern: flask.request.get_json(...)
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: html.escape(...)
+          - pattern: markupsafe.escape(...)
+          - pattern: flask.escape(...)
+          - pattern: bleach.clean(...)
+          - pattern: escape_for_html(...)
+          - pattern: $X.escape_for_html(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-inside: |
+              @$APP.route(...)
+              def $F(...):
+                ...
+          - pattern: return $R
+          - focus-metavariable: $R

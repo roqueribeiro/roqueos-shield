@@ -1,0 +1,57 @@
+# Gabarito do alvo DAST (tests/regua/alvo_web/app.py), escaneado no ar.
+#
+# `arquivo` aqui é o CAMINHO da URL (sem host nem query), ou `porta/N/tcp` para o nmap.
+# Uma camada por scanner: ZAP, nuclei e nmap erram coisas diferentes, e a média dos três
+# esconderia o que parou.
+#
+# Controles limpos TIPADOS (com cwe): contam só o alarme daquele tipo. Toda página do alvo
+# recebe aviso de cabeçalho ausente, e isso não é o falso positivo que a busca segura
+# existe para medir (XSS onde ela escapa).
+nome: alvo_web
+descricao: >-
+  DAST contra uma aplicação de laboratório com XSS, SQLi, injeção de comando, path
+  traversal, open redirect, cookie sem HttpOnly e arquivos sensíveis expostos, com as
+  versões seguras dos mesmos recursos como controle
+alvo:
+  tipo: url
+  opcoes:
+    # Sem o active scan o ZAP só olha passivamente: não injeta nada e não acha injeção.
+    zap: {active: true}
+camadas:
+  dast_zap: {scanners: [zap]}
+  dast_nuclei: {scanners: [nuclei]}
+  rede: {scanners: [nmap]}
+itens:
+  # ---------------------------------------------------------------- ZAP
+  - {id: DAST-01, camada: dast_zap, tipo: defeito, arquivo: /busca,
+     descricao: "XSS refletido no termo de busca", cwe: [CWE-79]}
+  - {id: DAST-02, camada: dast_zap, tipo: defeito, arquivo: /produto,
+     descricao: "SQL injection no id do produto (erro do SQLite na página)", cwe: [CWE-89]}
+  - {id: DAST-03, camada: dast_zap, tipo: defeito, arquivo: /ping,
+     descricao: "injeção de comando no host do ping", cwe: [CWE-78]}
+  - {id: DAST-04, camada: dast_zap, tipo: defeito, arquivo: /arquivo,
+     descricao: "path traversal no nome do arquivo", cwe: [CWE-22]}
+  - {id: DAST-05, camada: dast_zap, tipo: defeito, arquivo: /ir,
+     descricao: "open redirect para qualquer URL", cwe: [CWE-601]}
+  - {id: DAST-06, camada: dast_zap, tipo: defeito, arquivo: /entrar,
+     descricao: "cookie de sessão sem HttpOnly", cwe: [CWE-1004]}
+  - {id: DAST-07, camada: dast_zap, tipo: defeito, arquivo: /.git/config,
+     descricao: "configuração do git exposta", cwe: [CWE-538, CWE-200]}
+  - {id: LIMPO-DAST-01, camada: dast_zap, tipo: limpo, arquivo: /busca-segura,
+     descricao: "busca que escapa o termo: XSS aqui é falso positivo", cwe: [CWE-79]}
+  - {id: LIMPO-DAST-02, camada: dast_zap, tipo: limpo, arquivo: /produto-seguro,
+     descricao: "produto com SQL parametrizado: SQLi aqui é falso positivo", cwe: [CWE-89]}
+  - {id: LIMPO-DAST-03, camada: dast_zap, tipo: limpo, arquivo: /,
+     descricao: "página inicial sem JavaScript e sem reflexo: XSS aqui é falso positivo",
+     cwe: [CWE-79]}
+  - {id: LIMPO-DAST-04, camada: dast_zap, tipo: limpo, arquivo: /arquivo,
+     descricao: "path traversal não executa comando: injeção de comando aqui é falso positivo",
+     cwe: [CWE-78]}
+  # ---------------------------------------------------------------- nuclei
+  - {id: NUC-01, camada: dast_nuclei, tipo: defeito, arquivo: /.git/config,
+     descricao: "configuração do git exposta", regra: "git-config"}
+  - {id: NUC-02, camada: dast_nuclei, tipo: defeito, arquivo: /.env,
+     descricao: ".env com credenciais exposto", regra: "(?i)env"}
+  # ---------------------------------------------------------------- nmap
+  - {id: REDE-01, camada: rede, tipo: defeito, arquivo: porta/8088/tcp,
+     descricao: "porta HTTP do alvo aberta e identificada"}

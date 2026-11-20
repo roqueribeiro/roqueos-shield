@@ -11,7 +11,9 @@ Fases: traditional spider, AJAX spider (opt-in), active scan (opt-in), passive s
 
 from __future__ import annotations
 
+import re
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx
@@ -71,6 +73,8 @@ class ZAPAdapter:
         )
         # mapa: native_id -> {"spider_id": ..., "ascan_id": ..., "url": ..., "active": bool}
         self._scans: dict[str, dict[str, Any]] = {}
+        # native_id -> descrições das regras de header que este scan pôs no daemon.
+        self._regras: dict[str, list[str]] = {}
 
     async def _get(self, path: str, **params: Any) -> dict[str, Any]:
         r = await self._client.get(path, params=params)
@@ -97,23 +101,68 @@ class ZAPAdapter:
         headers = options.get("headers") or {}
         openapi_url = options.get("openapi_url")
 
-        # Authenticated scanning: inject the auth headers into EVERY request via
-        # ZAP's replacer so the spider + active scan reach behind-login surfaces.
-        # Best-effort: the value goes only to ZAP (never logged/persisted), and a
-        # missing replacer add-on must NOT fail the scan.
+        native_id = str(uuid4())
+        gaps: list[str] = []
+
+        # O daemon do ZAP é COMPARTILHADO entre scans e guarda tudo na mesma sessão.
+        # Dois defeitos medidos pela régua do DAST em 20/11/2026, os dois do mesmo
+        # resto deixado pelo scan anterior do MESMO alvo:
+        #  1. o spider do segundo scan não percorria nada ("No seeds available for the
+        #     Spider. Cancelling scan..."): página nova da aplicação nunca era achada, e o
+        #     active scan atacava só a árvore antiga;
+        #  2. o relatório trazia os alertas do scan anterior: quem corrigiu a falha e
+        #     escaneou de novo continuava vendo a falha.
+        # O começo limpo é por ALVO (o nó do site e os alertas dele), não uma sessão
+        # nova: o worker roda scans em paralelo, e `newSession` apagaria os dos outros.
+        try:
+            await self._esquecer_site(url)
+        except Exception as e:  # noqa: BLE001 - vira lacuna declarada, nunca silêncio
+            gaps.append(
+                "não foi possível tirar do ZAP o que ficou do scan anterior deste alvo "
+                f"({e}): o spider pode não percorrer de novo as páginas já vistas."
+            )
+        try:
+            sobraram = await self._limpar_alertas(url)
+            if sobraram:
+                gaps.append(
+                    f"{sobraram} alerta(s) de scans anteriores deste alvo não saíram do ZAP: "
+                    "podem aparecer no relatório sem terem sido vistos neste scan."
+                )
+        except Exception as e:  # noqa: BLE001 - vira lacuna declarada, nunca silêncio
+            gaps.append(
+                "não foi possível limpar os alertas de scans anteriores deste alvo no ZAP "
+                f"({e}): alertas de antes deste scan podem aparecer no relatório."
+            )
+
+        # Authenticated scanning: injeta os headers de sessão via replacer do ZAP para o
+        # spider e o active scan chegarem atrás do login. A regra vale SÓ para a origem
+        # deste alvo e é removida no cleanup: antes ela valia para toda requisição do
+        # daemon compartilhado e ficava lá para sempre, e o Cookie/Authorization de um
+        # usuário ia junto nos scans seguintes de QUALQUER alvo. O valor vai só para o
+        # ZAP (nunca para log nem banco), e um replacer ausente não derruba o scan.
+        regras: list[str] = []
+        origem = re.escape(self._origem(url))
         for name, value in headers.items():
+            descricao = f"cai-auth-{native_id}-{name}"
             try:
                 await self._get(
                     "/JSON/replacer/action/addRule/",
-                    description=f"cai-auth-{name}",
+                    description=descricao,
                     enabled="true",
                     matchType="REQ_HEADER",
                     matchString=name,
                     matchRegex="false",
                     replacement=value,
+                    url=f"^{origem}(/.*)?$",
                 )
+                regras.append(descricao)
             except Exception as e:  # noqa: BLE001 — degrade gracefully (no add-on)
                 log.warning("zap.replacer_failed", header=name, error=str(e))
+                gaps.append(
+                    f"o header de autenticação {name} não pôde ser aplicado no ZAP: o "
+                    "que fica atrás do login não foi verificado."
+                )
+        self._regras[native_id] = regras
         if headers:
             # log the header NAMES only — never the secret values.
             log.info("zap.auth_headers_applied", headers=sorted(headers.keys()))
@@ -136,7 +185,6 @@ class ZAPAdapter:
         spider_id = await self._start_spider_with_retry(url, max_children)
         log.info("zap.spider_started", scan_id=spider_id, url=url)
 
-        native_id = str(uuid4())
         self._scans[native_id] = {
             "spider_id": spider_id,
             "ascan_id": None,
@@ -144,7 +192,7 @@ class ZAPAdapter:
             "active": active,
             "ajax": ajax,
             "phase": "spider",
-            "gaps": [],
+            "gaps": gaps,
         }
 
         return ScanHandle(
@@ -564,6 +612,51 @@ class ZAPAdapter:
                 # nenhuma; o alerta em si continua inteiro.
                 continue
         return out
+
+    async def _esquecer_site(self, url: str) -> None:
+        """Tira da árvore do ZAP o site deste alvo (nó e histórico). Site que o daemon
+        nunca viu responde `does_not_exist`, que é o caso normal do primeiro scan."""
+        try:
+            await self._get("/JSON/core/action/deleteSiteNode/", url=self._origem(url))
+        except httpx.HTTPStatusError as e:
+            corpo = e.response.text if e.response is not None else ""
+            if "does_not_exist" not in corpo:
+                raise
+
+    async def _limpar_alertas(self, url: str) -> int:
+        """Apaga os alertas deste alvo e devolve quantos sobraram.
+
+        O `deleteAlerts` do ZAP 2.17 apaga só uma parte por chamada (medido: 65 alertas,
+        cada chamada tirava um pedaço). Repete enquanto a contagem cai; o que não sai é
+        devolvido para virar lacuna, nunca engolido.
+        """
+        anterior = -1
+        for _ in range(30):
+            dados = await self._get("/JSON/alert/view/numberOfAlerts/", baseurl=url)
+            restantes = int(dados.get("numberOfAlerts", 0))
+            if restantes == 0 or restantes == anterior:
+                return restantes
+            anterior = restantes
+            # Com e sem a barra final: o alerta de DOM XSS sai com a URL
+            # `http://alvo:8088#...`, que a base com `/` não alcança (medido).
+            for base in dict.fromkeys((url, url.rstrip("/"))):
+                await self._get("/JSON/alert/action/deleteAlerts/", baseurl=base)
+        return anterior
+
+    async def cleanup(self, handle: ScanHandle) -> None:
+        """Tira do daemon compartilhado as regras de header deste scan. Falha aqui é
+        log de erro alto: credencial de um usuário que ficou no ZAP vale para os scans
+        seguintes daquela origem."""
+        for descricao in self._regras.pop(handle.native_id, []):
+            try:
+                await self._get("/JSON/replacer/action/removeRule/", description=descricao)
+            except Exception as e:  # noqa: BLE001 - o scan já terminou; o erro é alto
+                log.error("zap.replacer_remove_failed", regra=descricao, error=str(e))
+
+    @staticmethod
+    def _origem(url: str) -> str:
+        p = urlsplit(url)
+        return f"{p.scheme}://{p.netloc}"
 
     async def aclose(self) -> None:
         await self._client.aclose()

@@ -312,3 +312,53 @@ mutacoes:
     de: "        if scan_id:\n            await asyncio.shield(_fechar_scan_interrompido(UUID(scan_id), e))"
     para: "        if False:\n            await asyncio.shield(_fechar_scan_interrompido(UUID(scan_id), e))"
     teste: tests/unit/test_codigo_enviado.py -k interrompido
+  # ======================================================== SAST fora do Python
+  - id: M-SAST-01
+    controle: projeto só de TypeScript carrega as regras de JavaScript
+    arquivo: orchestrator/adapters/semgrep_adapter.py
+    de: '        querer = querer | {"javascript"}'
+    para: "        querer = querer"
+    teste: tests/unit/test_semgrep_cobertura_linguagens.py -k typescript
+  - id: M-SAST-02
+    controle: as regras próprias do RoqueShield entram em todo scan
+    arquivo: orchestrator/adapters/semgrep_adapter.py
+    de: "            configs.append(str(DIR_REGRAS_PROPRIAS))"
+    para: "            pass"
+    teste: tests/unit/test_semgrep_cobertura_linguagens.py -k regras_proprias_vao
+  - id: M-SAST-03
+    controle: execução de comando do Go, Ruby e PHP sai como CWE-78
+    arquivo: orchestrator/adapters/semgrep_adapter.py
+    de: '    (re.compile(r"\.(dangerous-exec-command|dangerous-exec|tainted-exec|exec-use)$"), "CWE-78"),'
+    para: ""
+    teste: tests/unit/test_semgrep_cobertura_linguagens.py -k cwe_certa
+  - id: M-SAST-04
+    controle: falso positivo vai para a camada do controle limpo, não para a primeira do scanner
+    arquivo: orchestrator/regua/placar.py
+    de: "                if f.source_tool in gabarito.camadas[item.camada].scanners:"
+    para: "                if False:"
+    teste: tests/unit/test_regua_placar.py -k camada_do_controle
+  # ======================================================== ZAP compartilhado
+  - id: M-ZAP-01
+    controle: o scan apaga os alertas anteriores do alvo no daemon compartilhado
+    arquivo: orchestrator/adapters/zap_adapter.py
+    de: '                await self._get("/JSON/alert/action/deleteAlerts/", baseurl=base)'
+    para: "                pass"
+    teste: tests/unit/test_zap_daemon_compartilhado.py -k apaga_todos
+  - id: M-ZAP-02
+    controle: o header de autenticação vale só para a origem do alvo
+    arquivo: orchestrator/adapters/zap_adapter.py
+    de: '                    url=f"^{origem}(/.*)?$",'
+    para: '                    url=".*",'
+    teste: tests/unit/test_zap_daemon_compartilhado.py -k origem
+  - id: M-ZAP-03
+    controle: o cleanup tira do daemon as regras de header do scan
+    arquivo: orchestrator/adapters/zap_adapter.py
+    de: '                await self._get("/JSON/replacer/action/removeRule/", description=descricao)'
+    para: "                pass"
+    teste: tests/unit/test_zap_daemon_compartilhado.py -k cleanup
+  - id: M-ZAP-04
+    controle: o scan esquece o site do alvo no daemon (o spider volta a percorrer)
+    arquivo: orchestrator/adapters/zap_adapter.py
+    de: '            await self._get("/JSON/core/action/deleteSiteNode/", url=self._origem(url))'
+    para: "            pass"
+    teste: tests/unit/test_zap_daemon_compartilhado.py -k esquece_o_site
