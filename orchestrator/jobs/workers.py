@@ -5,6 +5,7 @@ Wraps run_scan() e run_exposure_scan() em job assíncrono.
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 import tempfile
 from pathlib import Path
@@ -82,6 +83,16 @@ async def run_scan_job(
             code_root=code_root,
             code_error=code_error,
         )
+    except BaseException as e:
+        # O arq cancela o job no `job_timeout` (CancelledError dentro do job) e o
+        # processo pode cair no meio. Sem isto o scan ficava `running` para sempre:
+        # ninguém o fechava, a tela mostrava "em andamento" e o roqueos-server, que
+        # não recria a stack com scan ativo, nunca mais atualizava o shield. Medido
+        # no shield central em 19/11/2026: 346 achados na triagem de IA, 3600 s, job
+        # morto, scan preso.
+        if scan_id:
+            await asyncio.shield(_fechar_scan_interrompido(UUID(scan_id), e))
+        raise
     finally:
         if code_upload_id:
             from orchestrator import codigo_enviado
@@ -104,6 +115,33 @@ async def run_scan_job(
         "errors": result.errors,
         "report_path": str(result.report_path) if result.report_path else None,
     }
+
+
+async def _fechar_scan_interrompido(scan_id: UUID, erro: BaseException) -> None:
+    """Fecha como `failed` o scan cujo job morreu, se ainda estiver aberto."""
+    from datetime import UTC, datetime
+
+    from orchestrator.persistence.db import session as _db_session
+    from orchestrator.persistence.models import ScanRow, ScanState
+
+    motivo = (
+        "o job do worker foi interrompido (job_timeout do arq ou cancelamento) antes de "
+        f"terminar: {type(erro).__name__}. O scan NÃO verificou tudo; rode de novo "
+        "(para gate, com ai=false)."
+    )
+    try:
+        async with _db_session() as s:
+            row = await s.get(ScanRow, scan_id)
+            if row is None or row.state not in (ScanState.PENDING.value, ScanState.RUNNING.value):
+                return
+            row.state = ScanState.FAILED.value
+            row.finished_at = datetime.now(UTC)
+            row.errors = [*list(row.errors or []), motivo]
+            s.add(row)
+            await s.commit()
+        log.error("scan.interrompido", scan_id=str(scan_id), erro=type(erro).__name__)
+    except Exception as e2:  # noqa: BLE001
+        log.error("scan.interrompido_sem_fechar", scan_id=str(scan_id), erro=str(e2))
 
 
 def _preparar_codigo(upload_id: str) -> tuple[Path | None, str | None, Path | None]:
