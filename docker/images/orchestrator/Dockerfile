@@ -155,6 +155,13 @@ RUN uv export --frozen --no-dev --no-emit-project -o /tmp/requirements.txt \
     && uv pip install --system --no-cache-dir -r /tmp/requirements.txt \
     && uv pip install --system --no-cache-dir -c /tmp/requirements.txt \
         dnstwist==20250130 semgrep==1.182.1 \
+    # O semgrep fixa mcp==1.29.0 em todas as versões até a 1.186.0 (18/11/2026), e a
+    # 1.29.0 tem a CVE-2026-115563 (o cliente OAuth do SDK podia mandar credencial para
+    # outro servidor), corrigida na 1.30.0. O semgrep só usa o mcp no subcomando
+    # `semgrep mcp`, que o RoqueShield nunca chama: medido com a 1.30.0 na imagem, o
+    # scan roda igual (achado plantado achado, zero erro). Tirar quando o semgrep subir
+    # o pin.
+    && uv pip install --system --no-cache-dir "mcp==1.30.0" \
     && rm /tmp/requirements.txt
 # checkov (IaC) sai do ambiente do app e vai para um venv proprio.
 #
