@@ -68,8 +68,16 @@ _CWE_RE = re.compile(r"CWE-\d+")
 # classificada como "conversão de tipo" (o que o pacote declara para tainted-sql-string)
 # some da linha A03 do relatório do banco. Achado pela régua de detecção
 # (tests/regua/), item SAST-02. Só entram correções confirmadas, pelo id da regra.
+#
+# Execução de comando do sistema (Go `dangerous-exec-command`, Ruby `dangerous-exec`,
+# PHP `tainted-exec`/`exec-use`) vem como CWE-94, injeção de CÓDIGO; o defeito é injeção
+# de COMANDO, CWE-78, outra linha do mapeamento. E o `eval-use` do PHP vem como CWE-78,
+# quando `eval` é injeção de código, CWE-95. Itens SAST-GO-02, SAST-RB-02, SAST-PHP-02 e
+# SAST-PHP-03 da régua.
 _CWE_CORRETA_POR_REGRA: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(tainted-sql-string|formatted-sql-query|sql-injection)"), "CWE-89"),
+    (re.compile(r"\.(dangerous-exec-command|dangerous-exec|tainted-exec|exec-use)$"), "CWE-78"),
+    (re.compile(r"\.php\..*\.eval-use$"), "CWE-95"),
 )
 
 
@@ -93,6 +101,12 @@ _DEFAULT_CONFIGS: tuple[str, ...] = ("p/security-audit", "p/secrets", "p/owasp-t
 # alcançar o registry. Medido: sem egress o semgrep sai com código 0 e ZERO regras —
 # o silêncio que o `_rules_ran` pega, mas que deixaria o SAST inútil justamente no
 # ambiente-alvo. Com o ruleset local, 1000+ regras rodam offline.
+# Regras próprias (orchestrator/adapters/regras_semgrep/): fecham lacunas que a régua
+# mediu no pacote pinado. Vão em todo scan, com o ruleset local ou com os packs: são
+# arquivos do próprio pacote Python, não dependem de rede.
+DIR_REGRAS_PROPRIAS = Path(__file__).with_name("regras_semgrep")
+
+
 def _dir_regras_local() -> Path:
     """Caminho do ruleset embarcado. Lido a cada chamada: o valor vem do Settings
     (e do ambiente), e fixá-lo no import esconderia mudança de configuração."""
@@ -172,6 +186,12 @@ def _configs_locais(raiz_alvo: Path | None = None) -> list[str]:
         if raiz_alvo is not None and raiz_alvo.is_dir()
         else set(_LINGUAGENS)
     )
+    # As regras de TypeScript são poucas (13 no pin): quase tudo que pega TS mora na
+    # pasta de JavaScript, que o semgrep aplica aos dois. Sem isto, um projeto só de
+    # TypeScript rodava 13 regras e saía com zero achados (medido pela régua: a mesma
+    # injeção de SQL achada em .js passava calada em .ts).
+    if "typescript" in querer:
+        querer = querer | {"javascript"}
     return [str(raiz_regras / ling) for ling in sorted(querer) if (raiz_regras / ling).is_dir()]
 
 
@@ -184,6 +204,8 @@ def _resolver_configs(bruto: Any, raiz_alvo: Path | None = None) -> list[str]:
     """
     if bruto is None or bruto == "":
         configs = _configs_locais(raiz_alvo) or list(_DEFAULT_CONFIGS)
+        if DIR_REGRAS_PROPRIAS.is_dir():
+            configs.append(str(DIR_REGRAS_PROPRIAS))
     elif isinstance(bruto, str):
         configs = [bruto]
     else:

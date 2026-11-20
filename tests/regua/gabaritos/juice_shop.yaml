@@ -1,0 +1,39 @@
+# Gabarito externo do DAST: o OWASP Juice Shop (bkimminich/juice-shop:v17.3.0, pinado).
+#
+# O alvo_web prova que o pipeline acha o que plantamos; o Juice Shop é uma aplicação de
+# terceiros, uma SPA Angular com API REST, do jeito que os sistemas de verdade são. Os
+# itens são falhas DOCUMENTADAS do Juice Shop que um DAST sem login deveria alcançar; o
+# recall aqui é a medida honesta do DAST contra aplicação real, não um alvo de 100%.
+#
+# Só na régua noturna da produção: AJAX spider (navegador) + active scan levam ~30 min e
+# mais de 4 GB de RAM, o que não cabe no runner do CI.
+nome: juice_shop
+descricao: DAST contra o OWASP Juice Shop, uma SPA real com falhas documentadas
+alvo:
+  tipo: url
+  opcoes:
+    # SPA: sem o AJAX spider o spider não vê as rotas, e sem active nada é injetado.
+    zap: {active: true, ajax: true}
+camadas:
+  dast_zap: {scanners: [zap]}
+  dast_nuclei: {scanners: [nuclei]}
+itens:
+  - {id: JUICE-01, camada: dast_zap, tipo: defeito, arquivo: /rest/products/search,
+     descricao: "SQL injection na busca de produtos (q=)", cwe: [CWE-89]}
+  - {id: JUICE-02, camada: dast_zap, tipo: defeito, arquivo: /rest/user/login,
+     descricao: "SQL injection no login (e-mail no corpo JSON)", cwe: [CWE-89]}
+  - {id: JUICE-03, camada: dast_zap, tipo: defeito, arquivo: /,
+     descricao: "XSS de DOM na busca (#/search?q=)", cwe: [CWE-79]}
+  - {id: JUICE-04, camada: dast_zap, tipo: defeito, arquivo: /ftp,
+     descricao: "listagem do diretório /ftp com backups e documentos internos",
+     cwe: [CWE-548, CWE-538]}
+  - {id: JUICE-05, camada: dast_zap, tipo: defeito, arquivo: /encryptionkeys,
+     descricao: "listagem do diretório com a chave pública do JWT", cwe: [CWE-548, CWE-538]}
+  - {id: JUICE-06, camada: dast_zap, tipo: defeito, arquivo: /,
+     descricao: "CORS liberado para qualquer origem", cwe: [CWE-264, CWE-942]}
+  - {id: JUICE-07, camada: dast_zap, tipo: defeito, arquivo: /vendor.js,
+     descricao: "biblioteca JavaScript com vulnerabilidade conhecida", cwe: [CWE-1395, CWE-1104]}
+  - {id: JUICE-08, camada: dast_nuclei, tipo: defeito, arquivo: /metrics,
+     descricao: "métricas do Prometheus expostas sem autenticação", regra: "metrics"}
+  - {id: JUICE-09, camada: dast_nuclei, tipo: defeito, arquivo: "/api-docs*",
+     descricao: "documentação Swagger da API exposta", regra: "(?i)swagger|openapi"}

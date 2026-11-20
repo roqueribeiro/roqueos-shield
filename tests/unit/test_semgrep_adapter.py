@@ -145,7 +145,8 @@ def test_sem_ruleset_local_cai_nos_packs_do_registry(monkeypatch, tmp_path) -> N
     from orchestrator.adapters import semgrep_adapter as mod
 
     monkeypatch.setenv("SEMGREP_RULES_DIR", str(tmp_path / "nao_existe"))
-    assert mod._resolver_configs(None) == list(mod._DEFAULT_CONFIGS)
+    # Os packs do registry, mais as regras próprias, que são arquivo do pacote.
+    assert mod._resolver_configs(None) == [*mod._DEFAULT_CONFIGS, str(mod.DIR_REGRAS_PROPRIAS)]
 
 
 def test_ruleset_local_tem_preferencia_sobre_o_registry(monkeypatch, tmp_path) -> None:
@@ -159,7 +160,9 @@ def test_ruleset_local_tem_preferencia_sobre_o_registry(monkeypatch, tmp_path) -
 
     configs = mod._resolver_configs(None)
     assert configs, "ruleset local existe e foi ignorado"
-    assert all(c.startswith(str(tmp_path)) for c in configs)
+    # O ruleset local, e por último as regras próprias (arquivo do pacote).
+    assert configs[-1] == str(mod.DIR_REGRAS_PROPRIAS)
+    assert all(c.startswith(str(tmp_path)) for c in configs[:-1])
     assert not any(c.startswith("p/") for c in configs)
 
 
@@ -183,7 +186,7 @@ def test_seleciona_regras_pela_linguagem_do_checkout(monkeypatch, tmp_path) -> N
     (alvo / "infra.tf").write_text('resource "x" "y" {}', encoding="utf-8")
 
     escolhidas = {c.rsplit("/", 1)[-1] for c in mod._resolver_configs(None, alvo)}
-    assert escolhidas == {"python", "terraform", "generic"}, escolhidas
+    assert escolhidas == {"python", "terraform", "generic", "regras_semgrep"}, escolhidas
     assert "java" not in escolhidas and "kotlin" not in escolhidas
 
 

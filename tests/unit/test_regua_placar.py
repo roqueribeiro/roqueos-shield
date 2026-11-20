@@ -169,11 +169,187 @@ def test_catraca_grava_melhora() -> None:
     assert nova["mini"]["sast"] == {"recall_min": 1.0, "fp_max": 0, "classificacao_min": 1.0}
 
 
-def test_gabarito_real_carrega_e_cobre_as_tres_camadas() -> None:
+def test_gabarito_real_carrega_e_cobre_todas_as_camadas() -> None:
     raiz = Path(__file__).resolve().parents[1] / "regua"
     g = Gabarito.carregar(raiz / "gabaritos" / "repo_sintetico.yaml")
-    assert set(g.camadas) == {"sast", "iac", "segredo"}
+    linguagens = {"js", "ts", "java", "go", "php", "ruby", "csharp"}
+    assert set(g.camadas) == {"sast", "iac", "segredo", "dependencia"} | {
+        f"sast_{x}" for x in linguagens
+    }
+    # Toda camada tem defeito plantado, e toda camada de SAST tem controle limpo:
+    # sem limpo, uma ferramenta que marcasse tudo tiraria 100%.
+    for camada in g.camadas:
+        tipos = {i.tipo for i in g.itens if i.camada == camada}
+        assert "defeito" in tipos, camada
+        if camada.startswith("sast"):
+            assert "limpo" in tipos, camada
     for item in g.itens:
         if item.camada == "segredo":
             continue  # gerados na hora pela régua, nunca commitados
-        assert (raiz / "repo_sintetico" / item.arquivo).is_file(), item.arquivo
+        arquivo = raiz / "repo_sintetico" / item.arquivo
+        # Manifesto de dependência fica com sufixo `.regua` (scripts/regua.py, desembrulhar).
+        assert arquivo.is_file() or arquivo.with_name(arquivo.name + ".regua").is_file(), (
+            item.arquivo
+        )
+
+
+def test_falso_positivo_cai_na_camada_do_controle_limpo() -> None:
+    # Duas camadas com o mesmo scanner (o semgrep mede oito linguagens). O alarme no
+    # controle limpo do Go é piora do Go, não do Python, que é a primeira camada do
+    # semgrep. Mutação: atribuir sempre à primeira camada do scanner.
+    g = Gabarito.model_validate(
+        {
+            "nome": "duas",
+            "descricao": "x",
+            "camadas": {"sast": {"scanners": ["semgrep"]}, "sast_go": {"scanners": ["semgrep"]}},
+            "itens": [
+                {"id": "LG", "camada": "sast_go", "tipo": "limpo", "arquivo": "ok.go",
+                 "descricao": "limpo"},
+            ],
+        }
+    )  # fmt: skip
+    p = avaliar(
+        g,
+        [_f("semgrep", "ok.go", "md5")],
+        scanners_ran=["semgrep"],
+        scanners_skipped={},
+        raiz=RAIZ,
+    )
+    assert p.camadas["sast_go"].falsos_positivos == 1
+    assert p.camadas["sast"].falsos_positivos == 0
+
+
+def _web(tool: str, url: str, regra: str, cwe: list[str] | None = None) -> Finding:
+    return Finding(
+        scan_id=uuid4(),
+        target=Target(asset_type=AssetType.URL, value=url),
+        source_tool=tool,
+        source_rule_id=regra,
+        title=regra,
+        description="d",
+        severity=Severity.HIGH,
+        cwe=cwe or [],
+    )
+
+
+def test_alvo_web_compara_pelo_caminho_e_limpo_tipado_so_conta_o_seu_alarme() -> None:
+    # Achado de URL vale pelo caminho (sem host nem query); nmap pela porta. E o controle
+    # limpo com CWE só conta o alarme daquele tipo: o aviso de cabeçalho ausente que toda
+    # página recebe não é falso positivo de XSS. Mutação: tirar o filtro `alarmes`.
+    g = Gabarito.model_validate(
+        {
+            "nome": "web",
+            "descricao": "x",
+            "camadas": {"dast": {"scanners": ["zap"]}, "rede": {"scanners": ["nmap"]}},
+            "itens": [
+                {"id": "X1", "camada": "dast", "tipo": "defeito", "arquivo": "/busca",
+                 "descricao": "xss", "cwe": ["CWE-79"]},
+                {"id": "L1", "camada": "dast", "tipo": "limpo", "arquivo": "/busca-segura",
+                 "descricao": "escapa", "cwe": ["CWE-79"]},
+                {"id": "P1", "camada": "rede", "tipo": "defeito", "arquivo": "porta/8088/tcp",
+                 "descricao": "porta http"},
+            ],
+        }
+    )  # fmt: skip
+    achados = [
+        _web("zap", "http://alvo:8088/busca?q=%3Cscript%3E", "40012", ["CWE-79"]),
+        _web("zap", "http://alvo:8088/busca-segura?q=x", "10038", ["CWE-693"]),
+        Finding(
+            scan_id=uuid4(),
+            target=Target(asset_type=AssetType.PORT, value="10.0.0.5:8088/tcp"),
+            source_tool="nmap",
+            source_rule_id="nmap-open-port",
+            title="porta aberta",
+            description="d",
+            severity=Severity.INFO,
+        ),
+    ]
+    p = avaliar(g, achados, scanners_ran=["zap", "nmap"], scanners_skipped={})
+    assert p.camadas["dast"].recall == 1.0
+    assert p.camadas["dast"].falsos_positivos == 0
+    assert p.camadas["rede"].recall == 1.0
+    # O XSS na busca segura, esse sim, é falso positivo.
+    achados.append(_web("zap", "http://alvo:8088/busca-segura?q=y", "40012", ["CWE-79"]))
+    p = avaliar(g, achados, scanners_ran=["zap", "nmap"], scanners_skipped={})
+    assert p.camadas["dast"].falsos_positivos == 1
+
+
+def test_caminho_com_barra_dupla_do_nuclei_casa_com_o_gabarito() -> None:
+    # Mutação: tirar o re.sub das barras -> o caminho com barra dupla não casa.
+    g = Gabarito.model_validate(
+        {
+            "nome": "w",
+            "descricao": "x",
+            "camadas": {"dast_nuclei": {"scanners": ["nuclei"]}},
+            "itens": [
+                {"id": "N", "camada": "dast_nuclei", "tipo": "defeito", "arquivo": "/.env",
+                 "descricao": "arquivo de ambiente exposto", "regra": "generic"},
+            ],
+        }
+    )  # fmt: skip
+    p = avaliar(
+        g,
+        [_web("nuclei", "http://alvo:8088//.env", "generic-env")],
+        scanners_ran=["nuclei"],
+        scanners_skipped={},
+    )
+    assert p.camadas["dast_nuclei"].recall == 1.0
+
+
+def test_dois_tercos_nao_reprova_contra_ele_mesmo_gravado() -> None:
+    # 2/3 gravado com 4 casas é 0,6667, acima de 0,666...: sem folga, reprovava sozinho.
+    fs = [_f("semgrep", "a.py", "tainted-sql-string", ["CWE-89"])]
+    p = _avaliar(fs)
+    nova, _ = nova_linha_de_base(p, {})
+    assert comparar_com_linha_de_base(p, nova, exigir_medida=True) == []
+
+
+def test_lugar_com_asterisco_casa_por_prefixo() -> None:
+    # `/api-docs*` pega o `swagger.json` que o nuclei acha embaixo; o resto não.
+    g = Gabarito.model_validate(
+        {
+            "nome": "w",
+            "descricao": "x",
+            "camadas": {"dast_nuclei": {"scanners": ["nuclei"]}},
+            "itens": [
+                {"id": "S", "camada": "dast_nuclei", "tipo": "defeito", "arquivo": "/api-docs*",
+                 "descricao": "swagger", "regra": "swagger"},
+            ],
+        }
+    )  # fmt: skip
+    achado = [_web("nuclei", "http://j:3000/api-docs/swagger.json", "swagger-api")]
+    p = avaliar(g, achado, scanners_ran=["nuclei"], scanners_skipped={})
+    assert p.camadas["dast_nuclei"].recall == 1.0
+    assert p.fora_do_gabarito == []
+    outro = [_web("nuclei", "http://j:3000/apidocs", "swagger-api")]
+    assert (
+        avaliar(g, outro, scanners_ran=["nuclei"], scanners_skipped={})
+        .camadas["dast_nuclei"]
+        .recall
+        == 0.0
+    )
+
+
+def test_manifesto_de_dependencia_nao_fica_com_o_nome_de_verdade_no_repositorio() -> None:
+    # Este repo é público: com o nome de verdade, o grafo de dependências do GitHub lê o
+    # Log4Shell plantado e põe alerta crítico na página do projeto.
+    raiz = Path(__file__).resolve().parents[1] / "regua" / "repo_sintetico"
+    reais = {"package-lock.json", "package.json", "pom.xml", "go.mod", "go.sum",
+             "requirements.txt", "Gemfile.lock", "yarn.lock", "Pipfile.lock"}  # fmt: skip
+    assert [p for p in raiz.rglob("*") if p.name in reais] == []
+
+
+def test_desembrulhar_devolve_o_nome_que_o_trivy_le(tmp_path: Path) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "regua", Path(__file__).resolve().parents[2] / "scripts" / "regua.py"
+    )
+    assert spec and spec.loader
+    regua = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(regua)
+    (tmp_path / "deps").mkdir()
+    (tmp_path / "deps" / "pom.xml.regua").write_text("<project/>")
+    regua.desembrulhar(tmp_path)
+    assert (tmp_path / "deps" / "pom.xml").read_text() == "<project/>"
+    assert not list(tmp_path.rglob("*.regua"))

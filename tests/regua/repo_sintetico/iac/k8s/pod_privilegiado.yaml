@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agente
+spec:
+  hostNetwork: true
+  containers:
+    - name: agente
+      image: registry.exemplo/agente:1.0
+      securityContext:
+        privileged: true

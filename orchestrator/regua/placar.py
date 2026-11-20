@@ -23,11 +23,16 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 import yaml
 from pydantic import BaseModel, Field
 
 from orchestrator.domain.schemas import Finding
+
+# A linha de base guarda 4 casas (2/3 vira 0,6667, ACIMA do 0,666...): sem a folga, o
+# mesmo placar reprovava contra ele mesmo por arredondamento.
+_TOL = 1e-4
 
 
 class Camada(BaseModel):
@@ -45,9 +50,20 @@ class Item(BaseModel):
     regra: str | None = None
 
 
+class Alvo(BaseModel):
+    """Como a régua escaneia o gabarito: um repositório montado do fixture (o padrão), uma
+    URL de laboratório no ar (`--alvo`) ou uma imagem de container (`valor`, fixa e
+    pinada), com as opções por scanner."""
+
+    tipo: Literal["repo", "url", "imagem"] = "repo"
+    valor: str | None = None
+    opcoes: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
 class Gabarito(BaseModel):
     nome: str
     descricao: str
+    alvo: Alvo = Field(default_factory=Alvo)
     camadas: dict[str, Camada]
     itens: list[Item]
 
@@ -100,12 +116,38 @@ class Placar(BaseModel):
 
 
 def _arquivo_do_achado(f: Finding, raiz: str | None) -> str:
-    """`target.value` dos adapters de repo é `arquivo:linha`; devolve o arquivo relativo."""
+    """O "lugar" do achado, na forma em que o gabarito o escreve.
+
+    - repo: `target.value` é `arquivo:linha`; devolve o arquivo relativo à raiz;
+    - web (ZAP, nuclei): a URL; devolve o caminho, sem host nem query (`/busca`);
+    - rede (nmap): `host:porta/proto`; devolve `porta/8088/tcp`.
+    """
     valor = f.target.value
+    if valor.startswith(("http://", "https://")):
+        # O nuclei junta a URL do alvo (com barra no fim) ao caminho do template e o
+        # achado sai com barra dupla no caminho, que não casava com o gabarito (medido).
+        return re.sub(r"/{2,}", "/", urlparse(valor).path) or "/"
+    porta = re.match(r"^[^/\s]+:(\d+)/(tcp|udp)$", valor)
+    if porta:
+        return f"porta/{porta.group(1)}/{porta.group(2)}"
     caminho = valor.rsplit(":", 1)[0] if re.search(r":\d+$|:\?$", valor) else valor
     if raiz and caminho.startswith(raiz):
         caminho = caminho[len(raiz) :]
     return caminho.lstrip("/")
+
+
+def _no_lugar(
+    lugar: str, por_arquivo: dict[str, list[Finding]], todos: list[Finding]
+) -> list[Finding]:
+    """Os achados no lugar do item. `*` sozinho: qualquer lugar (CVE de pacote do sistema
+    numa imagem não tem arquivo). Terminado em `*`: prefixo (`/api-docs/*` pega o
+    `swagger.json` que o nuclei acha embaixo). Senão, o lugar exato."""
+    if lugar == "*":
+        return todos
+    if lugar.endswith("*"):
+        prefixo = lugar[:-1]
+        return [f for k, fs in por_arquivo.items() if k.startswith(prefixo) for f in fs]
+    return por_arquivo.get(lugar, [])
 
 
 def _pelo_motivo_certo(item: Item, f: Finding) -> bool:
@@ -141,19 +183,33 @@ def avaliar(
 
     itens: list[ResultadoItem] = []
     fp_por_camada: dict[str, int] = dict.fromkeys(gabarito.camadas, 0)
+    todos = [f for fs in por_arquivo.values() for f in fs]
     for item in gabarito.itens:
-        no_arquivo = por_arquivo.get(item.arquivo, [])
+        no_arquivo = _no_lugar(item.arquivo, por_arquivo, todos)
         regras = sorted({f.source_rule_id or f.title for f in no_arquivo})
         if item.tipo == "limpo":
-            for f in no_arquivo:
-                camada = gabarito.camada_do_scanner(f.source_tool)
+            # Controle limpo com regra ou CWE conta só o alarme DAQUELE tipo: num alvo
+            # web toda página leva aviso de cabeçalho ausente, e isso não é o falso
+            # positivo que a busca segura existe para medir (XSS onde ela escapa).
+            alarmes = [
+                f for f in no_arquivo if not (item.cwe or item.regra) or _pelo_motivo_certo(item, f)
+            ]
+            for f in alarmes:
+                # Várias camadas usam o mesmo scanner (o semgrep mede oito linguagens):
+                # o alarme cai na camada do controle limpo quando o scanner é dela, e só
+                # senão na primeira camada do scanner. Antes caía sempre na primeira, e o
+                # falso positivo do Go aparecia como piora do Python.
+                if f.source_tool in gabarito.camadas[item.camada].scanners:
+                    camada: str | None = item.camada
+                else:
+                    camada = gabarito.camada_do_scanner(f.source_tool)
                 if camada:
                     fp_por_camada[camada] += 1
             itens.append(
                 ResultadoItem(
                     **item.model_dump(include={"id", "camada", "tipo", "arquivo", "descricao"}),
-                    detectado=bool(no_arquivo),
-                    achados=regras,
+                    detectado=bool(alarmes),
+                    achados=sorted({f.source_rule_id or f.title for f in alarmes}),
                 )
             )
             continue
@@ -198,6 +254,10 @@ def avaliar(
         )
 
     cobertos = {i.arquivo for i in gabarito.itens}
+    if "*" in cobertos:
+        cobertos |= set(por_arquivo)
+    for prefixo in [c[:-1] for c in cobertos if c.endswith("*") and c != "*"]:
+        cobertos |= {k for k in por_arquivo if k.startswith(prefixo)}
     fora = sorted(
         f"{arquivo} ({f.source_tool}: {f.source_rule_id or f.title})"
         for arquivo, fs in por_arquivo.items()
@@ -236,7 +296,7 @@ def comparar_com_linha_de_base(
             if exigir_medida:
                 problemas.append(f"{nome}: não medida ({pc.motivo_nao_medida})")
             continue
-        if pc.recall is not None and pc.recall + 1e-9 < alvo["recall_min"]:
+        if pc.recall is not None and pc.recall + _TOL < alvo["recall_min"]:
             problemas.append(
                 f"{nome}: recall caiu para {pc.recall:.0%} "
                 f"(linha de base {alvo['recall_min']:.0%}); "
@@ -246,7 +306,7 @@ def comparar_com_linha_de_base(
         if (
             cls_min is not None
             and pc.classificacao is not None
-            and pc.classificacao + 1e-9 < cls_min
+            and pc.classificacao + _TOL < cls_min
         ):
             problemas.append(
                 f"{nome}: classificação (CWE certa) caiu para {pc.classificacao:.0%} "
@@ -272,7 +332,7 @@ def nova_linha_de_base(placar: Placar, linha: dict[str, Any]) -> tuple[dict[str,
             continue
         antes = base.get(nome)
         if antes and (
-            pc.recall + 1e-9 < antes["recall_min"] or pc.falsos_positivos > antes["fp_max"]
+            pc.recall + _TOL < antes["recall_min"] or pc.falsos_positivos > antes["fp_max"]
         ):
             recusas.append(f"{nome}: o placar piorou; a catraca não grava piora automaticamente")
             continue
@@ -280,7 +340,7 @@ def nova_linha_de_base(placar: Placar, linha: dict[str, Any]) -> tuple[dict[str,
             antes
             and pc.classificacao is not None
             and antes.get("classificacao_min") is not None
-            and pc.classificacao + 1e-9 < antes["classificacao_min"]
+            and pc.classificacao + _TOL < antes["classificacao_min"]
         ):
             recusas.append(f"{nome}: a classificação piorou; a catraca não grava piora")
             continue

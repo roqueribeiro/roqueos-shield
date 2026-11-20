@@ -178,10 +178,13 @@ jobs:
     name: Régua de detecção (recall, falsos positivos, CWE)
     runs-on: ubuntu-latest
     # O e2e acima pergunta "acha ALGUMA coisa?". A régua pergunta "acha QUANTO, e
-    # erra onde?": 19 defeitos plantados (SAST, IaC, segredos num commit de verdade)
-    # e 7 controles limpos, medidos contra tests/regua/linha_de_base.json. Recall que
+    # erra onde?": SAST em oito linguagens (uma camada por linguagem), IaC (Terraform,
+    # Kubernetes, Dockerfile), dependências com CVE conhecida e segredos num commit de
+    # verdade, com controles limpos, contra tests/regua/linha_de_base.json. Recall que
     # cai, falso positivo que sobe, CWE trocada ou camada sem medir reprovam. A linha
     # de base é catraca: `--atualizar` só grava melhora.
+    # O ruleset do semgrep é o MESMO da imagem (scripts/semgrep_ruleset.sh): antes o CI
+    # media com os packs do registry e a produção rodava outro conjunto.
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -191,6 +194,7 @@ jobs:
       - name: Install package + scanners
         env:
           GITLEAKS_VERSION: "8.30.1"
+          TRIVY_VERSION: "0.76.2"
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
@@ -204,9 +208,31 @@ jobs:
           curl -fsSL -o /tmp/gl/checksums.txt "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
           (cd /tmp/gl && grep " ${tgz}\$" checksums.txt | sha256sum -c -)
           tar -xzf "/tmp/gl/${tgz}" -C /tmp/scanners-bin gitleaks
+          tbase="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          ttgz="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSL -o "/tmp/gl/${ttgz}" "${tbase}/${ttgz}"
+          curl -fsSL -o /tmp/gl/trivy_checksums.txt "${tbase}/trivy_${TRIVY_VERSION}_checksums.txt"
+          (cd /tmp/gl && grep " ${ttgz}\$" trivy_checksums.txt | sha256sum -c -)
+          tar -xzf "/tmp/gl/${ttgz}" -C /tmp/scanners-bin trivy
           echo "/tmp/scanners-bin" >> "$GITHUB_PATH"
+      - name: Ruleset do semgrep (o mesmo da imagem)
+        run: |
+          sh scripts/semgrep_ruleset.sh "$RUNNER_TEMP/semgrep-rules"
+          echo "SEMGREP_RULES_DIR=$RUNNER_TEMP/semgrep-rules" >> "$GITHUB_ENV"
       - name: Régua de detecção
+        # Sem servidor do trivy no runner: o padrão do Settings (http://trivy:4954) é o
+        # da stack. Vazio faz o trivy baixar a base e rodar sozinho.
+        env:
+          TRIVY_SERVER_URL: ""
         run: python scripts/regua.py deteccao --exigir-scanners --saida regua-placar
+      - name: Régua da imagem de container (CVEs de pacote do sistema)
+        env:
+          TRIVY_SERVER_URL: ""
+        run: python scripts/regua.py deteccao --gabarito imagem --exigir-scanners --saida regua-placar
+      - name: OWASP Benchmark Python (gabarito de terceiros)
+        run: python scripts/regua.py benchmark --nome python --saida regua-placar
+      - name: OWASP Benchmark Java (gabarito de terceiros)
+        run: python scripts/regua.py benchmark --nome java --saida regua-placar
       - name: Código enviado de ponta a ponta (semgrep e gitleaks reais)
         env:
           ROQUESHIELD_EXIGIR_SCANNERS: "1"
@@ -215,6 +241,60 @@ jobs:
         if: always()
         with:
           name: regua-placar
+          path: regua-placar/
+          if-no-files-found: ignore
+
+  regua-dast:
+    name: Régua do DAST (ZAP, nuclei e nmap contra um alvo de laboratório)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # O alvo é tests/regua/alvo_web/app.py: XSS, SQLi, injeção de comando, path
+    # traversal, open redirect, cookie sem HttpOnly e .git/.env expostos, cada um com a
+    # versão segura do mesmo recurso como controle. O ZAP roda com active scan (sem ele
+    # nada é injetado e nenhuma injeção é achada).
+    # Os scanners vêm da última imagem publicada (nuclei, templates pinados, nmap); o
+    # CÓDIGO dos adapters e do pipeline é o deste commit, montado por cima em /src.
+    env:
+      ZAP: zaproxy/zap-stable:2.17.0
+    steps:
+      - uses: actions/checkout@v7
+      - name: Sobe o alvo e o ZAP numa rede isolada
+        run: |
+          # A imagem da última versão publicada (não a `:latest` do Docker Hub, que já
+          # ficou para trás de um release e faltava dependência do código deste commit).
+          versao=$(git ls-remote --tags --refs origin 'v*' | sed 's#.*/##' | sort -V | tail -1)
+          echo "IMAGEM=roqueribeiro1988/roqueos-shield:${versao}" >> "$GITHUB_ENV"
+          IMAGEM="roqueribeiro1988/roqueos-shield:${versao}"
+          echo "scanners da imagem ${IMAGEM}"
+          docker network create regua
+          docker run -d --name regua-alvo --network regua \
+            -v "$PWD/tests/regua/alvo_web:/alvo:ro" python:3.13-slim python /alvo/app.py --porta 8088
+          docker run -d --name regua-zap --network regua "$ZAP" zap.sh -daemon \
+            -host 0.0.0.0 -port 8080 -config api.key=regua \
+            -config 'api.addrs.addr.name=.*' -config api.addrs.addr.regex=true
+          docker pull -q "$IMAGEM"
+          for i in $(seq 1 60); do
+            if docker run --rm --network regua curlimages/curl:8.10.1 -fsS \
+              "http://regua-zap:8080/JSON/core/view/version/?apikey=regua" >/dev/null 2>&1; then
+              echo "ZAP de pé"; exit 0
+            fi
+            sleep 5
+          done
+          echo "ZAP não subiu"; docker logs regua-zap | tail -50; exit 1
+      - name: Régua do DAST
+        run: |
+          # O container roda como o usuário 1000, e a pasta montada é do usuário do runner.
+          mkdir -p regua-placar && chmod a+rwx regua-placar
+          docker run --rm --network regua -v "$PWD:/src" -w /src \
+            -e PYTHONPATH=/src -e ZAP_BASE_URL=http://regua-zap:8080 -e ZAP_API_KEY=regua \
+            -e GITHUB_STEP_SUMMARY=/src/regua-placar/resumo.md \
+            --entrypoint python "$IMAGEM" scripts/regua.py deteccao --gabarito alvo_web \
+            --alvo http://regua-alvo:8088/ --exigir-scanners --saida regua-placar
+          cat regua-placar/resumo.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: regua-dast-placar
           path: regua-placar/
           if-no-files-found: ignore
 

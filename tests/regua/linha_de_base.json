@@ -12,6 +12,92 @@
     "segredo": {
       "recall_min": 1.0,
       "fp_max": 0
+    },
+    "sast_js": {
+      "recall_min": 1.0,
+      "fp_max": 0,
+      "classificacao_min": 1.0
+    },
+    "sast_ts": {
+      "recall_min": 1.0,
+      "fp_max": 0,
+      "classificacao_min": 1.0
+    },
+    "sast_java": {
+      "recall_min": 1.0,
+      "fp_max": 0,
+      "classificacao_min": 1.0
+    },
+    "sast_go": {
+      "recall_min": 1.0,
+      "fp_max": 0,
+      "classificacao_min": 1.0
+    },
+    "sast_php": {
+      "recall_min": 1.0,
+      "fp_max": 0,
+      "classificacao_min": 1.0
+    },
+    "sast_ruby": {
+      "recall_min": 1.0,
+      "fp_max": 0,
+      "classificacao_min": 1.0
+    },
+    "sast_csharp": {
+      "recall_min": 1.0,
+      "fp_max": 0,
+      "classificacao_min": 1.0
+    },
+    "dependencia": {
+      "recall_min": 1.0,
+      "fp_max": 0
+    }
+  },
+  "benchmark_python": {
+    "nota_min": 0.2437,
+    "tpr_min": 0.5851,
+    "fpr_max": 0.3414
+  },
+  "benchmark_java": {
+    "nota_min": 0.4367,
+    "tpr_min": 0.8813,
+    "fpr_max": 0.4446
+  },
+  "juice_shop": {
+    "dast_zap": {
+      "recall_min": 0.4286,
+      "fp_max": 0,
+      "classificacao_min": 1.0
+    },
+    "dast_nuclei": {
+      "recall_min": 0.5,
+      "fp_max": 0
+    }
+  },
+  "imagem": {
+    "imagem": {
+      "recall_min": 1.0,
+      "fp_max": 0
+    }
+  },
+  "triagem_ia_python": {
+    "nota_min": 0.0,
+    "descarte_errado_max": 0.05,
+    "_medido": "2026-11-20, qwen3.6-35b-a3b no DGX: nota +3% (descartou 2/60 falsos positivos e 0/60 achados reais). Folga de 3 casos em 60 (5%): o modelo não é determinístico e a amostra é pequena."
+  },
+  "alvo_web": {
+    "dast_zap": {
+      "recall_min": 1.0,
+      "fp_max": 1,
+      "classificacao_min": 1.0
+    },
+    "dast_nuclei": {
+      "recall_min": 1.0,
+      "fp_max": 0
+    },
+    "rede": {
+      "recall_min": 1.0,
+      "fp_max": 0
     }
   }
 }

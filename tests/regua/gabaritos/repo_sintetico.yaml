@@ -6,10 +6,22 @@
 # Os segredos (camada `segredo`) não ficam no repositório: o próprio gitleaks do CI
 # reprovaria. O construtor da régua os gera na hora, com valores fixos de teste.
 nome: repo_sintetico
-descricao: SAST, IaC e segredos plantados num repositório git, com controles limpos
+descricao: >-
+  SAST em oito linguagens, IaC (Terraform, Kubernetes, Dockerfile), dependências com CVE
+  conhecida e segredos, plantados num repositório git, com controles limpos
+# Uma camada por linguagem: a média de oito linguagens esconderia a linguagem que
+# zerou (foi assim que o TypeScript passou meses com 13 regras e zero achados).
 camadas:
   sast: {scanners: [semgrep]}
+  sast_js: {scanners: [semgrep]}
+  sast_ts: {scanners: [semgrep]}
+  sast_java: {scanners: [semgrep]}
+  sast_go: {scanners: [semgrep]}
+  sast_php: {scanners: [semgrep]}
+  sast_ruby: {scanners: [semgrep]}
+  sast_csharp: {scanners: [semgrep]}
   iac: {scanners: [checkov]}
+  dependencia: {scanners: [trivy]}
   segredo: {scanners: [gitleaks]}
 itens:
   # ---------------------------------------------------------------- SAST
@@ -60,6 +72,112 @@ itens:
      descricao: "chave privada RSA commitada", regra: "(?i)private"}
   - {id: SEG-04, camada: segredo, tipo: defeito, arquivo: segredos/slack_bot.txt,
      descricao: "token de bot do Slack commitado", regra: "(?i)slack"}
+  # ---------------------------------------------------------------- SAST JavaScript
+  - {id: SAST-JS-01, camada: sast_js, tipo: defeito, arquivo: js/injecao_comando.js,
+     descricao: "child_process.exec com parâmetro da requisição", cwe: [CWE-78]}
+  - {id: SAST-JS-02, camada: sast_js, tipo: defeito, arquivo: js/sql_concatenado.js,
+     descricao: "SQL concatenado com parâmetro da rota", cwe: [CWE-89]}
+  - {id: SAST-JS-03, camada: sast_js, tipo: defeito, arquivo: js/eval_entrada.js,
+     descricao: "eval do corpo da requisição", cwe: [CWE-95]}
+  - {id: SAST-JS-04, camada: sast_js, tipo: defeito, arquivo: js/redirect_aberto.js,
+     descricao: "redirect para URL vinda da query (open redirect)", cwe: [CWE-601]}
+  - {id: SAST-JS-05, camada: sast_js, tipo: defeito, arquivo: js/xss_resposta.js,
+     descricao: "HTML montado com parâmetro da query (XSS refletido)", cwe: [CWE-79]}
+  - {id: SAST-JS-06, camada: sast_js, tipo: defeito, arquivo: js/jwt_segredo_fixo.js,
+     descricao: "segredo do JWT escrito no código", cwe: [CWE-798]}
+  - {id: LIMPO-JS-01, camada: sast_js, tipo: limpo, arquivo: limpo_js/execfile_lista.js,
+     descricao: "execFile com argv em lista e literal"}
+  - {id: LIMPO-JS-02, camada: sast_js, tipo: limpo, arquivo: limpo_js/sql_parametrizado.js,
+     descricao: "query com placeholder"}
+  # ---------------------------------------------------------------- SAST TypeScript
+  - {id: SAST-TS-01, camada: sast_ts, tipo: defeito, arquivo: ts/xss_dom.ts,
+     descricao: "innerHTML com o hash da URL (XSS de DOM)", cwe: [CWE-79]}
+  - {id: SAST-TS-02, camada: sast_ts, tipo: defeito, arquivo: ts/caminho_arquivo.ts,
+     descricao: "path.join com parâmetro da requisição (path traversal)", cwe: [CWE-22]}
+  - {id: SAST-TS-03, camada: sast_ts, tipo: defeito, arquivo: ts/sql_concatenado.ts,
+     descricao: "SQL em template string com parâmetro da query", cwe: [CWE-89]}
+  - {id: LIMPO-TS-01, camada: sast_ts, tipo: limpo, arquivo: limpo_ts/texto_seguro.ts,
+     descricao: "textContent em vez de innerHTML"}
+  # ---------------------------------------------------------------- SAST Java
+  - {id: SAST-JAVA-01, camada: sast_java, tipo: defeito, arquivo: java/SqlConcatenado.java,
+     descricao: "Statement com SQL concatenado de parâmetro HTTP", cwe: [CWE-89]}
+  - {id: SAST-JAVA-02, camada: sast_java, tipo: defeito, arquivo: java/InjecaoComando.java,
+     descricao: "Runtime.exec com comando concatenado de parâmetro HTTP", cwe: [CWE-78]}
+  - {id: SAST-JAVA-03, camada: sast_java, tipo: defeito, arquivo: java/XxeParser.java,
+     descricao: "DocumentBuilderFactory sem desligar DOCTYPE (XXE)", cwe: [CWE-611]}
+  - {id: SAST-JAVA-04, camada: sast_java, tipo: defeito, arquivo: java/CifraFraca.java,
+     descricao: "DES em modo ECB", cwe: [CWE-327, CWE-326]}
+  - {id: SAST-JAVA-05, camada: sast_java, tipo: defeito, arquivo: java/DesserializaEntrada.java,
+     descricao: "ObjectInputStream.readObject do corpo da requisição", cwe: [CWE-502]}
+  - {id: LIMPO-JAVA-01, camada: sast_java, tipo: limpo, arquivo: limpo_java/SqlParametrizado.java,
+     descricao: "PreparedStatement com parâmetro"}
+  - {id: LIMPO-JAVA-02, camada: sast_java, tipo: limpo, arquivo: limpo_java/HashForte.java,
+     descricao: "SHA-256"}
+  # ---------------------------------------------------------------- SAST Go
+  - {id: SAST-GO-01, camada: sast_go, tipo: defeito, arquivo: go/sql_concatenado.go,
+     descricao: "db.Query com SQL concatenado de parâmetro HTTP", cwe: [CWE-89]}
+  - {id: SAST-GO-02, camada: sast_go, tipo: defeito, arquivo: go/injecao_comando.go,
+     descricao: "exec.Command sh -c com valor do formulário", cwe: [CWE-78]}
+  - {id: SAST-GO-03, camada: sast_go, tipo: defeito, arquivo: go/tls_sem_verificacao.go,
+     descricao: "InsecureSkipVerify: true", cwe: [CWE-295]}
+  - {id: SAST-GO-04, camada: sast_go, tipo: defeito, arquivo: go/hash_fraco.go,
+     descricao: "MD5 para senha", cwe: [CWE-328, CWE-327, CWE-916]}
+  - {id: LIMPO-GO-01, camada: sast_go, tipo: limpo, arquivo: limpo_go/sql_parametrizado.go,
+     descricao: "db.Query com placeholder"}
+  - {id: LIMPO-GO-02, camada: sast_go, tipo: limpo, arquivo: limpo_go/hash_forte.go,
+     descricao: "SHA-256"}
+  # ---------------------------------------------------------------- SAST PHP
+  - {id: SAST-PHP-01, camada: sast_php, tipo: defeito, arquivo: php/sql_concatenado.php,
+     descricao: "mysqli_query com $_GET concatenado", cwe: [CWE-89]}
+  - {id: SAST-PHP-02, camada: sast_php, tipo: defeito, arquivo: php/injecao_comando.php,
+     descricao: "system() com $_GET concatenado", cwe: [CWE-78]}
+  - {id: SAST-PHP-03, camada: sast_php, tipo: defeito, arquivo: php/eval_entrada.php,
+     descricao: "eval de $_POST", cwe: [CWE-95, CWE-94]}
+  - {id: SAST-PHP-04, camada: sast_php, tipo: defeito, arquivo: php/desserializa_cookie.php,
+     descricao: "unserialize de cookie", cwe: [CWE-502]}
+  - {id: LIMPO-PHP-01, camada: sast_php, tipo: limpo, arquivo: limpo_php/sql_parametrizado.php,
+     descricao: "PDO com prepare e parâmetro"}
+  # ---------------------------------------------------------------- SAST Ruby
+  - {id: SAST-RB-01, camada: sast_ruby, tipo: defeito, arquivo: ruby/usuarios_controller.rb,
+     descricao: "where com interpolação de params (SQLi)", cwe: [CWE-89]}
+  - {id: SAST-RB-02, camada: sast_ruby, tipo: defeito, arquivo: ruby/backup_controller.rb,
+     descricao: "system com interpolação de params", cwe: [CWE-78]}
+  - {id: SAST-RB-03, camada: sast_ruby, tipo: defeito, arquivo: ruby/importa_controller.rb,
+     descricao: "Marshal.load de params", cwe: [CWE-502]}
+  - {id: LIMPO-RB-01, camada: sast_ruby, tipo: limpo, arquivo: limpo_ruby/usuarios_seguro_controller.rb,
+     descricao: "where com hash"}
+  # ---------------------------------------------------------------- SAST C#
+  - {id: SAST-CS-01, camada: sast_csharp, tipo: defeito, arquivo: csharp/SqlConcatenado.cs,
+     descricao: "SqlCommand com SQL concatenado", cwe: [CWE-89]}
+  - {id: SAST-CS-02, camada: sast_csharp, tipo: defeito, arquivo: csharp/Desserializa.cs,
+     descricao: "BinaryFormatter.Deserialize", cwe: [CWE-502]}
+  - {id: SAST-CS-03, camada: sast_csharp, tipo: defeito, arquivo: csharp/InjecaoComando.cs,
+     descricao: "Process.Start cmd.exe /c com argumento concatenado", cwe: [CWE-78]}
+  - {id: LIMPO-CS-01, camada: sast_csharp, tipo: limpo, arquivo: limpo_csharp/SqlParametrizado.cs,
+     descricao: "SqlCommand com parâmetro"}
+  # ---------------------------------------------------------------- IaC além de Terraform
+  - {id: IAC-06, camada: iac, tipo: defeito, arquivo: iac/k8s/pod_privilegiado.yaml,
+     descricao: "container Kubernetes privilegiado", regra: "CKV_K8S_16\\b"}
+  - {id: IAC-07, camada: iac, tipo: defeito, arquivo: iac/k8s/pod_privilegiado.yaml,
+     descricao: "pod na rede do host (hostNetwork)", regra: "CKV_K8S_19\\b"}
+  - {id: IAC-08, camada: iac, tipo: defeito, arquivo: iac/docker/Dockerfile,
+     descricao: "Dockerfile baixa script remoto com ADD", regra: "CKV_DOCKER_4\\b"}
+  - {id: IAC-09, camada: iac, tipo: defeito, arquivo: iac/docker/Dockerfile,
+     descricao: "imagem roda como root", regra: "CKV_DOCKER_8\\b"}
+  # ---------------------------------------------------------------- dependências (SCA)
+  - {id: DEP-01, camada: dependencia, tipo: defeito, arquivo: deps/java/pom.xml,
+     descricao: "log4j-core 2.14.1 (Log4Shell)", regra: "CVE-2021-44228\\b"}
+  - {id: DEP-02, camada: dependencia, tipo: defeito, arquivo: deps/node/package-lock.json,
+     descricao: "lodash 4.17.15 (prototype pollution)", regra: "CVE-2020-8203\\b"}
+  - {id: DEP-03, camada: dependencia, tipo: defeito, arquivo: deps/python/requirements.txt,
+     descricao: "PyYAML 5.3 (execução de código no full_load)", regra: "CVE-2020-1747\\b"}
+  - {id: DEP-04, camada: dependencia, tipo: defeito, arquivo: deps/go/go.mod,
+     descricao: "golang.org/x/text v0.3.5 (DoS no parser de tag de idioma)",
+     regra: "CVE-2022-32149\\b"}
+  - {id: DEP-05, camada: dependencia, tipo: defeito, arquivo: deps/ruby/Gemfile.lock,
+     descricao: "nokogiri 1.10.4 (XXE em SAX)", regra: "CVE-2020-26247\\b"}
+  - {id: LIMPO-DEP-01, camada: dependencia, tipo: limpo,
+     arquivo: limpo_deps/python/requirements.txt, descricao: "six 1.17.0, sem CVE"}
   # ---------------------------------------------------------------- controles limpos
   - {id: LIMPO-01, camada: sast, tipo: limpo, arquivo: limpo/sql_parametrizado.py,
      descricao: "SQL parametrizado"}

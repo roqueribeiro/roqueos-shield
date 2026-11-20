@@ -181,6 +181,25 @@ Two CI gates hold the two halves of that promise, and **both were validated by m
 - **`silencio`** ([`scripts/check_no_silence.py`](scripts/check_no_silence.py)) parses the adapters' AST and rejects an `except` in the scan lifecycle that ends in an empty result, a `poll()` that decides on `task.done()` without reading `task.result()`, and a fabricated success payload. `# silencio-ok: reason` is the only way past, and the written reason is what exposes it if a real silence is ever waved through.
 - **`efetividade`** (`tests/integration/test_efetividade_e2e.py`) builds a repository with known flaws (command injection, tainted SQL, `pickle`, MD5, Flask `debug=True`, a public S3 bucket, a `0.0.0.0/0` security group, an unencrypted volume), runs the whole pipeline and requires a real finding from every layer, while checking that a missing scanner shows up as skipped.
 
+### How good it is, measured
+
+Green tests say the code does what it claims. They do not say how much the tool finds. The effectiveness ruler (`scripts/regua.py`, `tests/regua/`) measures that against answer keys, every night against the production shield and on every pull request in CI. A layer whose scanner did not run is "not measured", never green. Measured on 2026-11-20:
+
+| What | Answer key | Result |
+| --- | --- | --- |
+| SAST, 8 languages (Python, JS, TS, Java, Go, PHP, Ruby, C#) | ours: 38 planted defects and 13 clean controls, one layer per language | 38/38, right CWE on all, 0 false positives |
+| IaC (Terraform, Kubernetes, Dockerfile) | ours: 9 planted misconfigurations | 9/9 |
+| Dependencies (npm, pip, Go, Maven, Bundler) | ours: 5 known CVEs (Log4Shell among them) and a clean lockfile | 5/5, 0 false positives |
+| Container image | a pinned old image, 4 known CVEs | 4/4 |
+| Secrets | 4 generated credentials in a real git history | 4/4 |
+| DAST on our lab app | XSS, SQLi, command injection, path traversal, open redirect, cookie flags, exposed `.git` and `.env`, each with a safe twin | ZAP 7/7 (1 false positive: DOM XSS on a page with no JavaScript), nuclei 2/2, nmap 1/1 |
+| **DAST on OWASP Juice Shop** (third party) | 9 documented flaws reachable without login | ZAP 3/7, nuclei 1/2 |
+| **SAST on OWASP Benchmark** (third party, score = hit rate minus false-positive rate per category, 0 is guessing) | Python, 1,230 cases | **+24%** (59% hit, 34% false positives); zero hits on LDAP, XPath and trust boundary |
+| | Java, 2,740 cases | **+44%** (88% hit, 44% false positives) |
+| AI triage on a Benchmark sample (local model on the DGX) | 60 real findings and 60 known false positives | dismissed 3% of the false positives and 0% of the real ones |
+
+The two third-party rows are the honest ones: our own answer keys were written next to the ruleset, and they show the tool finds what we planted. The external numbers show where it is weak (taint precision in Python, login-protected and JSON endpoints in DAST, an AI triage that is safe but barely removes noise), and the baselines are ratchets: they can only go up. What the ruler caught on its first day, and is fixed: TypeScript-only projects ran 13 rules and found nothing; Java and C# command injection and Go `InsecureSkipVerify` had no rule; command execution was classified as code injection; the shared ZAP daemon leaked one user's auth header into other scans, re-scans did not crawl, and old alerts came back after a fix. Details in [docs/TESTING.md](docs/TESTING.md#the-effectiveness-ruler).
+
 **And the gate has a gate.** An adversarial audit bypassed the first version four different ways and reintroduced silence into the nmap adapter with CI green. The four became `tests/unit/test_gate_do_silencio.py`, and the gate was hardened against each. The full rule, with the nine historical cases behind it, is in [`.claude/rules/60-contrato-do-silencio.md`](.claude/rules/60-contrato-do-silencio.md) (Portuguese).
 
 ## Inside RoqueOS

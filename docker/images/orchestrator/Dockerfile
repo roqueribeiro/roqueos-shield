@@ -50,53 +50,15 @@ RUN set -eux; \
     for b in nuclei gitleaks trufflehog trivy; do "$b" --version >/dev/null 2>&1 || "$b" -version >/dev/null 2>&1 || { echo "$b nao executa em $ARCH" >&2; exit 1; }; done
 
 # ---- ruleset do Semgrep, embarcado e validado no build ----------------------
-# POR QUE EMBARCAR: o default `--config p/security-audit` baixa as regras do
-# registry da Semgrep a cada scan. Num banco a rede e restrita, e sem alcancar o
-# registry o semgrep sai com codigo 0, ZERO regras e zero achados -- o silencio
-# classico. Com o ruleset em disco, ~1000 regras rodam OFFLINE.
-#
-# So os diretorios por linguagem, validados um a um: a RAIZ do repo tem config
-# invalida e passar a raiz faz o semgrep abortar com "1 configs were invalid" e
-# zero regras (medido). O `--validate` abaixo e um gate de BUILD: se um diretorio
-# quebrar numa atualizacao do pin, a imagem nao sai.
-# elixir fica de fora: exige extensao proprietaria que nao vem no open source.
+# O mesmo script do job regua-deteccao do CI (scripts/semgrep_ruleset.sh): o pin, as
+# linguagens, a poda do que não é segurança e o --validate de cada diretório moram lá,
+# para a régua do CI medir exatamente o ruleset que esta imagem roda.
 FROM python:3.13-slim AS rules
-ARG SEMGREP_RULES_COMMIT=40b8c63f75dc7c22c8a77482d73bfb864b146f7e
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir "semgrep>=1.100.0"
-RUN set -eux; \
-    git init -q /src && cd /src \
-    && git remote add origin https://github.com/semgrep/semgrep-rules.git \
-    && git fetch -q --depth 1 origin "${SEMGREP_RULES_COMMIT}" \
-    && git checkout -q FETCH_HEAD; \
-    mkdir -p /opt/semgrep-rules; \
-    for d in python javascript typescript java go ruby php csharp terraform \
-             dockerfile bash rust kotlin swift scala yaml json html c ocaml \
-             clojure generic; do \
-        cp -r "/src/$d" /opt/semgrep-rules/; \
-    done; \
-    find /opt/semgrep-rules -type d -name .semgrep_logs -prune -exec rm -rf {} +; \
-    # So o que e SEGURANCA. Os diretorios por linguagem trazem tambem boa pratica,
-    # desempenho, manutencao, correcao e compatibilidade: achado MEDIUM de
-    # "use raise_for_status" num codigo correto. A regua noturna do shield central
-    # pegou isso em 19/11/2026: falso positivo num controle limpo do gabarito que o
-    # CI (pacotes de seguranca do registry) nao via. Producao e CI tem que medir o
-    # mesmo conjunto.
-    for cat in best-practice best-practices performance maintainability correctness \
-               compatibility portability caching; do \
-        find /opt/semgrep-rules -type d -name "$cat" -prune -exec rm -rf {} +; \
-    done; \
-    cd /; rm -rf /src; \
-    # O `cd /` acima nao e enfeite: o RUN faz `cd /src` no comeco, e apagar /src
-    # deixava o processo com um cwd inexistente. O semgrep seguinte morria em
-    # Semgrep_envvars.of_current_sys_env com Sys_error("No such file or
-    # directory") -- erro que nao diz nada sobre diretorio apagado, e que so
-    # aparece no `docker build` inteiro.
-    for d in /opt/semgrep-rules/*/; do \
-        semgrep --validate --config "$d" --metrics off --disable-version-check; \
-    done; \
-    echo "${SEMGREP_RULES_COMMIT}" > /opt/semgrep-rules/PINNED_COMMIT
+COPY scripts/semgrep_ruleset.sh /usr/local/bin/semgrep_ruleset.sh
+RUN sh /usr/local/bin/semgrep_ruleset.sh /opt/semgrep-rules
 
 # ---- templates do nuclei, embarcados e CONFERIDOS no build ------------------
 # Mesma logica do ruleset do semgrep, e pela mesma razao: o binario do nuclei era
