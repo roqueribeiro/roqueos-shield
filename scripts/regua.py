@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib.util
 import json
 import os
 import random
@@ -432,6 +433,15 @@ def _gravar_triagem(
 # ============================================================ mutação
 
 
+def _esquecer_bytecode(arquivo: Path) -> None:
+    """Apaga o .pyc do arquivo. O Python valida o .pyc por tamanho e mtime em SEGUNDOS:
+    duas mutações do mesmo arquivo com o mesmo tamanho, escritas no mesmo segundo, faziam
+    o pytest rodar a mutação ANTERIOR. Medido no CI em 20/11/2026: M-ZAP-03 e M-ZAP-04
+    dão 31.652 bytes cada, e a M-ZAP-04 "escapava" sem ter sido aplicada."""
+    if arquivo.suffix == ".py":
+        Path(importlib.util.cache_from_source(str(arquivo))).unlink(missing_ok=True)
+
+
 def mutacao(args: argparse.Namespace) -> int:
     import yaml
 
@@ -461,6 +471,7 @@ def mutacao(args: argparse.Namespace) -> int:
         for t in trocas:
             mutado = mutado.replace(t["de"], t["para"], 1)
         arquivo.write_text(mutado, encoding="utf-8")
+        _esquecer_bytecode(arquivo)
         try:
             r = subprocess.run(
                 [
@@ -477,11 +488,13 @@ def mutacao(args: argparse.Namespace) -> int:
                 capture_output=True,
                 text=True,
                 check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
             )
             pegou = r.returncode != 0 and (" failed" in r.stdout or " error" in r.stdout)
             resultados.append((m["id"], "PEGA" if pegou else "ESCAPOU", m["controle"]))
         finally:
             arquivo.write_text(original, encoding="utf-8")
+            _esquecer_bytecode(arquivo)
 
     medidas = [x for x in resultados if x[1] in ("PEGA", "ESCAPOU")]
     pegas = sum(1 for x in medidas if x[1] == "PEGA")

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-20
+
 ### Added
 
 - **Régua de efetividade completa.** A régua media SAST em Python, IaC Terraform e segredos. Agora mede, com gabarito, linha de base em catraca e "não medido" que nunca vira verde:
